@@ -1,0 +1,50 @@
+Description: Core project rules and patterns for CutFill game development
+Globs: **/*
+
+# CutFill Game Development Rules
+
+## Project Context
+This is a 7-day AI-accelerated game development challenge creating a 3D cut-and-fill earthworks educational game. The project emphasizes rapid learning, iterative development, and production-quality results.
+
+## Development Philosophy
+- **AI-First Learning**: Leverage AI for rapid technology adoption and problem-solving
+- **Educational Focus**: Every feature must serve the educational mission
+- **Multiplayer Core**: Real-time synchronization is a fundamental requirement
+- **Performance Priority**: 60 FPS and <100ms latency are non-negotiable
+- **Scope Discipline**: Strict MVP focus with clear future enhancement path
+
+## Code Quality Standards
+- **Documentation**: Every major function and class must have clear documentation
+- **Testing**: Critical calculations (volume, terrain) require unit tests
+- **Performance**: Profile early and optimize throughout development
+- **Readability**: Code should be self-documenting and AI-readable
+
+## File Organization
+- **Memory Bank**: Complete project documentation in `memory-bank/`
+- **Source Code**: Clean separation of client and server code
+- **Assets**: Optimized 3D models and textures under size constraints
+- **Tests**: Co-located with source code for easy maintenance
+
+## AI Utilization Patterns
+- **Research**: Use AI for technology comparison and selection
+- **Implementation**: AI-assisted code generation for boilerplate
+- **Debugging**: AI-powered problem diagnosis and optimization
+- **Documentation**: AI-maintained technical documentation
+
+## Technical Constraints
+- **Web Platform**: Browser-only deployment target
+- **Three.js**: Primary 3D graphics library
+- **Socket.io**: Real-time multiplayer communication
+- **Supabase**: Authentication, database, and real-time subscriptions
+- **Node.js**: Server-side runtime environment
+- **Self-contained Development**: Minimal external dependencies
+
+## Success Metrics
+- **Functional Multiplayer**: 4-player real-time sessions
+- **Educational Value**: Measurable learning outcomes
+- **Production Quality**: Polished and bug-free experience
+- **Development Velocity**: Rapid prototype to production timeline
+description:
+globs:
+alwaysApply: false
+---

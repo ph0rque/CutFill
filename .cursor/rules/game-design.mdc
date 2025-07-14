@@ -1,0 +1,46 @@
+@base.mdc
+Description: Game design rules for CutFill gameplay mechanics and user experience
+Globs: src/game/**/*.js, docs/game-design/**/*.md
+
+# Game Design Rules
+
+## Core Gameplay Principles
+- **Net-Zero Constraint**: All earthworks must maintain volume balance within ±5% tolerance
+- **Real-time Feedback**: Immediate visual and numerical feedback on every action
+- **Progressive Difficulty**: Scalable complexity serving ages 8-60+
+- **Educational Integration**: Every mechanic teaches real-world earthworks principles
+
+## User Experience Patterns
+- **Forgiveness**: Undo functionality encourages experimentation
+- **Clarity**: Clear visual distinction between cut (red) and fill (blue) areas
+- **Progression**: Assignment-based levels with clear objectives
+- **Multiplayer Balance**: Cooperative and competitive modes serve different learning styles
+
+## Interaction Design Standards
+- **Grid-Based Terrain**: Structured mesh for predictable calculations
+- **Visual Feedback**: Color overlays and transparency for cut/fill visualization
+- **Contextual UI**: Tools and information appear when relevant
+- **Accessibility**: Support for different input methods and abilities
+
+## Educational Framework
+- **Learning Objectives**: Each level teaches specific earthworks concepts
+- **Assessment Integration**: Progress tracking and skill development monitoring
+- **Real-world Connection**: Professional context and practical applications
+- **Multi-audience Support**: Age-appropriate complexity scaling
+
+## Multiplayer Design
+- **Session Management**: 2-4 players per game session with Supabase authentication
+- **Synchronization**: Real-time terrain state sharing via Supabase and Socket.io
+- **User Management**: Built-in authentication and user profiles
+- **Conflict Resolution**: Last-write-wins for concurrent operations
+- **Fair Play**: Equal tools and starting conditions for all players
+
+## Performance Requirements
+- **Frame Rate**: Maintain 60 FPS on medium-spec hardware
+- **Responsiveness**: <100ms latency for multiplayer actions
+- **Memory Efficiency**: <512MB for typical game session
+- **Load Times**: <5 seconds for initial game load
+description:
+globs:
+alwaysApply: false
+---
