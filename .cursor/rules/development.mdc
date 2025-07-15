@@ -1,0 +1,52 @@
+Description: Development workflow preferences and patterns for CutFill project
+Globs: **/*
+
+# CutFill Development Workflow Rules
+
+## Server Management
+**User Preference**: The user will manually start and manage both the frontend and backend servers themselves.
+
+- **Frontend Server**: `npm run dev` (runs on localhost:5173)
+- **Backend Server**: `cd server && npm start` (runs on localhost:3001)
+- **Do NOT automatically start servers** in background during development
+- **Do NOT assume servers are running** - always check or ask user to start them
+- **Server Status**: User is responsible for ensuring both servers are running before testing
+
+## Development Commands
+The user prefers to control when and how development servers are started:
+
+```bash
+# Frontend (from src/ directory)
+npm run dev
+
+# Backend (from server/ directory)  
+cd ../server && npm start
+```
+
+## Port Configuration
+- **Frontend**: localhost:5173 (Vite dev server)
+- **Backend**: localhost:3001 (Node.js + Socket.io server)
+- **Database**: Supabase (user-configured)
+
+## Development Flow
+1. User starts backend server manually
+2. User starts frontend server manually  
+3. User opens browser to localhost:5173
+4. User tests features and reports any issues
+
+## AI Assistant Guidelines
+- **Never start servers automatically** in background
+- **Always mention** that user needs to start servers if they aren't running
+- **Provide server startup commands** when connection errors occur
+- **Focus on code fixes** rather than server management
+- **Check server status** with lsof or similar commands when troubleshooting
+
+## Testing Protocol
+- User is responsible for browser testing
+- User will report errors and issues for debugging
+- AI assistant focuses on code fixes and feature implementation
+- Manual testing approach preferred over automated testing setup
+description:
+globs:
+alwaysApply: false
+---
