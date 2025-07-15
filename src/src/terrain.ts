@@ -41,12 +41,12 @@ export class Terrain {
   private wallMeshes: THREE.Mesh[] = [];
   // bottomMesh is now part of the box geometry
   private materialLayers: MaterialLayer[] = [];
-  private blockDepth: number = 10; // 10 meter depth
+  private blockDepth: number = 33; // 10m = ~33 feet depth
   private crossSectionGeometries: THREE.BufferGeometry[] = [];
 
   constructor(
-    width: number = 50,
-    height: number = 50,
+    width: number = 164,  // 50m = ~164 feet
+    height: number = 164, // 50m = ~164 feet  
     widthSegments: number = 8,  // Reduced from 32 for solid appearance
     heightSegments: number = 8  // Reduced from 32 for solid appearance
   ) {
@@ -56,7 +56,7 @@ export class Terrain {
     // Initialize material layers
     this.initializeMaterialLayers();
 
-    // Create surface terrain geometry
+    // Create surface terrain geometry (Z-up coordinate system)
     this.geometry = new THREE.PlaneGeometry(
       width,
       height,
@@ -64,8 +64,8 @@ export class Terrain {
       heightSegments
     );
 
-    // Rotate to be horizontal
-    this.geometry.rotateX(-Math.PI / 2);
+    // Terrain surface is horizontal in Z-up system (no rotation needed)
+    // this.geometry.rotateX(-Math.PI / 2); // Removed for Z-up system
 
     // Store original vertices for future modifications
     this.originalVertices = new Float32Array(
@@ -103,26 +103,26 @@ export class Terrain {
     this.materialLayers = [
       {
         name: 'Topsoil',
-        color: new THREE.Color(0x8B4513), // Saddle brown - clean soil color
-        depth: 1.5,
+        color: new THREE.Color(0xC4915C), // Much lighter brown - tan/beige
+        depth: 5, // 1.5m = ~5 feet
         hardness: 0.3
       },
       {
         name: 'Subsoil', 
-        color: new THREE.Color(0xA0522D), // Sienna - lighter brown
-        depth: 3.0,
+        color: new THREE.Color(0xD2B48C), // Light tan/wheat color
+        depth: 10, // 3.0m = ~10 feet
         hardness: 0.5
       },
       {
         name: 'Clay',
-        color: new THREE.Color(0xD2691E), // Chocolate - orange-brown clay
-        depth: 3.5,
+        color: new THREE.Color(0xF4A460), // Sandy brown - much lighter orange-brown
+        depth: 11, // 3.5m = ~11 feet
         hardness: 0.7
       },
       {
         name: 'Rock',
-        color: new THREE.Color(0x808080), // Gray - bedrock
-        depth: 2.0,
+        color: new THREE.Color(0xC0C0C0), // Light gray instead of dark gray
+        depth: 7, // 2.0m = ~7 feet
         hardness: 1.0
       }
     ];
@@ -132,32 +132,34 @@ export class Terrain {
    * Create the 3D terrain block with sides and bottom
    */
   private create3DTerrainBlock(width: number, height: number): void {
-    // Create a solid box geometry for the terrain block
-    const boxGeometry = new THREE.BoxGeometry(width, this.blockDepth, height);
+    // Create a solid box geometry for the terrain block (Z-up system)
+    // In Z-up: X=width, Y=height, Z=depth (vertical)
+    const boxGeometry = new THREE.BoxGeometry(width, height, this.blockDepth);
     
     // Create materials for each face of the box
     const materials = [
       this.createWallMaterial(), // Right face (+X)
       this.createWallMaterial(), // Left face (-X)  
-      this.material,             // Top face (+Y) - will be replaced by surface mesh
-      new THREE.MeshLambertMaterial({ // Bottom face (-Y)
+      this.createWallMaterial(), // Top face (+Y) 
+      this.createWallMaterial(), // Bottom face (-Y)
+      this.material,             // Front face (+Z) - will be replaced by surface mesh
+      new THREE.MeshLambertMaterial({ // Back face (-Z) - bottom of block
         color: this.materialLayers[this.materialLayers.length - 1].color,
         side: THREE.DoubleSide
-      }),
-      this.createWallMaterial(), // Front face (+Z)
-      this.createWallMaterial()  // Back face (-Z)
+      })
     ];
     
     // Create the solid terrain block
     const terrainBlock = new THREE.Mesh(boxGeometry, materials);
-    terrainBlock.position.set(0, -this.blockDepth / 2, 0);
+    // Position the block so its top face is at Z=0, extending down to -blockDepth
+    terrainBlock.position.set(0, 0, -this.blockDepth / 2);
     
     // Store reference to the block for wireframe toggle
     this.wallMeshes = [terrainBlock];
     this.terrainGroup.add(terrainBlock);
     
-    // The surface mesh will be positioned on top of this block
-    this.surfaceMesh.position.y = 0; // At the top of the block
+    // The surface mesh will be positioned on top of this block (at Z=0)
+    this.surfaceMesh.position.z = 0; // At the top of the block in Z-up system
   }
 
   /**

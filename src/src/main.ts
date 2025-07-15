@@ -89,7 +89,7 @@ canvas.addEventListener('webglcontextrestored', (e) => {
 });
 
 // Create terrain
-const terrain = new Terrain(50, 50, 8, 8);
+const terrain = new Terrain(164, 164, 8, 8); // 164 feet x 164 feet
 scene.add(terrain.getMesh());
 
 // Add basic lighting immediately so terrain is visible
@@ -97,14 +97,14 @@ const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
 scene.add(ambientLight);
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
-directionalLight.position.set(10, 10, 5);
+directionalLight.position.set(10, 10, 15); // Adjusted for Z-up system
 scene.add(directionalLight);
 
 // Add scale reference grid and markers
 const scaleReferences = addScaleReferences(scene);
 
-// Position camera
-camera.position.set(0, 15, 40);
+// Position camera for Z-up system
+camera.position.set(50, 50, 80); // X, Y, Z with Z pointing up
 camera.lookAt(0, 0, 0);
 
 // Terrain is now visible - turn off wireframe
@@ -112,32 +112,66 @@ camera.lookAt(0, 0, 0);
 
 // Function to add scale references to the scene
 function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; markers: THREE.Group } {
-  const gridHelper = new THREE.GridHelper(50, 10, 0x444444, 0x222222);
-  gridHelper.position.y = 0.01; // Slightly above terrain to avoid z-fighting
+  // Create grid helper for Z-up system (rotated to be horizontal)
+  const gridHelper = new THREE.GridHelper(164, 16, 0x444444, 0x222222); // 164 feet with 16 divisions
+  gridHelper.rotateX(Math.PI / 2); // Rotate to be horizontal in Z-up system
+  gridHelper.position.z = 0.1; // Slightly above terrain to avoid z-fighting
   scene.add(gridHelper);
 
   // Add scale markers with axis lines in corner
   const markerGroup = new THREE.Group();
   
-  // Create axis lines in far corner
-  const axisLength = 8; // Length of axis lines
-  const cornerX = -25; // Far left
-  const cornerZ = -25; // Far back
-  const axisY = 2; // Height above terrain
+  // These will be dynamically positioned based on camera angle
+  updateAxisPosition(markerGroup, camera);
   
-  // Create X-axis line (red)
+  scene.add(markerGroup);
+  
+  return { grid: gridHelper, markers: markerGroup };
+}
+
+// Function to update axis position based on camera rotation
+function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveCamera): void {
+  // Clear existing markers
+  markerGroup.clear();
+  
+  // Get camera direction to determine which corner to place axes
+  const cameraDirection = new THREE.Vector3();
+  camera.getWorldDirection(cameraDirection);
+  
+  // Determine corner position based on camera view
+  // Default to far corner that's most visible
+  let cornerX = -82; // Far left (negative X)
+  let cornerY = -82; // Far back (negative Y)
+  
+  // Adjust corner based on camera direction
+  if (cameraDirection.x > 0) cornerX = 82;  // Switch to positive X if looking from negative X
+  if (cameraDirection.y > 0) cornerY = 82;  // Switch to positive Y if looking from negative Y
+  
+  const axisLength = 25; // Length of axis lines in feet
+  const axisZ = 8; // Height above terrain
+  
+  // Create X-axis line (red) - points right
   const xAxisGeometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(cornerX, axisY, cornerZ),
-    new THREE.Vector3(cornerX + axisLength, axisY, cornerZ)
+    new THREE.Vector3(cornerX, cornerY, axisZ),
+    new THREE.Vector3(cornerX + (cornerX > 0 ? -axisLength : axisLength), cornerY, axisZ)
   ]);
   const xAxisMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
   const xAxisLine = new THREE.Line(xAxisGeometry, xAxisMaterial);
   markerGroup.add(xAxisLine);
   
-  // Create Z-axis line (blue)
+  // Create Y-axis line (green) - points forward
+  const yAxisGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(cornerX, cornerY, axisZ),
+    new THREE.Vector3(cornerX, cornerY + (cornerY > 0 ? -axisLength : axisLength), axisZ)
+  ]);
+  const yAxisMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
+  const yAxisLine = new THREE.Line(yAxisGeometry, yAxisMaterial);
+  markerGroup.add(yAxisLine);
+  
+  // Create Z-axis line (blue) - points up
   const zAxisGeometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(cornerX, axisY, cornerZ),
-    new THREE.Vector3(cornerX, axisY, cornerZ + axisLength)
+    new THREE.Vector3(cornerX, cornerY, axisZ),
+    new THREE.Vector3(cornerX, cornerY, axisZ + axisLength)
   ]);
   const zAxisMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 3 });
   const zAxisLine = new THREE.Line(zAxisGeometry, zAxisMaterial);
@@ -150,7 +184,7 @@ function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; marke
   canvas.height = 48;
   
   // Helper function to create text markers
-  function createTextMarker(text: string, x: number, z: number, y: number = 0.5, color: string = '#000000'): THREE.Sprite {
+  function createTextMarker(text: string, x: number, y: number, z: number = 0.5, color: string = '#000000'): THREE.Sprite {
     // Clear canvas
     context.fillStyle = '#FFFFFF';
     context.fillRect(0, 0, canvas.width, canvas.height);
@@ -174,23 +208,24 @@ function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; marke
     const material = new THREE.SpriteMaterial({ map: texture });
     const sprite = new THREE.Sprite(material);
     sprite.position.set(x, y, z);
-    sprite.scale.set(4, 2, 1);
+    sprite.scale.set(12, 6, 1); // Larger scale for feet
     
     return sprite;
   }
 
   // Add origin marker at axis intersection
-  markerGroup.add(createTextMarker('0,0', cornerX - 1, cornerZ - 1, axisY + 0.5, '#666666'));
+  markerGroup.add(createTextMarker('0,0,0', cornerX - 3, cornerY - 3, axisZ + 2, '#666666'));
   
   // Add X-axis scale marker (red)
-  markerGroup.add(createTextMarker('50m', cornerX + axisLength + 1, cornerZ, axisY + 0.5, '#ff0000'));
+  const xLabelX = cornerX + (cornerX > 0 ? -axisLength - 6 : axisLength + 6);
+  markerGroup.add(createTextMarker('164ft', xLabelX, cornerY, axisZ + 2, '#ff0000'));
+  
+  // Add Y-axis scale marker (green)
+  const yLabelY = cornerY + (cornerY > 0 ? -axisLength - 6 : axisLength + 6);
+  markerGroup.add(createTextMarker('164ft', cornerX, yLabelY, axisZ + 2, '#00ff00'));
   
   // Add Z-axis scale marker (blue)
-  markerGroup.add(createTextMarker('50m', cornerX, cornerZ + axisLength + 1, axisY + 0.5, '#0000ff'));
-  
-  scene.add(markerGroup);
-  
-  return { grid: gridHelper, markers: markerGroup };
+  markerGroup.add(createTextMarker('33ft', cornerX, cornerY - 3, axisZ + axisLength + 3, '#0000ff'));
 }
 
 // Force initialize game if authentication is taking too long
@@ -207,6 +242,11 @@ setTimeout(() => {
 function animate() {
   requestAnimationFrame(animate);
   try {
+    // Update axis position based on camera rotation
+    if (scaleReferences && scaleReferences.markers) {
+      updateAxisPosition(scaleReferences.markers, camera);
+    }
+    
     renderer.render(scene, camera);
   } catch (error) {
     console.error('Render error:', error);
@@ -925,8 +965,8 @@ function setupUI() {
       <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
         <strong>Terrain Stats:</strong><br>
         <div id="terrain-stats">
-          <strong>Dimensions:</strong> 50m × 50m<br>
-          <strong>Work Area:</strong> 2,500 m²<br>
+          <strong>Dimensions:</strong> 164ft × 164ft<br>
+          <strong>Work Area:</strong> 26,896 ft²<br>
           Vertices: 0<br>
           Triangles: 0
         </div>
