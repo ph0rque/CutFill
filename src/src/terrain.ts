@@ -43,6 +43,7 @@ export class Terrain {
   private materialLayers: MaterialLayer[] = [];
   private blockDepth: number = 33; // 10m = ~33 feet depth
   private crossSectionGeometries: THREE.BufferGeometry[] = [];
+  private arrows: THREE.ArrowHelper[] = [];
 
   constructor(
     width: number = 100,  // 100 feet x 100 feet
@@ -434,6 +435,16 @@ export class Terrain {
         b = Math.max(0.6, b - darkening); // Higher minimum brightness
       }
 
+      // Add contour shading
+      const contourInterval = 5;
+      const contourWidth = 0.2;
+      const heightMod = height % contourInterval;
+      if (Math.abs(heightMod) < contourWidth || Math.abs(heightMod - contourInterval) < contourWidth) {
+        r *= 0.85;
+        g *= 0.85;
+        b *= 0.85;
+      }
+
       // Clamp values to valid range
       colors[i] = Math.min(1.0, Math.max(0.0, r));
       colors[i + 1] = Math.min(1.0, Math.max(0.0, g));
@@ -489,6 +500,33 @@ export class Terrain {
       this.geometry.attributes.position.needsUpdate = true;
       this.geometry.computeVertexNormals();
       this.updateTerrainColors();
+
+      // Calculate average new height for arrow position
+      let totalHeight = 0;
+      let count = 0;
+      for (let j = 0; j < vertices.length; j += 3) {
+        const dist = Math.sqrt((x - vertices[j]) ** 2 + (z - vertices[j + 2]) ** 2);
+        if (dist <= this.brushSettings.size) {
+          totalHeight += vertices[j + 1];
+          count++;
+        }
+      }
+      const avgHeight = count > 0 ? totalHeight / count : 0;
+
+      // Add arrow indicator
+      const color = heightChange < 0 ? 0x0000ff : 0xff0000;
+      const dir = new THREE.Vector3(0, heightChange < 0 ? -1 : 1, 0);
+      const length = Math.abs(heightChange) * 2;
+      const arrowPos = new THREE.Vector3(x, avgHeight + (heightChange < 0 ? 1 : -1), z);
+      const arrow = new THREE.ArrowHelper(dir, arrowPos, length, color);
+      this.terrainGroup.add(arrow);
+      this.arrows.push(arrow);
+
+      // Animate and remove
+      setTimeout(() => {
+        this.terrainGroup.remove(arrow);
+        this.arrows = this.arrows.filter(a => a !== arrow);
+      }, 2000);
     }
   }
 
@@ -832,5 +870,22 @@ export class Terrain {
       volume: this.calculateVolumeDifference(),
       materialLayers: this.materialLayers.length
     };
+  }
+
+  // Add hover tooltip logic (simplified, assume raycaster in main handles hover)
+  public getLayerAtPosition(x: number, z: number): string {
+    const vertices = this.geometry.attributes.position.array;
+    let height = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < vertices.length; i += 3) {
+      const dist = Math.sqrt((x - vertices[i]) ** 2 + (z - vertices[i + 2]) ** 2);
+      if (dist < minDist) {
+        minDist = dist;
+        height = vertices[i + 1];
+      }
+    }
+    const depth = Math.max(0, -height);
+    const layer = this.getMaterialAtDepth(depth);
+    return `${layer.name} (Hardness: ${layer.hardness})`;
   }
 }

@@ -16,6 +16,14 @@
 - **Gesture Controls**: Mac trackpad support with intuitive camera controls
 - **Smooth Terrain Generation**: Eliminated spiky artifacts for realistic surfaces
 
+### Latest Enhancements: Cut/Fill UI and UX Polish
+- Dynamic arrow indicators for cut (blue down) and fill (red up) operations
+- Tooltips showing material layers on hover
+- Contour-like shading for better depth perception
+- Enhanced HUD with tool info, volumes, warnings, progress
+- Accessibility: Color-blind modes, additional keyboard shortcuts
+- Mobile: Refined gesture controls
+
 ## Recent Major Achievements
 
 ### Enhanced 3D Terrain System

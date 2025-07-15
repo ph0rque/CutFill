@@ -89,7 +89,7 @@ canvas.addEventListener('webglcontextrestored', (e) => {
 });
 
 // Create terrain
-const terrain = new Terrain(100, 100, 8, 8); // 100 feet x 100 feet
+const terrain = new Terrain(100, 100, 32, 32); // 100 feet x 100 feet
 scene.add(terrain.getMesh());
 
 // Add basic lighting immediately so terrain is visible
@@ -694,7 +694,7 @@ function setupGameControls() {
   // Add keyboard event listeners for modifier key feedback
   document.addEventListener('keyup', event => {
     if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
-      updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
+    updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
     }
   });
 
@@ -710,7 +710,7 @@ function setupGameControls() {
     isModifying = false;
     // Reset interaction mode when mouse is released (only if not in gesture mode)
     if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
-      updateInteractionMode(false, false);
+    updateInteractionMode(false, false);
     }
   });
 
@@ -723,7 +723,7 @@ function setupGameControls() {
   document.addEventListener('keydown', event => {
     // Update interaction mode display (only if not in gesture mode)
     if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
-      updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
+    updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
     }
     
     switch (event.key.toLowerCase()) {
@@ -1094,6 +1094,8 @@ function setupUI() {
          <div id="current-assignment" style="margin: 5px 0; font-size: 12px; color: #ccc;">No assignment selected</div>
          <div id="assignment-progress" style="margin: 5px 0; font-size: 12px; color: #ccc; display: none;">Progress: 0%</div>
        </div>
+       <div id="water-warning" style="margin: 5px 0; color: #F44336; display: none;">⚠️ Water Hazard Detected</div>
+       <div id="assignment-progress-hud" style="margin: 5px 0;">Assignment Progress: 0%</div>
      </div>
    `;
 

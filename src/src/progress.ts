@@ -76,6 +76,8 @@ export class ProgressTracker {
     onAchievementUnlocked?: (achievement: Achievement) => void;
     onXPGained?: (xp: number, source: string) => void;
   } = {};
+  private saveTimeout: number | null = null;
+  private isSaving: boolean = false;
 
   constructor() {
     this.initializeAchievements();
@@ -412,8 +414,22 @@ export class ProgressTracker {
   }
 
   public async saveUserProgress(): Promise<void> {
-    if (!this.userProgress) return;
+    if (!this.userProgress || this.isSaving) return;
 
+    // Debounce saves to prevent race conditions
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+
+    this.saveTimeout = window.setTimeout(async () => {
+      await this.performSave();
+    }, 500); // Wait 500ms before saving
+  }
+
+  private async performSave(): Promise<void> {
+    if (!this.userProgress || this.isSaving) return;
+
+    this.isSaving = true;
     try {
       const { error } = await supabase
         .from('user_progress')
@@ -430,6 +446,9 @@ export class ProgressTracker {
           last_active_date: this.userProgress.lastActiveDate.toISOString(),
           preferences: this.userProgress.preferences,
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id', // Specify the conflict column
+          ignoreDuplicates: false // Update on conflict instead of ignoring
         });
 
       if (error) {
@@ -437,6 +456,8 @@ export class ProgressTracker {
       }
     } catch (error) {
       console.error('Failed to save user progress:', error);
+    } finally {
+      this.isSaving = false;
     }
   }
 
@@ -453,13 +474,9 @@ export class ProgressTracker {
       this.userProgress.level = newLevel;
       this.userProgress.currentXP = this.userProgress.totalXP - this.getXPForLevel(newLevel);
       
-      // Trigger level up callback
-      if (this.callbacks.onLevelUp) {
-        const newLevelData = this.levels.find(l => l.level === newLevel);
-        const oldLevelData = this.levels.find(l => l.level === oldLevel);
-        if (newLevelData && oldLevelData) {
-          this.callbacks.onLevelUp(newLevelData, oldLevelData);
-        }
+      const levelData = this.levels.find(l => l.level === newLevel);
+      if (levelData && this.callbacks.onLevelUp) {
+        this.callbacks.onLevelUp(levelData, this.levels.find(l => l.level === oldLevel) || this.levels[0]);
       }
     }
 
@@ -468,7 +485,11 @@ export class ProgressTracker {
       this.callbacks.onXPGained(amount, source);
     }
 
-    await this.saveUserProgress();
+    // Check for achievements (don't await to avoid blocking)
+    this.checkAchievements();
+
+    // Use debounced save
+    this.saveUserProgress();
   }
 
   private calculateLevel(totalXP: number): number {
@@ -483,17 +504,26 @@ export class ProgressTracker {
   public async recordToolUsage(toolName: string): Promise<void> {
     if (!this.userProgress) return;
 
+    // Update tool usage stats
     this.userProgress.toolUsageStats[toolName] = (this.userProgress.toolUsageStats[toolName] || 0) + 1;
-    await this.checkAchievements();
-    await this.saveUserProgress();
+    
+    // Award small XP for tool usage
+    this.awardXP(5, `Using ${toolName}`);
+    
+    // Debounced save will handle persistence
+    this.saveUserProgress();
   }
 
-  public async recordVolumeMove(volumeCubicMeters: number): Promise<void> {
+  public async recordVolumeMove(cubicMeters: number): Promise<void> {
     if (!this.userProgress) return;
 
-    this.userProgress.totalVolumeMovedCubicMeters += volumeCubicMeters;
-    await this.checkAchievements();
-    await this.saveUserProgress();
+    this.userProgress.totalVolumeMovedCubicMeters += cubicMeters;
+    
+    // Award XP for volume moved (1 XP per cubic meter)
+    this.awardXP(Math.floor(cubicMeters), 'Moving terrain');
+    
+    // Debounced save will handle persistence
+    this.saveUserProgress();
   }
 
   public async recordAssignmentCompletion(accuracy: number): Promise<void> {
@@ -518,7 +548,7 @@ export class ProgressTracker {
     await this.saveUserProgress();
   }
 
-  private async checkAchievements(): Promise<void> {
+  private checkAchievements(): void {
     if (!this.userProgress) return;
 
     for (const achievement of this.achievements) {
@@ -528,7 +558,8 @@ export class ProgressTracker {
         this.userProgress.achievements.push(achievement.id);
         achievement.unlockedAt = new Date();
         
-        await this.awardXP(achievement.xpReward, `Achievement: ${achievement.name}`);
+        // Award XP for achievement without recursive save
+        this.userProgress.totalXP += achievement.xpReward;
         
         if (this.callbacks.onAchievementUnlocked) {
           this.callbacks.onAchievementUnlocked(achievement);

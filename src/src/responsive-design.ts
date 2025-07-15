@@ -623,7 +623,7 @@ class TouchManagerImpl implements TouchManager {
     // Only handle touches on UI elements, not the game canvas
     if (element && (element.classList.contains('tool-btn') || element.closest('.main-panel'))) {
       if (element.classList.contains('tool-btn')) {
-        element.classList.add('touch-active');
+      element.classList.add('touch-active');
       }
     }
   }
