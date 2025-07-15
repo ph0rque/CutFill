@@ -129,25 +129,25 @@ export class Terrain {
     this.materialLayers = [
       {
         name: 'Topsoil',
-        color: new THREE.Color(0xE6C2A6), // Much lighter tan/beige
+        color: new THREE.Color(0x8B5A2B), // Rich dark brown topsoil
         depth: 5, // 1.5m = ~5 feet
         hardness: 0.3
       },
       {
         name: 'Subsoil', 
-        color: new THREE.Color(0xF5DEB3), // Very light wheat color
+        color: new THREE.Color(0xA0522D), // Sienna brown subsoil
         depth: 10, // 3.0m = ~10 feet
         hardness: 0.5
       },
       {
         name: 'Clay',
-        color: new THREE.Color(0xFFE4B5), // Light moccasin - very light orange-brown
+        color: new THREE.Color(0xCD853F), // Sandy brown clay
         depth: 11, // 3.5m = ~11 feet
         hardness: 0.7
       },
       {
         name: 'Rock',
-        color: new THREE.Color(0xF0F0F0), // Very light gray, almost white
+        color: new THREE.Color(0x696969), // Dim gray rock
         depth: 7, // 2.0m = ~7 feet
         hardness: 1.0
       }
@@ -214,86 +214,125 @@ export class Terrain {
    * Create the 3D terrain block with sides and bottom
    */
   private create3DTerrainBlock(width: number, height: number): void {
-    // Create a solid box geometry for the terrain block (Y-up system)
-    // In Y-up: X=width, Z=height, Y=depth (vertical)
-    const boxGeometry = new THREE.BoxGeometry(width, this.blockDepth, height);
+    // Create custom geometry where the block top follows the terrain contours
+    const blockGeometry = new THREE.BufferGeometry();
     
-    // Create materials for each face of the box
-    const materials = [
-      this.createWallMaterial(), // Right face (+X)
-      this.createWallMaterial(), // Left face (-X)  
-      this.material,             // Top face (+Y) - will be replaced by surface mesh
-      new THREE.MeshLambertMaterial({ // Bottom face (-Y) - bottom of block
-        color: this.materialLayers[this.materialLayers.length - 1].color,
-        side: THREE.DoubleSide
-      }),
-      this.createWallMaterial(), // Front face (+Z)
-      this.createWallMaterial()  // Back face (-Z)
-    ];
+    // Get terrain vertices to define the top shape
+    const terrainVertices = this.geometry.attributes.position.array;
+    const widthSegments = this.geometry.parameters.widthSegments;
+    const heightSegments = this.geometry.parameters.heightSegments;
     
-    // Create the solid terrain block
-    const terrainBlock = new THREE.Mesh(boxGeometry, materials);
-    // Position the block so its top face is at Y=0, extending down to -blockDepth
-    terrainBlock.position.set(0, -this.blockDepth / 2, 0);
+    // Calculate total vertices needed: terrain top + bottom + walls
+    const topVertexCount = terrainVertices.length / 3;
+    const totalVertices = topVertexCount * 2; // top + bottom
+    const positions = new Float32Array(totalVertices * 3);
+    const indices = [];
     
-    // Store reference to the block for wireframe toggle
+    // Copy terrain vertices for top face (Y-up system)
+    for (let i = 0; i < terrainVertices.length; i += 3) {
+      const vertexIndex = i / 3;
+      // Top vertices (use terrain heights)
+      positions[vertexIndex * 3] = terrainVertices[i];     // x
+      positions[vertexIndex * 3 + 1] = terrainVertices[i + 1]; // y (height)
+      positions[vertexIndex * 3 + 2] = terrainVertices[i + 2]; // z
+      
+      // Bottom vertices (flat at -blockDepth)
+      const bottomIndex = topVertexCount + vertexIndex;
+      positions[bottomIndex * 3] = terrainVertices[i];     // x
+      positions[bottomIndex * 3 + 1] = -this.blockDepth;  // y (bottom)
+      positions[bottomIndex * 3 + 2] = terrainVertices[i + 2]; // z
+    }
+    
+    // Create triangles for top face (terrain surface - not needed since surfaceMesh handles this)
+    // Create triangles for bottom face
+    for (let row = 0; row < heightSegments; row++) {
+      for (let col = 0; col < widthSegments; col++) {
+        const topLeft = topVertexCount + (row * (widthSegments + 1) + col);
+        const topRight = topVertexCount + (row * (widthSegments + 1) + col + 1);
+        const bottomLeft = topVertexCount + ((row + 1) * (widthSegments + 1) + col);
+        const bottomRight = topVertexCount + ((row + 1) * (widthSegments + 1) + col + 1);
+        
+        // Bottom face triangles (flipped for downward normal)
+        indices.push(bottomLeft, topRight, topLeft);
+        indices.push(bottomLeft, bottomRight, topRight);
+      }
+    }
+    
+    // Create side walls connecting top to bottom
+    // Front edge (positive Z)
+    for (let col = 0; col < widthSegments; col++) {
+      const row = heightSegments;
+      const topLeft = row * (widthSegments + 1) + col;
+      const topRight = row * (widthSegments + 1) + col + 1;
+      const bottomLeft = topVertexCount + topLeft;
+      const bottomRight = topVertexCount + topRight;
+      
+      indices.push(topLeft, bottomLeft, topRight);
+      indices.push(topRight, bottomLeft, bottomRight);
+    }
+    
+    // Back edge (negative Z)
+    for (let col = 0; col < widthSegments; col++) {
+      const row = 0;
+      const topLeft = row * (widthSegments + 1) + col;
+      const topRight = row * (widthSegments + 1) + col + 1;
+      const bottomLeft = topVertexCount + topLeft;
+      const bottomRight = topVertexCount + topRight;
+      
+      indices.push(topRight, bottomLeft, topLeft);
+      indices.push(bottomRight, bottomLeft, topRight);
+    }
+    
+    // Left edge (negative X)
+    for (let row = 0; row < heightSegments; row++) {
+      const col = 0;
+      const topTop = row * (widthSegments + 1) + col;
+      const topBottom = (row + 1) * (widthSegments + 1) + col;
+      const bottomTop = topVertexCount + topTop;
+      const bottomBottom = topVertexCount + topBottom;
+      
+      indices.push(topTop, bottomTop, topBottom);
+      indices.push(topBottom, bottomTop, bottomBottom);
+    }
+    
+    // Right edge (positive X)
+    for (let row = 0; row < heightSegments; row++) {
+      const col = widthSegments;
+      const topTop = row * (widthSegments + 1) + col;
+      const topBottom = (row + 1) * (widthSegments + 1) + col;
+      const bottomTop = topVertexCount + topTop;
+      const bottomBottom = topVertexCount + topBottom;
+      
+      indices.push(topBottom, bottomTop, topTop);
+      indices.push(bottomBottom, bottomTop, topBottom);
+    }
+    
+    blockGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    blockGeometry.setIndex(indices);
+    blockGeometry.computeVertexNormals();
+    
+    // Create earth material for the block
+    const earthMaterial = new THREE.MeshLambertMaterial({
+      color: 0x8B5A2B, // Rich earth brown
+      side: THREE.DoubleSide
+    });
+    
+    // Create the terrain block that follows the surface contours
+    const terrainBlock = new THREE.Mesh(blockGeometry, earthMaterial);
+    
     this.wallMeshes = [terrainBlock];
     this.terrainGroup.add(terrainBlock);
     
-    // The surface mesh will be positioned on top of this block (at Y=0)
-    this.surfaceMesh.position.y = 0; // At the top of the block in Y-up system
+    // Surface mesh still needed for tools and interaction, but position it exactly on the terrain
+    this.surfaceMesh.position.y = 0;
   }
 
   /**
-   * Create material for cross-section walls showing layers
+   * Create material for cross-section walls showing solid earth layers
    */
   private createWallMaterial(): THREE.MeshLambertMaterial {
-    // Create a gradient texture showing material layers
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d')!;
-    
-    // Create gradient representing soil layers
-    const gradient = ctx.createLinearGradient(0, 0, 0, 64);
-    let currentDepth = 0;
-    
-    for (let i = 0; i < this.materialLayers.length; i++) {
-      const layer = this.materialLayers[i];
-      const startPercent = currentDepth / this.blockDepth;
-      currentDepth += layer.depth;
-      const endPercent = Math.min(currentDepth / this.blockDepth, 1.0);
-      
-      const color = `rgb(${Math.floor(layer.color.r * 255)}, ${Math.floor(layer.color.g * 255)}, ${Math.floor(layer.color.b * 255)})`;
-      gradient.addColorStop(startPercent, color);
-      gradient.addColorStop(endPercent, color);
-    }
-    
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 256, 64);
-    
-    // Add some texture lines for realism
-    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < this.materialLayers.length - 1; i++) {
-      let lineDepth = 0;
-      for (let j = 0; j <= i; j++) {
-        lineDepth += this.materialLayers[j].depth;
-      }
-      const y = (lineDepth / this.blockDepth) * 64;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(256, y);
-      ctx.stroke();
-    }
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.repeat.set(4, 1);
-    
     return new THREE.MeshLambertMaterial({
-      map: texture,
+      color: 0x8B5A2B, // Rich topsoil brown - same as surface
       side: THREE.DoubleSide
     });
   }
@@ -330,6 +369,7 @@ export class Terrain {
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.computeVertexNormals();
     this.updateTerrainColors();
+    this.updateBlockGeometry(); // Update block to match new terrain
     this.saveState();
   }
 
@@ -525,55 +565,45 @@ export class Terrain {
       maxHeight = 10;
     }
 
-    // Apply elevation-based colors
+    // Apply elevation-based colors with earth tones
     for (let i = 0; i < vertices.length; i += 3) {
       const height = vertices[i + 1];
       
-      // Default to a safe light brown color if height is invalid
-      let r = 0.9, g = 0.8, b = 0.7; // Light brown default
+      // Default to earth brown color
+      let r = 0.85, g = 0.7, b = 0.55; // Warm earth brown
       
       if (isFinite(height) && !isNaN(height)) {
         // Get elevation zone for this height
         const zone = this.getElevationZone(height);
         
-        // Start with zone base color
-        r = zone.color.r;
-        g = zone.color.g;
-        b = zone.color.b;
+        // Start with zone base color but keep earth tones
+        r = Math.min(zone.color.r + 0.3, 0.9); // Warmer
+        g = Math.min(zone.color.g + 0.2, 0.8); // Earth tones
+        b = Math.min(zone.color.b + 0.1, 0.7); // Browns
         
-        // Add material layer influence for subsurface areas
+        // Add material layer influence for subsurface areas (earth to stone progression)
         if (height < 0) {
           const exposureDepth = Math.max(0, -height);
           const materialLayer = this.getMaterialAtDepth(exposureDepth);
           
-          // Blend zone color with material color (30% zone, 70% material for lighter appearance)
-          r = r * 0.3 + materialLayer.color.r * 0.7;
-          g = g * 0.3 + materialLayer.color.g * 0.7;
-          b = b * 0.3 + materialLayer.color.b * 0.7;
+          // Progressive earth to stone coloring
+          r = r * 0.4 + materialLayer.color.r * 0.6;
+          g = g * 0.4 + materialLayer.color.g * 0.6;
+          b = b * 0.4 + materialLayer.color.b * 0.6;
         } else {
-          // Surface level - add height-based variation
-          const normalizedHeight = (height - minHeight) / (maxHeight - minHeight + 0.001); // Avoid division by zero
-          const lightingVariation = 0.9 + (normalizedHeight * 0.2); // Brighter base
-          r *= lightingVariation;
-          g *= lightingVariation;
-          b *= lightingVariation;
-        }
-
-        // Add very subtle contour shading for topographic effect
-        const contourInterval = 1; // 1 foot intervals
-        const contourWidth = 0.05; // Narrower contour lines
-        const heightMod = (height - this.targetElevation) % contourInterval;
-        if (Math.abs(heightMod) < contourWidth || Math.abs(heightMod - contourInterval) < contourWidth) {
-          r *= 0.95; // Very light contour lines
-          g *= 0.95;
-          b *= 0.95;
+          // Surface level - rich earth tones
+          const normalizedHeight = (height - minHeight) / (maxHeight - minHeight + 0.001);
+          const earthVariation = 0.85 + (normalizedHeight * 0.15); // Earth tone variation
+          r *= earthVariation;
+          g *= earthVariation;
+          b *= earthVariation;
         }
       }
 
-      // Ensure colors are never black - enforce high minimum values
-      colors[i] = Math.min(1.0, Math.max(0.7, r || 0.7)); // Higher minimum with fallback
-      colors[i + 1] = Math.min(1.0, Math.max(0.7, g || 0.7)); // Higher minimum with fallback
-      colors[i + 2] = Math.min(1.0, Math.max(0.7, b || 0.7)); // Higher minimum with fallback
+      // Ensure rich earth colors - higher minimums for natural look
+      colors[i] = Math.min(1.0, Math.max(0.6, r || 0.6)); // Rich browns
+      colors[i + 1] = Math.min(1.0, Math.max(0.5, g || 0.5)); // Earth tones
+      colors[i + 2] = Math.min(1.0, Math.max(0.4, b || 0.4)); // Natural browns
     }
 
     this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -628,6 +658,7 @@ export class Terrain {
       this.geometry.attributes.position.needsUpdate = true;
       this.geometry.computeVertexNormals();
       this.updateTerrainColors();
+      this.updateBlockGeometry(); // Update block to match terrain
 
       // Create intelligent arrow placement based on operation magnitude
       this.createDensityBasedArrows(x, z, heightChange, totalVolumeChange, brushRadius);
@@ -914,6 +945,7 @@ export class Terrain {
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.computeVertexNormals();
     this.updateTerrainColors();
+    this.updateBlockGeometry(); // Update block to match undone state
   }
 
   /**
@@ -993,7 +1025,8 @@ export class Terrain {
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.computeVertexNormals();
     this.updateTerrainColors();
-    
+    this.updateBlockGeometry(); // Update block to match reset terrain
+
     // Clear undo/redo stacks and save initial state
     this.undoStack = [];
     this.redoStack = [];
@@ -1011,7 +1044,9 @@ export class Terrain {
    * Force disable wireframe mode
    */
   public forceDisableWireframe(): void {
-    this.material.wireframe = false;
+    // Disable wireframe on surface mesh (now MeshBasicMaterial)
+    const surfaceMaterial = this.surfaceMesh.material as THREE.MeshBasicMaterial;
+    surfaceMaterial.wireframe = false;
     
     // Also disable wireframe on the terrain block
     this.wallMeshes.forEach(block => {
@@ -1032,19 +1067,20 @@ export class Terrain {
    * Toggle wireframe mode
    */
   public toggleWireframe(): void {
-    this.material.wireframe = !this.material.wireframe;
+    // Toggle wireframe on surface mesh
+    const surfaceMaterial = this.surfaceMesh.material as THREE.MeshBasicMaterial;
+    surfaceMaterial.wireframe = !surfaceMaterial.wireframe;
     
-    // Also toggle wireframe on the terrain block
+    // Toggle wireframe on the terrain block (now has 5 materials: bottom, front, back, left, right)
     this.wallMeshes.forEach(block => {
       if (block.material instanceof Array) {
-        // Handle multi-material mesh (our box)
         block.material.forEach(mat => {
           if (mat instanceof THREE.MeshLambertMaterial) {
-            mat.wireframe = this.material.wireframe;
+            mat.wireframe = surfaceMaterial.wireframe;
           }
         });
       } else if (block.material instanceof THREE.MeshLambertMaterial) {
-        block.material.wireframe = this.material.wireframe;
+        block.material.wireframe = surfaceMaterial.wireframe;
       }
     });
   }
@@ -1102,6 +1138,29 @@ export class Terrain {
       volume: this.calculateVolumeDifference(),
       materialLayers: this.materialLayers.length
     };
+  }
+
+  /**
+   * Update the 3D block geometry to match current terrain heights
+   */
+  private updateBlockGeometry(): void {
+    if (this.wallMeshes.length === 0) return;
+    
+    const terrainVertices = this.geometry.attributes.position.array;
+    const blockGeometry = this.wallMeshes[0].geometry as THREE.BufferGeometry;
+    const positions = blockGeometry.attributes.position.array as Float32Array;
+    const topVertexCount = terrainVertices.length / 3;
+    
+    // Update top vertices to match terrain heights
+    for (let i = 0; i < terrainVertices.length; i += 3) {
+      const vertexIndex = i / 3;
+      positions[vertexIndex * 3] = terrainVertices[i];     // x
+      positions[vertexIndex * 3 + 1] = terrainVertices[i + 1]; // y (height)
+      positions[vertexIndex * 3 + 2] = terrainVertices[i + 2]; // z
+    }
+    
+    blockGeometry.attributes.position.needsUpdate = true;
+    blockGeometry.computeVertexNormals();
   }
 
   // Add hover tooltip logic (simplified, assume raycaster in main handles hover)

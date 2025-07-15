@@ -103,24 +103,45 @@ canvas.addEventListener('webglcontextrestored', (e) => {
 // Create terrain
 const terrain = new Terrain(100, 100, 32, 32); // 100 feet x 100 feet
 
-// Force disable all pattern overlays to prevent black grid
+// Force disable all pattern overlays to prevent issues
 terrain.forceDisablePatterns();
 
-// Force disable wireframe mode to prevent black grid
+// Force disable wireframe mode initially
 terrain.forceDisableWireframe();
 
-// Force light colors to eliminate any black areas
-terrain.forceLightColors();
+// Change to unlit material for even lighting
+terrain.getSurfaceMesh().material = new THREE.MeshBasicMaterial({
+  vertexColors: true,
+  side: THREE.DoubleSide
+});
+
+// Force update colors to ensure they're applied
+terrain.updateTerrainColors();
 
 scene.add(terrain.getMesh());
 
 // Add basic lighting immediately so terrain is visible
-const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Increased ambient
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
-directionalLight.position.set(10, 15, 10); // Adjusted for Y-up system
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+directionalLight.position.set(50, 80, 50); // more top-down
 scene.add(directionalLight);
+
+// Add side lighting to illuminate walls better
+const sideLight1 = new THREE.DirectionalLight(0xffffff, 0.3);
+sideLight1.position.set(-50, 20, 0); // Left side
+scene.add(sideLight1);
+
+const sideLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+sideLight2.position.set(50, 20, 0); // Right side
+scene.add(sideLight2);
+
+const hemi = new THREE.HemisphereLight(0xddddff, 0x888866, 0.4);
+scene.add(hemi);
+
+// or simply raise the ambient intensity:
+ambientLight.intensity = 1.0;
 
 // Add scale reference grid and markers
 const scaleReferences = addScaleReferences(scene);
@@ -952,8 +973,8 @@ function setupGameControls() {
         event.preventDefault();
         toggleGrid();
         break;
-      case 'l':
-        if (event.ctrlKey) return; // Don't interfere with Ctrl+L
+      case 'b':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+B
         event.preventDefault();
         terrain.forceLightColors();
         break;
@@ -2248,8 +2269,8 @@ function setupEnhancedKeyboardNavigation() {
         event.preventDefault();
         toggleGrid();
         break;
-      case 'l':
-        if (event.ctrlKey) return; // Don't interfere with Ctrl+L
+      case 'b':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+B
         event.preventDefault();
         terrain.forceLightColors();
         break;
@@ -2296,3 +2317,13 @@ function initializeAccessibilityFeatures() {
   
   document.body.appendChild(accessibilityStatus);
 }
+
+const MIN_LIGHT = 0.5;               // 0 → pitch black, 1 → fully lit
+renderer.toneMappingExposure = 1;    // make sure exposure is 1
+
+// after each frame's lighting calculations run
+scene.traverse(obj => {
+  if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshLambertMaterial) {
+    obj.material.lightMapIntensity = MIN_LIGHT;
+  }
+});
