@@ -427,11 +427,11 @@ export class Terrain {
         g *= lightingVariation;
         b *= lightingVariation;
       } else {
-        // Below ground - slightly darken based on depth for realism
-        const darkening = Math.min(0.2, exposureDepth * 0.02);
-        r = Math.max(0.2, r - darkening);
-        g = Math.max(0.2, g - darkening);
-        b = Math.max(0.2, b - darkening);
+        // Below ground - apply minimal darkening to show depth but prevent black areas
+        const darkening = Math.min(0.1, exposureDepth * 0.005); // Much less darkening
+        r = Math.max(0.6, r - darkening); // Higher minimum brightness
+        g = Math.max(0.6, g - darkening); // Higher minimum brightness  
+        b = Math.max(0.6, b - darkening); // Higher minimum brightness
       }
 
       // Clamp values to valid range
