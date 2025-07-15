@@ -47,7 +47,7 @@ export class Terrain {
 
   // Add elevation zone properties
   private targetElevation: number = 0; // Target grade elevation
-  private elevationZones: {
+  private elevationZones!: {
     high: { min: number; max: number; color: THREE.Color };
     medium: { min: number; max: number; color: THREE.Color };
     low: { min: number; max: number; color: THREE.Color };
@@ -171,6 +171,13 @@ export class Terrain {
   public setTargetElevation(elevation: number): void {
     this.targetElevation = elevation;
     this.updateTerrainColors();
+  }
+
+  /**
+   * Get current target elevation
+   */
+  public getTargetElevation(): number {
+    return this.targetElevation;
   }
 
   /**

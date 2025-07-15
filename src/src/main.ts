@@ -116,10 +116,30 @@ camera.updateProjectionMatrix();
 
 // Function to add scale references to the scene
 function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; markers: THREE.Group } {
-  // Create grid helper for Y-up system (already horizontal by default)
-  const gridHelper = new THREE.GridHelper(100, 10, 0x444444, 0x222222); // 100 feet with 10 divisions
-  gridHelper.position.y = 0.1; // Slightly above terrain to avoid z-fighting
+  // Create professional grid helper with enhanced styling
+  const gridHelper = new THREE.GridHelper(100, 20, 0x666666, 0x333333); // 100 feet with 20 divisions (5ft spacing)
+  gridHelper.position.y = 0.05; // Slightly above terrain to avoid z-fighting
+  
+  // Enhance grid material for professional appearance
+  const gridMaterial = gridHelper.material as THREE.LineBasicMaterial;
+  if (gridMaterial) {
+    gridMaterial.linewidth = 2;
+    gridMaterial.opacity = 0.8;
+    gridMaterial.transparent = true;
+  }
+  
   scene.add(gridHelper);
+
+  // Add secondary fine grid for detailed work
+  const fineGridHelper = new THREE.GridHelper(100, 100, 0x444444, 0x222222); // 1ft spacing
+  fineGridHelper.position.y = 0.03;
+  const fineGridMaterial = fineGridHelper.material as THREE.LineBasicMaterial;
+  if (fineGridMaterial) {
+    fineGridMaterial.opacity = 0.3;
+    fineGridMaterial.transparent = true;
+    fineGridMaterial.linewidth = 1;
+  }
+  scene.add(fineGridHelper);
 
   // Add scale markers with axis lines in corner
   const markerGroup = new THREE.Group();
@@ -623,6 +643,74 @@ function setupGameControls() {
   });
 
   renderer.domElement.addEventListener('mousemove', event => {
+    // Enhanced hover tooltips for terrain information
+    if (!isMouseDown && !isModifying) {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(terrain.getSurfaceMesh());
+      
+      if (intersects.length > 0) {
+        const point = intersects[0].point;
+        const layerInfo = terrain.getLayerAtPosition(point.x, point.z);
+        const height = point.y;
+        const relativeHeight = height - terrain.getTargetElevation();
+        
+        let tooltip = document.getElementById('terrain-tooltip');
+        if (!tooltip) {
+          tooltip = document.createElement('div');
+          tooltip.id = 'terrain-tooltip';
+          tooltip.style.cssText = `
+            position: absolute; 
+            background: rgba(0,0,0,0.9); 
+            color: white; 
+            padding: 8px; 
+            border-radius: 4px; 
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 2000;
+            border: 1px solid #555;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          `;
+          document.body.appendChild(tooltip);
+        }
+        
+        // Determine zone type
+        let zoneType = '';
+        let zoneColor = '';
+        if (relativeHeight >= 2) {
+          zoneType = 'High Fill Zone';
+          zoneColor = '#4CAF50';
+        } else if (relativeHeight >= 0.5) {
+          zoneType = 'Medium Fill Zone';
+          zoneColor = '#FF9800';
+        } else if (relativeHeight >= -0.5) {
+          zoneType = 'Target Zone';
+          zoneColor = '#FFF59D';
+        } else {
+          zoneType = 'Cut Zone';
+          zoneColor = '#2196F3';
+        }
+        
+        tooltip.innerHTML = `
+          <div style="color: ${zoneColor}; font-weight: bold; margin-bottom: 4px;">🎯 ${zoneType}</div>
+          <div><strong>Elevation:</strong> ${height.toFixed(2)} ft</div>
+          <div><strong>Relative:</strong> ${relativeHeight > 0 ? '+' : ''}${relativeHeight.toFixed(2)} ft</div>
+          <div><strong>Material:</strong> ${layerInfo}</div>
+          <div style="margin-top: 4px; font-size: 11px; color: #ccc;">
+            ${relativeHeight > 0.5 ? '⬆️ Excavate to reduce fill' : relativeHeight < -0.5 ? '⬇️ Add material to cut' : '✅ Near target elevation'}
+          </div>
+        `;
+        
+        tooltip.style.display = 'block';
+        tooltip.style.left = `${event.clientX + 15}px`;
+        tooltip.style.top = `${event.clientY - 10}px`;
+      } else {
+        const tooltip = document.getElementById('terrain-tooltip');
+        if (tooltip) tooltip.style.display = 'none';
+      }
+    }
+
     if (isMouseDown) {
       if (event.buttons === 1) { // Left mouse button is down
         if (event.ctrlKey || event.metaKey || isModifying) {
@@ -836,6 +924,18 @@ function setupGameControls() {
     brushFalloffSelect.addEventListener('change', () => {
       terrain.setBrushSettings({ falloff: brushFalloffSelect.value as 'linear' | 'smooth' | 'sharp' });
       updateBrushDisplay();
+    });
+  }
+
+  // Target elevation controls
+  const targetElevationSlider = document.getElementById('target-elevation') as HTMLInputElement;
+  const targetElevationValue = document.getElementById('target-elevation-value');
+
+  if (targetElevationSlider && targetElevationValue) {
+    targetElevationSlider.addEventListener('input', () => {
+      const elevation = parseFloat(targetElevationSlider.value);
+      terrain.setTargetElevation(elevation);
+      targetElevationValue.textContent = `${elevation.toFixed(1)} ft`;
     });
   }
 
@@ -1160,6 +1260,20 @@ function setupUI() {
   authContainers.forEach(container => {
     (container as HTMLElement).style.display = 'none';
   });
+
+  // Target elevation controls
+  const targetElevationSlider = document.getElementById('target-elevation') as HTMLInputElement;
+  const targetElevationValue = document.getElementById('target-elevation-value');
+
+  if (targetElevationSlider && targetElevationValue) {
+    targetElevationSlider.addEventListener('input', () => {
+      const elevation = parseFloat(targetElevationSlider.value);
+      terrain.setTargetElevation(elevation);
+      targetElevationValue.textContent = `${elevation.toFixed(1)} ft`;
+    });
+  }
+
+  // Tool buttons
 }
 
 // Update volume display
@@ -1167,11 +1281,29 @@ function updateVolumeDisplay() {
   const volumes = terrain.calculateVolumeDifference();
   const info = document.getElementById('volume-info');
   if (info) {
+    // Calculate efficiency metrics
+    const totalVolume = volumes.cut + volumes.fill;
+    const efficiency = totalVolume > 0 ? (Math.min(volumes.cut, volumes.fill) / Math.max(volumes.cut, volumes.fill)) * 100 : 0;
+    const netBalance = Math.abs(volumes.net);
+    const balanceStatus = netBalance < 1 ? '✅ Balanced' : netBalance < 5 ? '⚠️ Minor Imbalance' : '❌ Major Imbalance';
+    
     info.innerHTML = `
       <strong>Volume Analysis:</strong><br>
-      Cut: ${volumes.cut.toFixed(2)}<br>
-      Fill: ${volumes.fill.toFixed(2)}<br>
-      Net: ${volumes.net.toFixed(2)}
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0;">
+        <div style="text-align: center; padding: 5px; background: rgba(33, 150, 243, 0.2); border-radius: 4px;">
+          <div style="font-size: 16px; font-weight: bold; color: #2196F3;">📉 CUT</div>
+          <div style="font-size: 14px;">${volumes.cut.toFixed(2)} ft³</div>
+        </div>
+        <div style="text-align: center; padding: 5px; background: rgba(211, 47, 47, 0.2); border-radius: 4px;">
+          <div style="font-size: 16px; font-weight: bold; color: #D32F2F;">📈 FILL</div>
+          <div style="font-size: 14px;">${volumes.fill.toFixed(2)} ft³</div>
+        </div>
+      </div>
+      <div style="margin: 8px 0; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+        <strong>Net Movement:</strong> ${volumes.net.toFixed(2)} ft³<br>
+        <strong>Efficiency:</strong> ${efficiency.toFixed(1)}%<br>
+        <strong>Balance:</strong> ${balanceStatus}
+      </div>
     `;
   }
 
