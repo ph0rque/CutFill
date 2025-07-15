@@ -3,7 +3,8 @@ import * as THREE from 'three';
 export interface GestureState {
   isRotating: boolean;
   isZooming: boolean;
-  gestureMode: 'none' | 'rotation' | 'zoom';
+  isPanning: boolean;
+  gestureMode: 'none' | 'rotation' | 'zoom' | 'pan';
 }
 
 export interface CameraControl {
@@ -25,6 +26,7 @@ export class GestureControls {
   private gestureState: GestureState = {
     isRotating: false,
     isZooming: false,
+    isPanning: false,
     gestureMode: 'none'
   };
   
@@ -38,6 +40,10 @@ export class GestureControls {
   // Zoom settings
   private zoomSpeed = 2.0;
   private lastPinchDistance = 0;
+  
+  // Pan settings
+  private panSpeed = 0.5;
+  private panDelta: THREE.Vector3 = new THREE.Vector3();
   
   // Touch position tracking for single-finger rotation
   private lastTouchX = 0;
@@ -235,6 +241,34 @@ export class GestureControls {
     this.updateCamera();
   }
 
+  // Mouse panning for desktop (called from main controls with shift+drag)
+  public handleMousePan(deltaX: number, deltaY: number): void {
+    // Calculate pan direction based on camera orientation
+    const camera = this.camera;
+    const position = camera.position.clone();
+    
+    // Get camera's right and up vectors
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    
+    camera.getWorldDirection(right);
+    right.cross(camera.up).normalize();
+    up.copy(camera.up);
+    
+    // Calculate pan distance based on camera distance from target
+    const distance = this.spherical.radius;
+    const panScale = distance * this.panSpeed * 0.001;
+    
+    // Calculate pan vector
+    this.panDelta.copy(right).multiplyScalar(-deltaX * panScale);
+    this.panDelta.addScaledVector(up, deltaY * panScale);
+    
+    // Apply pan to target
+    this.target.add(this.panDelta);
+    
+    this.updateCamera();
+  }
+
   private updateCamera(): void {
     // Apply deltas to spherical coordinates
     this.spherical.theta += this.sphericalDelta.theta;
@@ -256,6 +290,7 @@ export class GestureControls {
     
     // Reset deltas
     this.sphericalDelta.set(0, 0, 0);
+    this.panDelta.set(0, 0, 0);
   }
 
   // Set target point for camera to orbit around

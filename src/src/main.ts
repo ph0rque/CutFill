@@ -615,10 +615,17 @@ function setupGameControls() {
             }
           }
         } else {
-          // Default left drag = Camera rotation
+          // Check for modifier keys to determine interaction mode
           const deltaX = event.clientX - lastMouseX;
           const deltaY = event.clientY - lastMouseY;
-          gestureControls.handleMouseRotation(deltaX, deltaY);
+          
+          if (event.shiftKey) {
+            // Shift + drag = Pan camera
+            gestureControls.handleMousePan(deltaX, deltaY);
+          } else {
+            // Default left drag = Camera rotation
+            gestureControls.handleMouseRotation(deltaX, deltaY);
+          }
         }
       } else if (event.buttons === 2) { // Right mouse button is down
         // Right click drag = Camera rotation using gesture controls
@@ -999,7 +1006,7 @@ function setupUI() {
           <ul style="margin: 5px 0; padding-left: 20px; font-size: 14px;">
             <li><strong>Touch:</strong> One-finger drag: Rotate camera | Two-finger scroll: Zoom</li>
             <li><strong>Trackpad:</strong> Two-finger scroll: Zoom | Two-finger pinch/rotate: Camera control</li>
-            <li><strong>Mouse:</strong> Left drag: Rotate camera | Scroll wheel: Zoom</li>
+            <li><strong>Mouse:</strong> Left drag: Rotate camera | Shift+drag: Pan camera | Scroll wheel: Zoom</li>
             <li>Ctrl + drag: Apply current tool</li>
             <li>Q: Excavator | E: Bulldozer | T: Grader | Y: Compactor</li>
             <li>R: Reset terrain | G: Generate new terrain | W: Wireframe | X: Toggle grid</li>
@@ -1177,14 +1184,14 @@ function updateInteractionMode(shiftKey: boolean, ctrlKey: boolean, gestureState
         statusColor = '#4CAF50';
       }
     } else if (shiftKey) {
-      statusText = '🔄 Camera rotation mode';
-      statusColor = '#FF9800';
+      statusText = '🚚 Pan camera mode (Shift+drag to pan)';
+      statusColor = '#9C27B0';
     } else if (ctrlKey) {
       statusText = '🔧 Tool application mode';
       statusColor = '#4CAF50';
     } else {
-      statusText = '🔧 Ready to modify terrain';
-      statusColor = '#4CAF50';
+      statusText = '🔄 Camera rotation mode (Left-drag to rotate)';
+      statusColor = '#FF9800';
     }
     
     // Add zoom level indicator
