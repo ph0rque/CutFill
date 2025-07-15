@@ -254,7 +254,6 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Add X-axis segment markings and labels
   let segmentCount = 0;
   for (let x = -50; x <= 50; x += segmentSpacing) {
-    if (x === 0) continue; // Skip origin
     
     // Only show segment if it passes the culling interval
     if (segmentCount % xSegmentInterval === 0) {
@@ -269,7 +268,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       
       // Add number label at calculated intervals
       if (segmentCount % xLabelInterval === 0) {
-        const labelValue = Math.abs(x); // Distance from origin
+        const labelValue = x + 50; // Distance from left edge (0-100ft)
         const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
         const labelOffset = cornerZ > 0 ? -2 : 2;
         markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000', true));
@@ -296,7 +295,6 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Add Z-axis segment markings and labels
   segmentCount = 0;
   for (let z = -50; z <= 50; z += segmentSpacing) {
-    if (z === 0) continue; // Skip origin
     
     // Only show segment if it passes the culling interval
     if (segmentCount % zSegmentInterval === 0) {
@@ -311,7 +309,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       
       // Add number label at calculated intervals
       if (segmentCount % zLabelInterval === 0) {
-        const labelValue = Math.abs(z); // Distance from origin
+        const labelValue = z + 50; // Distance from back edge (0-100ft)
         const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
         const labelOffset = cornerX > 0 ? -2 : 2;
         markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00', true));
