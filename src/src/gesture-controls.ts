@@ -31,7 +31,7 @@ export class GestureControls {
   // Rotation settings
   private rotateSpeed = 1.0;
   private minDistance = 10;
-  private maxDistance = 100;
+  private maxDistance = 500; // Increased from 100 to allow much more zoom out
   private minPolarAngle = 0; // radians
   private maxPolarAngle = Math.PI; // radians
   
