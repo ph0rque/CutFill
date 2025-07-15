@@ -13,6 +13,18 @@ import { responsiveDesignSystem } from './responsive-design';
 import { performanceOptimizer, performanceMonitorUI } from './performance-optimization';
 import { GestureControls, type GestureState } from './gesture-controls';
 
+// Global variables that need to be available before any functions run
+let isGameReady = false;
+let isModifying = false;
+let lastMousePosition: THREE.Vector3 | null = null;
+let modificationStrength = 0.5;
+let gestureControls: GestureControls;
+
+// Preview system variables (must be declared early for animation loop)
+let previewMesh: THREE.Mesh | null = null;
+let isPreviewMode = false;
+let lastPreviewPosition: THREE.Vector3 | null = null;
+
 // Create basic Three.js scene
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
@@ -508,18 +520,6 @@ progressTracker.setCallbacks({
     showXPGained(xp, source);
   }
 });
-
-// Game state
-let isGameReady = false;
-let isModifying = false;
-let lastMousePosition: THREE.Vector3 | null = null;
-let modificationStrength = 0.5;
-
-// Add preview system variables
-let previewMesh: THREE.Mesh | null = null;
-let isPreviewMode = false;
-let lastPreviewPosition: THREE.Vector3 | null = null;
-let gestureControls: GestureControls;
 
 // Initialize authentication (simplified for testing)
 try {
@@ -1889,11 +1889,6 @@ function showXPGained(xp: number, source: string) {
 
 // Operation Preview System Functions
 function showOperationPreview(point: THREE.Vector3): void {
-  // Guard check to ensure variables are initialized
-  if (typeof lastPreviewPosition === 'undefined' || typeof previewMesh === 'undefined' || typeof isPreviewMode === 'undefined') {
-    return; // Variables not initialized yet
-  }
-  
   if (!point || (lastPreviewPosition && point.distanceTo(lastPreviewPosition) < 0.5)) {
     return; // Don't update if position hasn't changed much
   }
@@ -1945,26 +1940,19 @@ function showOperationPreview(point: THREE.Vector3): void {
 }
 
 function hideOperationPreview(): void {
-  // Guard check to ensure variables are initialized
-  if (typeof previewMesh !== 'undefined' && previewMesh) {
+  if (previewMesh) {
     scene.remove(previewMesh);
     previewMesh.geometry.dispose();
     (previewMesh.material as THREE.Material).dispose();
     previewMesh = null;
   }
-  // Only set these if they're defined
-  if (typeof isPreviewMode !== 'undefined') {
-    isPreviewMode = false;
-  }
-  if (typeof lastPreviewPosition !== 'undefined') {
-    lastPreviewPosition = null;
-  }
+  isPreviewMode = false;
+  lastPreviewPosition = null;
 }
 
 // Update preview animation in render loop
 function updateOperationPreview(): void {
-  // Guard check to ensure variables are initialized
-  if (typeof isPreviewMode !== 'undefined' && typeof previewMesh !== 'undefined' && isPreviewMode && previewMesh) {
+  if (isPreviewMode && previewMesh) {
     const time = Date.now() * 0.003;
     const material = previewMesh.material as THREE.MeshLambertMaterial;
     material.opacity = 0.3 + 0.1 * Math.sin(time);
