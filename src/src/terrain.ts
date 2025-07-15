@@ -108,8 +108,15 @@ export class Terrain {
     // Add all parts to the group
     this.terrainGroup.add(this.surfaceMesh);
 
+    // Ensure pattern overlays are disabled by default
+    this.usePatternOverlays = false;
+    this.clearPatternOverlays();
+
     // Generate initial terrain
     this.regenerateTerrain();
+    
+    // Force color update to ensure no black areas
+    this.updateTerrainColors();
     
     // Save initial state
     this.saveState();
@@ -462,6 +469,38 @@ export class Terrain {
   }
 
   /**
+   * Force all terrain colors to be light (no black areas)
+   */
+  public forceLightColors(): void {
+    const vertices = this.geometry.attributes.position.array;
+    const colors = new Float32Array(vertices.length);
+
+    // Apply uniform light brown coloring
+    for (let i = 0; i < vertices.length; i += 3) {
+      const height = vertices[i + 1] || 0;
+      
+      // Base light brown color
+      let r = 0.85, g = 0.75, b = 0.65;
+      
+      // Add slight height variation for visual interest
+      if (isFinite(height)) {
+        const heightVariation = Math.sin(height * 0.1) * 0.1 + 0.1;
+        r += heightVariation;
+        g += heightVariation * 0.8;
+        b += heightVariation * 0.6;
+      }
+      
+      // Ensure colors stay within bounds and never go dark
+      colors[i] = Math.min(1.0, Math.max(0.75, r));
+      colors[i + 1] = Math.min(1.0, Math.max(0.7, g));
+      colors[i + 2] = Math.min(1.0, Math.max(0.65, b));
+    }
+
+    this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    this.geometry.attributes.color.needsUpdate = true;
+  }
+
+  /**
    * Enhanced terrain color update with elevation zones
    */
   public updateTerrainColors(): void {
@@ -474,63 +513,71 @@ export class Terrain {
 
     for (let i = 1; i < vertices.length; i += 3) {
       const height = vertices[i];
-      minHeight = Math.min(minHeight, height);
-      maxHeight = Math.max(maxHeight, height);
+      if (!isNaN(height) && isFinite(height)) {
+        minHeight = Math.min(minHeight, height);
+        maxHeight = Math.max(maxHeight, height);
+      }
+    }
+
+    // Fallback if no valid heights found
+    if (!isFinite(minHeight) || !isFinite(maxHeight)) {
+      minHeight = -10;
+      maxHeight = 10;
     }
 
     // Apply elevation-based colors
     for (let i = 0; i < vertices.length; i += 3) {
       const height = vertices[i + 1];
       
-      // Get elevation zone for this height
-      const zone = this.getElevationZone(height);
+      // Default to a safe light brown color if height is invalid
+      let r = 0.9, g = 0.8, b = 0.7; // Light brown default
       
-      // Start with zone base color
-      let r = zone.color.r;
-      let g = zone.color.g;
-      let b = zone.color.b;
-      
-      // Add material layer influence for subsurface areas
-      if (height < 0) {
-        const exposureDepth = Math.max(0, -height);
-        const materialLayer = this.getMaterialAtDepth(exposureDepth);
+      if (isFinite(height) && !isNaN(height)) {
+        // Get elevation zone for this height
+        const zone = this.getElevationZone(height);
         
-        // Blend zone color with material color (40% zone, 60% material for lighter appearance)
-        r = r * 0.4 + materialLayer.color.r * 0.6;
-        g = g * 0.4 + materialLayer.color.g * 0.6;
-        b = b * 0.4 + materialLayer.color.b * 0.6;
+        // Start with zone base color
+        r = zone.color.r;
+        g = zone.color.g;
+        b = zone.color.b;
         
-        // Apply very minimal depth darkening
-        const darkening = Math.min(0.05, exposureDepth * 0.002); // Much less darkening
-        r = Math.max(0.7, r - darkening); // Higher minimum brightness
-        g = Math.max(0.7, g - darkening); // Higher minimum brightness
-        b = Math.max(0.7, b - darkening); // Higher minimum brightness
-      } else {
-        // Surface level - add height-based variation
-        const normalizedHeight = (height - minHeight) / (maxHeight - minHeight);
-        const lightingVariation = 0.95 + (normalizedHeight * 0.1); // Brighter base
-        r *= lightingVariation;
-        g *= lightingVariation;
-        b *= lightingVariation;
+        // Add material layer influence for subsurface areas
+        if (height < 0) {
+          const exposureDepth = Math.max(0, -height);
+          const materialLayer = this.getMaterialAtDepth(exposureDepth);
+          
+          // Blend zone color with material color (30% zone, 70% material for lighter appearance)
+          r = r * 0.3 + materialLayer.color.r * 0.7;
+          g = g * 0.3 + materialLayer.color.g * 0.7;
+          b = b * 0.3 + materialLayer.color.b * 0.7;
+        } else {
+          // Surface level - add height-based variation
+          const normalizedHeight = (height - minHeight) / (maxHeight - minHeight + 0.001); // Avoid division by zero
+          const lightingVariation = 0.9 + (normalizedHeight * 0.2); // Brighter base
+          r *= lightingVariation;
+          g *= lightingVariation;
+          b *= lightingVariation;
+        }
+
+        // Add very subtle contour shading for topographic effect
+        const contourInterval = 1; // 1 foot intervals
+        const contourWidth = 0.05; // Narrower contour lines
+        const heightMod = (height - this.targetElevation) % contourInterval;
+        if (Math.abs(heightMod) < contourWidth || Math.abs(heightMod - contourInterval) < contourWidth) {
+          r *= 0.95; // Very light contour lines
+          g *= 0.95;
+          b *= 0.95;
+        }
       }
 
-      // Add very subtle contour shading for topographic effect
-      const contourInterval = 1; // 1 foot intervals
-      const contourWidth = 0.05; // Narrower contour lines
-      const heightMod = (height - this.targetElevation) % contourInterval;
-      if (Math.abs(heightMod) < contourWidth || Math.abs(heightMod - contourInterval) < contourWidth) {
-        r *= 0.9; // Much lighter contour lines
-        g *= 0.9;
-        b *= 0.9;
-      }
-
-      // Clamp values with higher minimum to prevent dark colors
-      colors[i] = Math.min(1.0, Math.max(0.6, r)); // Higher minimum
-      colors[i + 1] = Math.min(1.0, Math.max(0.6, g)); // Higher minimum
-      colors[i + 2] = Math.min(1.0, Math.max(0.6, b)); // Higher minimum
+      // Ensure colors are never black - enforce high minimum values
+      colors[i] = Math.min(1.0, Math.max(0.7, r || 0.7)); // Higher minimum with fallback
+      colors[i + 1] = Math.min(1.0, Math.max(0.7, g || 0.7)); // Higher minimum with fallback
+      colors[i + 2] = Math.min(1.0, Math.max(0.7, b || 0.7)); // Higher minimum with fallback
     }
 
     this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    this.geometry.attributes.color.needsUpdate = true;
   }
 
   /**
@@ -961,6 +1008,27 @@ export class Terrain {
   }
 
   /**
+   * Force disable wireframe mode
+   */
+  public forceDisableWireframe(): void {
+    this.material.wireframe = false;
+    
+    // Also disable wireframe on the terrain block
+    this.wallMeshes.forEach(block => {
+      if (block.material instanceof Array) {
+        // Handle multi-material mesh (our box)
+        block.material.forEach(mat => {
+          if (mat instanceof THREE.MeshLambertMaterial) {
+            mat.wireframe = false;
+          }
+        });
+      } else if (block.material instanceof THREE.MeshLambertMaterial) {
+        block.material.wireframe = false;
+      }
+    });
+  }
+
+  /**
    * Toggle wireframe mode
    */
   public toggleWireframe(): void {
@@ -1156,6 +1224,9 @@ export class Terrain {
    * Create pattern overlays for additional zone distinction
    */
   private createPatternOverlays(): void {
+    // Pattern overlays completely disabled to prevent black grid appearance
+    return;
+    
     this.clearPatternOverlays();
     
     const vertices = this.geometry.attributes.position.array;
@@ -1173,28 +1244,28 @@ export class Terrain {
         let patternMaterial: THREE.Material;
         
         switch (zone.name) {
-          case 'high': // Diagonal lines for high fill
-            patternGeometry = new THREE.PlaneGeometry(0.5, 0.1);
+          case 'high': // Very light diagonal lines for high fill
+            patternGeometry = new THREE.PlaneGeometry(0.2, 0.03);
             patternMaterial = new THREE.MeshBasicMaterial({ 
-              color: 0x000000, 
+              color: 0xE0E0E0, // Very light gray
               transparent: true, 
-              opacity: 0.3 
+              opacity: 0.08 // Very transparent
             });
             break;
-          case 'medium': // Dots for medium fill
-            patternGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.05, 8);
+          case 'medium': // Very light dots for medium fill
+            patternGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.01, 6);
             patternMaterial = new THREE.MeshBasicMaterial({ 
-              color: 0x000000, 
+              color: 0xDDDDDD, // Very light gray
               transparent: true, 
-              opacity: 0.4 
+              opacity: 0.1 // Very transparent
             });
             break;
-          case 'cut': // Cross-hatch for cut areas
-            patternGeometry = new THREE.PlaneGeometry(0.3, 0.05);
+          case 'cut': // Very light cross-hatch for cut areas
+            patternGeometry = new THREE.PlaneGeometry(0.15, 0.02);
             patternMaterial = new THREE.MeshBasicMaterial({ 
-              color: 0xFFFFFF, 
+              color: 0xF0F0F0, // Almost white, very light gray
               transparent: true, 
-              opacity: 0.5 
+              opacity: 0.12 // Very transparent
             });
             break;
           default:
@@ -1226,6 +1297,15 @@ export class Terrain {
       (mesh.material as THREE.Material).dispose();
     });
     this.patternMeshes = [];
+  }
+
+  /**
+   * Force disable all pattern overlays
+   */
+  public forceDisablePatterns(): void {
+    this.usePatternOverlays = false;
+    this.clearPatternOverlays();
+    this.accessibilityMode = 'normal';
   }
 
   /**

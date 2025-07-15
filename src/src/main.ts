@@ -102,6 +102,16 @@ canvas.addEventListener('webglcontextrestored', (e) => {
 
 // Create terrain
 const terrain = new Terrain(100, 100, 32, 32); // 100 feet x 100 feet
+
+// Force disable all pattern overlays to prevent black grid
+terrain.forceDisablePatterns();
+
+// Force disable wireframe mode to prevent black grid
+terrain.forceDisableWireframe();
+
+// Force light colors to eliminate any black areas
+terrain.forceLightColors();
+
 scene.add(terrain.getMesh());
 
 // Add basic lighting immediately so terrain is visible
@@ -129,29 +139,21 @@ camera.updateProjectionMatrix();
 // Function to add scale references to the scene
 function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; markers: THREE.Group } {
   // Create professional grid helper with enhanced styling
-  const gridHelper = new THREE.GridHelper(100, 20, 0x666666, 0x333333); // 100 feet with 20 divisions (5ft spacing)
+  const gridHelper = new THREE.GridHelper(100, 20, 0xAAAAAA, 0x888888); // Much lighter gray colors
   gridHelper.position.y = 0.05; // Slightly above terrain to avoid z-fighting
+  gridHelper.name = 'scaleGrid'; // Name for toggle functionality
   
   // Enhance grid material for professional appearance
   const gridMaterial = gridHelper.material as THREE.LineBasicMaterial;
   if (gridMaterial) {
-    gridMaterial.linewidth = 2;
-    gridMaterial.opacity = 0.8;
+    gridMaterial.linewidth = 1; // Thinner lines
+    gridMaterial.opacity = 0.4; // More transparent
     gridMaterial.transparent = true;
   }
   
   scene.add(gridHelper);
 
-  // Add secondary fine grid for detailed work
-  const fineGridHelper = new THREE.GridHelper(100, 100, 0x444444, 0x222222); // 1ft spacing
-  fineGridHelper.position.y = 0.03;
-  const fineGridMaterial = fineGridHelper.material as THREE.LineBasicMaterial;
-  if (fineGridMaterial) {
-    fineGridMaterial.opacity = 0.3;
-    fineGridMaterial.transparent = true;
-    fineGridMaterial.linewidth = 1;
-  }
-  scene.add(fineGridHelper);
+  // Fine grid removed - was causing black grid pattern
 
   // Add scale markers with axis lines in corner
   const markerGroup = new THREE.Group();
@@ -162,6 +164,22 @@ function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; marke
   scene.add(markerGroup);
   
   return { grid: gridHelper, markers: markerGroup };
+}
+
+// Grid visibility toggle
+let gridVisible = true;
+function toggleGrid() {
+  const grid = scene.getObjectByName('scaleGrid');
+  if (grid) {
+    grid.visible = !grid.visible;
+    gridVisible = grid.visible;
+    
+    // Update HUD indicator if it exists
+    const gridIndicator = document.getElementById('grid-indicator');
+    if (gridIndicator) {
+      gridIndicator.textContent = `📏 Grid: ${gridVisible ? 'ON' : 'OFF'}`;
+    }
+  }
 }
 
 // Function to update axis position based on camera rotation
@@ -928,6 +946,21 @@ function setupGameControls() {
       case '4':
         terrain.setBrushSettings({ size: 8 });
         updateBrushDisplay();
+        break;
+      case 'x':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+X
+        event.preventDefault();
+        toggleGrid();
+        break;
+      case 'l':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+L
+        event.preventDefault();
+        terrain.forceLightColors();
+        break;
+      case 'escape':
+        event.preventDefault();
+        hideOperationPreview();
+        hideKeyboardInstructions();
         break;
     }
   });
@@ -2210,6 +2243,16 @@ function setupEnhancedKeyboardNavigation() {
         event.preventDefault();
         showKeyboardInstructions();
         break;
+      case 'x':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+X
+        event.preventDefault();
+        toggleGrid();
+        break;
+      case 'l':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+L
+        event.preventDefault();
+        terrain.forceLightColors();
+        break;
       case 'escape':
         event.preventDefault();
         hideOperationPreview();
@@ -2244,9 +2287,10 @@ function initializeAccessibilityFeatures() {
     <div id="colorblind-indicator" style="margin: 2px 0;">🎨 Color-Blind Mode: OFF</div>
     <div id="patterns-indicator" style="margin: 2px 0;">📋 Patterns: OFF</div>
     <div id="highcontrast-indicator" style="margin: 2px 0;">🔆 High Contrast: OFF</div>
+    <div id="grid-indicator" style="margin: 2px 0;">📏 Grid: ON</div>
     <div id="colorblind-type-indicator" style="margin: 2px 0;">👁️ Vision Type: Normal Vision</div>
     <div style="margin-top: 5px; font-size: 10px; color: #ccc;">
-      Hotkeys: A=Color-blind | P=Patterns | H=Contrast | V=Vision Type | F1=Help
+      Hotkeys: A=Color-blind | P=Patterns | H=Contrast | V=Vision Type | X=Grid | L=Light Colors | F1=Help
     </div>
   `;
   
