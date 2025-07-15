@@ -141,8 +141,10 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   const cameraDirection = new THREE.Vector3();
   camera.getWorldDirection(cameraDirection);
   
+  // Calculate camera distance for dynamic scaling
+  const cameraDistance = camera.position.distanceTo(new THREE.Vector3(0, 0, 0));
+  
   // Determine corner position based on camera view
-  // Default to far corner that's most visible
   let cornerX = -50; // Far left (negative X)
   let cornerZ = -50; // Far back (negative Z)
   
@@ -150,37 +152,89 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   if (cameraDirection.x > 0) cornerX = 50;  // Switch to positive X if looking from negative X
   if (cameraDirection.z > 0) cornerZ = 50;  // Switch to positive Z if looking from negative Z
   
-  const axisLength = 15; // Length of axis lines in feet
-  const axisY = 5; // Height above terrain
+  const axisY = 2; // Height above terrain
+  const zAxisLength = 20; // Shortened Z-axis to 20 feet
   
-  // Create X-axis line (red) - points right
+  // Calculate dynamic segment spacing based on zoom level
+  let segmentSpacing = 10; // Default 10ft segments
+  if (cameraDistance < 50) {
+    segmentSpacing = 5; // 5ft segments when zoomed in
+  } else if (cameraDistance < 25) {
+    segmentSpacing = 1; // 1ft segments when very zoomed in
+  } else if (cameraDistance > 200) {
+    segmentSpacing = 25; // 25ft segments when zoomed out
+  }
+  
+  // Create X-axis line (red) - full length
+  const xAxisStart = cornerX > 0 ? 50 : -50;
+  const xAxisEnd = cornerX > 0 ? -50 : 50;
   const xAxisGeometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(cornerX, axisY, cornerZ),
-    new THREE.Vector3(cornerX + (cornerX > 0 ? -axisLength : axisLength), axisY, cornerZ)
+    new THREE.Vector3(xAxisStart, axisY, cornerZ),
+    new THREE.Vector3(xAxisEnd, axisY, cornerZ)
   ]);
   const xAxisMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
   const xAxisLine = new THREE.Line(xAxisGeometry, xAxisMaterial);
   markerGroup.add(xAxisLine);
   
-  // Create Z-axis line (green) - points forward
+  // Add X-axis segment markings
+  for (let x = -50; x <= 50; x += segmentSpacing) {
+    if (x === 0) continue; // Skip origin
+    const tickHeight = 1;
+    const tickGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(x, axisY, cornerZ),
+      new THREE.Vector3(x, axisY + tickHeight, cornerZ)
+    ]);
+    const tickMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 1 });
+    const tickLine = new THREE.Line(tickGeometry, tickMaterial);
+    markerGroup.add(tickLine);
+  }
+  
+  // Create Z-axis line (green) - full length  
+  const zAxisStart = cornerZ > 0 ? 50 : -50;
+  const zAxisEnd = cornerZ > 0 ? -50 : 50;
   const zAxisGeometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(cornerX, axisY, cornerZ),
-    new THREE.Vector3(cornerX, axisY, cornerZ + (cornerZ > 0 ? -axisLength : axisLength))
+    new THREE.Vector3(cornerX, axisY, zAxisStart),
+    new THREE.Vector3(cornerX, axisY, zAxisEnd)
   ]);
   const zAxisMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
   const zAxisLine = new THREE.Line(zAxisGeometry, zAxisMaterial);
   markerGroup.add(zAxisLine);
   
-  // Create Y-axis line (blue) - points up
+  // Add Z-axis segment markings
+  for (let z = -50; z <= 50; z += segmentSpacing) {
+    if (z === 0) continue; // Skip origin
+    const tickHeight = 1;
+    const tickGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(cornerX, axisY, z),
+      new THREE.Vector3(cornerX, axisY + tickHeight, z)
+    ]);
+    const tickMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 1 });
+    const tickLine = new THREE.Line(tickGeometry, tickMaterial);
+    markerGroup.add(tickLine);
+  }
+  
+  // Create Y-axis line (blue) - shortened to 20 feet
   const yAxisGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(cornerX, axisY, cornerZ),
-    new THREE.Vector3(cornerX, axisY + axisLength, cornerZ)
+    new THREE.Vector3(cornerX, axisY + zAxisLength, cornerZ)
   ]);
   const yAxisMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 3 });
   const yAxisLine = new THREE.Line(yAxisGeometry, yAxisMaterial);
   markerGroup.add(yAxisLine);
   
-  // Create text sprites for scale markers
+  // Add Y-axis segment markings (every 5 feet for vertical)
+  for (let y = 5; y <= zAxisLength; y += 5) {
+    const tickLength = 1;
+    const tickGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(cornerX, axisY + y, cornerZ),
+      new THREE.Vector3(cornerX + tickLength, axisY + y, cornerZ)
+    ]);
+    const tickMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 1 });
+    const tickLine = new THREE.Line(tickGeometry, tickMaterial);
+    markerGroup.add(tickLine);
+  }
+  
+  // Create text sprites for axis labels (only at ends, no origin marker)
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d')!;
   canvas.width = 96;
@@ -211,24 +265,19 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
     const material = new THREE.SpriteMaterial({ map: texture });
     const sprite = new THREE.Sprite(material);
     sprite.position.set(x, y, z);
-    sprite.scale.set(10, 5, 1); // Appropriate scale for 100ft terrain
+    sprite.scale.set(8, 4, 1); // Slightly smaller scale
     
     return sprite;
   }
 
-  // Add origin marker at axis intersection
-  markerGroup.add(createTextMarker('0,0,0', cornerX - 3, axisY + 2, cornerZ - 3, '#666666'));
+  // Add X-axis scale marker (red) at the end
+  markerGroup.add(createTextMarker('100ft', xAxisEnd + (xAxisEnd > 0 ? 5 : -5), axisY + 2, cornerZ, '#ff0000'));
   
-  // Add X-axis scale marker (red)
-  const xLabelX = cornerX + (cornerX > 0 ? -axisLength - 4 : axisLength + 4);
-  markerGroup.add(createTextMarker('100ft', xLabelX, axisY + 2, cornerZ, '#ff0000'));
+  // Add Z-axis scale marker (green) at the end
+  markerGroup.add(createTextMarker('100ft', cornerX, axisY + 2, zAxisEnd + (zAxisEnd > 0 ? 5 : -5), '#00ff00'));
   
-  // Add Z-axis scale marker (green)
-  const zLabelZ = cornerZ + (cornerZ > 0 ? -axisLength - 4 : axisLength + 4);
-  markerGroup.add(createTextMarker('100ft', cornerX, axisY + 2, zLabelZ, '#00ff00'));
-  
-  // Add Y-axis scale marker (blue)
-  markerGroup.add(createTextMarker('33ft', cornerX - 3, axisY + axisLength + 3, cornerZ, '#0000ff'));
+  // Add Y-axis scale marker (blue) at the top
+  markerGroup.add(createTextMarker('20ft', cornerX - 3, axisY + zAxisLength + 3, cornerZ, '#0000ff'));
 }
 
 // Force initialize game if authentication is taking too long
