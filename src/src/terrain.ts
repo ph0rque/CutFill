@@ -74,7 +74,7 @@ export class Terrain {
 
     // Create surface material with improved properties
     this.material = new THREE.MeshLambertMaterial({
-      color: 0x8B4513, // Brown color for terrain surface
+      color: 0xE6C2A6, // Much lighter brown to match topsoil
       wireframe: false,
       vertexColors: true, // Enable vertex colors for layered effects
     });
@@ -103,25 +103,25 @@ export class Terrain {
     this.materialLayers = [
       {
         name: 'Topsoil',
-        color: new THREE.Color(0xC4915C), // Much lighter brown - tan/beige
+        color: new THREE.Color(0xE6C2A6), // Much lighter tan/beige
         depth: 5, // 1.5m = ~5 feet
         hardness: 0.3
       },
       {
         name: 'Subsoil', 
-        color: new THREE.Color(0xD2B48C), // Light tan/wheat color
+        color: new THREE.Color(0xF5DEB3), // Very light wheat color
         depth: 10, // 3.0m = ~10 feet
         hardness: 0.5
       },
       {
         name: 'Clay',
-        color: new THREE.Color(0xF4A460), // Sandy brown - much lighter orange-brown
+        color: new THREE.Color(0xFFE4B5), // Light moccasin - very light orange-brown
         depth: 11, // 3.5m = ~11 feet
         hardness: 0.7
       },
       {
         name: 'Rock',
-        color: new THREE.Color(0xC0C0C0), // Light gray instead of dark gray
+        color: new THREE.Color(0xF0F0F0), // Very light gray, almost white
         depth: 7, // 2.0m = ~7 feet
         hardness: 1.0
       }
