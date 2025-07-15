@@ -495,39 +495,39 @@ export class Terrain {
         const exposureDepth = Math.max(0, -height);
         const materialLayer = this.getMaterialAtDepth(exposureDepth);
         
-        // Blend zone color with material color (60% zone, 40% material)
-        r = r * 0.6 + materialLayer.color.r * 0.4;
-        g = g * 0.6 + materialLayer.color.g * 0.4;
-        b = b * 0.6 + materialLayer.color.b * 0.4;
+        // Blend zone color with material color (40% zone, 60% material for lighter appearance)
+        r = r * 0.4 + materialLayer.color.r * 0.6;
+        g = g * 0.4 + materialLayer.color.g * 0.6;
+        b = b * 0.4 + materialLayer.color.b * 0.6;
         
-        // Apply depth darkening
-        const darkening = Math.min(0.1, exposureDepth * 0.005);
-        r = Math.max(0.5, r - darkening);
-        g = Math.max(0.5, g - darkening);
-        b = Math.max(0.5, b - darkening);
+        // Apply very minimal depth darkening
+        const darkening = Math.min(0.05, exposureDepth * 0.002); // Much less darkening
+        r = Math.max(0.7, r - darkening); // Higher minimum brightness
+        g = Math.max(0.7, g - darkening); // Higher minimum brightness
+        b = Math.max(0.7, b - darkening); // Higher minimum brightness
       } else {
         // Surface level - add height-based variation
         const normalizedHeight = (height - minHeight) / (maxHeight - minHeight);
-        const lightingVariation = 0.9 + (normalizedHeight * 0.2);
+        const lightingVariation = 0.95 + (normalizedHeight * 0.1); // Brighter base
         r *= lightingVariation;
         g *= lightingVariation;
         b *= lightingVariation;
       }
 
-      // Add contour shading for topographic effect
+      // Add very subtle contour shading for topographic effect
       const contourInterval = 1; // 1 foot intervals
-      const contourWidth = 0.1;
+      const contourWidth = 0.05; // Narrower contour lines
       const heightMod = (height - this.targetElevation) % contourInterval;
       if (Math.abs(heightMod) < contourWidth || Math.abs(heightMod - contourInterval) < contourWidth) {
-        r *= 0.7; // Darker contour lines
-        g *= 0.7;
-        b *= 0.7;
+        r *= 0.9; // Much lighter contour lines
+        g *= 0.9;
+        b *= 0.9;
       }
 
-      // Clamp values
-      colors[i] = Math.min(1.0, Math.max(0.0, r));
-      colors[i + 1] = Math.min(1.0, Math.max(0.0, g));
-      colors[i + 2] = Math.min(1.0, Math.max(0.0, b));
+      // Clamp values with higher minimum to prevent dark colors
+      colors[i] = Math.min(1.0, Math.max(0.6, r)); // Higher minimum
+      colors[i + 1] = Math.min(1.0, Math.max(0.6, g)); // Higher minimum
+      colors[i + 2] = Math.min(1.0, Math.max(0.6, b)); // Higher minimum
     }
 
     this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
