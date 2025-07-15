@@ -45,17 +45,29 @@ export class Terrain {
   private crossSectionGeometries: THREE.BufferGeometry[] = [];
   private arrows: THREE.ArrowHelper[] = [];
 
+  // Add elevation zone properties
+  private targetElevation: number = 0; // Target grade elevation
+  private elevationZones: {
+    high: { min: number; max: number; color: THREE.Color };
+    medium: { min: number; max: number; color: THREE.Color };
+    low: { min: number; max: number; color: THREE.Color };
+    cut: { min: number; max: number; color: THREE.Color };
+  };
+
   constructor(
     width: number = 100,  // 100 feet x 100 feet
     height: number = 100, // 100 feet x 100 feet  
-    widthSegments: number = 8,  // Reduced from 32 for solid appearance
-    heightSegments: number = 8  // Reduced from 32 for solid appearance
+    widthSegments: number = 32,  // Higher resolution for better cut/fill visualization
+    heightSegments: number = 32  // Higher resolution for better cut/fill visualization
   ) {
     // Create main group for all terrain parts
     this.terrainGroup = new THREE.Group();
     
     // Initialize material layers
     this.initializeMaterialLayers();
+
+    // Initialize elevation zones
+    this.initializeElevationZones();
 
     // Create surface terrain geometry (Y-up coordinate system - Z is height)
     this.geometry = new THREE.PlaneGeometry(
@@ -127,6 +139,55 @@ export class Terrain {
         hardness: 1.0
       }
     ];
+  }
+
+  /**
+   * Initialize elevation zones for cut/fill visualization
+   */
+  private initializeElevationZones(): void {
+    this.elevationZones = {
+      high: { 
+        min: 2, max: Infinity, 
+        color: new THREE.Color(0x4CAF50) // Green for high fill areas
+      },
+      medium: { 
+        min: 0.5, max: 2, 
+        color: new THREE.Color(0xFF9800) // Orange for medium fill
+      },
+      low: { 
+        min: -0.5, max: 0.5, 
+        color: new THREE.Color(0xFFF59D) // Light yellow for near target
+      },
+      cut: { 
+        min: -Infinity, max: -0.5, 
+        color: new THREE.Color(0x2196F3) // Blue for cut areas
+      }
+    };
+  }
+
+  /**
+   * Set target elevation for cut/fill operations
+   */
+  public setTargetElevation(elevation: number): void {
+    this.targetElevation = elevation;
+    this.updateTerrainColors();
+  }
+
+  /**
+   * Get elevation zone for a given height relative to target
+   */
+  private getElevationZone(height: number): { name: string; color: THREE.Color; fillType: 'cut' | 'fill' | 'target' } {
+    const relativeHeight = height - this.targetElevation;
+    
+    if (relativeHeight >= this.elevationZones.high.min) {
+      return { name: 'high', color: this.elevationZones.high.color, fillType: 'fill' };
+    } else if (relativeHeight >= this.elevationZones.medium.min) {
+      return { name: 'medium', color: this.elevationZones.medium.color, fillType: 'fill' };
+    } else if (relativeHeight >= this.elevationZones.low.min) {
+      return { name: 'low', color: this.elevationZones.low.color, fillType: 'target' };
+    } else {
+      return { name: 'cut', color: this.elevationZones.cut.color, fillType: 'cut' };
+    }
   }
 
   /**
@@ -388,13 +449,13 @@ export class Terrain {
   }
 
   /**
-   * Update terrain colors based on height and material layers
+   * Enhanced terrain color update with elevation zones
    */
   public updateTerrainColors(): void {
     const vertices = this.geometry.attributes.position.array;
     const colors = new Float32Array(vertices.length);
 
-    // Find height range
+    // Find height range for normalization
     let minHeight = Infinity;
     let maxHeight = -Infinity;
 
@@ -404,48 +465,53 @@ export class Terrain {
       maxHeight = Math.max(maxHeight, height);
     }
 
-    // Apply colors based on exposed material layers (no vegetation)
+    // Apply elevation-based colors
     for (let i = 0; i < vertices.length; i += 3) {
       const height = vertices[i + 1];
       
-      // Determine which material layer is exposed at this height
-      // Negative heights expose deeper layers
-      const exposureDepth = Math.max(0, -height);
-      const materialLayer = this.getMaterialAtDepth(exposureDepth);
+      // Get elevation zone for this height
+      const zone = this.getElevationZone(height);
       
-      // Use clean material layer colors (no vegetation tinting)
-      let r = materialLayer.color.r;
-      let g = materialLayer.color.g;
-      let b = materialLayer.color.b;
+      // Start with zone base color
+      let r = zone.color.r;
+      let g = zone.color.g;
+      let b = zone.color.b;
       
-      // Add subtle height-based variation for natural look
-      const normalizedHeight = (height - minHeight) / (maxHeight - minHeight);
-      
-      if (height >= 0) {
-        // Surface level - use topsoil color with slight lighting variation
-        const lightingVariation = 0.9 + (normalizedHeight * 0.2); // 0.9 to 1.1 multiplier
+      // Add material layer influence for subsurface areas
+      if (height < 0) {
+        const exposureDepth = Math.max(0, -height);
+        const materialLayer = this.getMaterialAtDepth(exposureDepth);
+        
+        // Blend zone color with material color (60% zone, 40% material)
+        r = r * 0.6 + materialLayer.color.r * 0.4;
+        g = g * 0.6 + materialLayer.color.g * 0.4;
+        b = b * 0.6 + materialLayer.color.b * 0.4;
+        
+        // Apply depth darkening
+        const darkening = Math.min(0.1, exposureDepth * 0.005);
+        r = Math.max(0.5, r - darkening);
+        g = Math.max(0.5, g - darkening);
+        b = Math.max(0.5, b - darkening);
+      } else {
+        // Surface level - add height-based variation
+        const normalizedHeight = (height - minHeight) / (maxHeight - minHeight);
+        const lightingVariation = 0.9 + (normalizedHeight * 0.2);
         r *= lightingVariation;
         g *= lightingVariation;
         b *= lightingVariation;
-      } else {
-        // Below ground - apply minimal darkening to show depth but prevent black areas
-        const darkening = Math.min(0.1, exposureDepth * 0.005); // Much less darkening
-        r = Math.max(0.6, r - darkening); // Higher minimum brightness
-        g = Math.max(0.6, g - darkening); // Higher minimum brightness  
-        b = Math.max(0.6, b - darkening); // Higher minimum brightness
       }
 
-      // Add contour shading
-      const contourInterval = 5;
-      const contourWidth = 0.2;
-      const heightMod = height % contourInterval;
+      // Add contour shading for topographic effect
+      const contourInterval = 1; // 1 foot intervals
+      const contourWidth = 0.1;
+      const heightMod = (height - this.targetElevation) % contourInterval;
       if (Math.abs(heightMod) < contourWidth || Math.abs(heightMod - contourInterval) < contourWidth) {
-        r *= 0.85;
-        g *= 0.85;
-        b *= 0.85;
+        r *= 0.7; // Darker contour lines
+        g *= 0.7;
+        b *= 0.7;
       }
 
-      // Clamp values to valid range
+      // Clamp values
       colors[i] = Math.min(1.0, Math.max(0.0, r));
       colors[i + 1] = Math.min(1.0, Math.max(0.0, g));
       colors[i + 2] = Math.min(1.0, Math.max(0.0, b));
@@ -455,7 +521,7 @@ export class Terrain {
   }
 
   /**
-   * Enhanced brush-based terrain modification with material awareness
+   * Enhanced brush-based terrain modification with intelligent arrow placement
    */
   public modifyHeightBrush(x: number, z: number, heightChange: number): void {
     const vertices = this.geometry.attributes.position.array;
@@ -465,6 +531,7 @@ export class Terrain {
     // Calculate brush area
     const brushRadius = this.brushSettings.size;
     let modified = false;
+    let totalVolumeChange = 0;
 
     for (let i = 0; i < vertices.length; i += 3) {
       const vertexX = vertices[i];
@@ -492,6 +559,7 @@ export class Terrain {
         const maxExcavationDepth = -this.blockDepth * 0.9; // Don't dig through the bottom
         vertices[i + 1] = Math.max(maxExcavationDepth, newHeight);
         
+        totalVolumeChange += Math.abs(actualChange);
         modified = true;
       }
     }
@@ -501,33 +569,116 @@ export class Terrain {
       this.geometry.computeVertexNormals();
       this.updateTerrainColors();
 
-      // Calculate average new height for arrow position
-      let totalHeight = 0;
-      let count = 0;
-      for (let j = 0; j < vertices.length; j += 3) {
-        const dist = Math.sqrt((x - vertices[j]) ** 2 + (z - vertices[j + 2]) ** 2);
-        if (dist <= this.brushSettings.size) {
-          totalHeight += vertices[j + 1];
-          count++;
+      // Create intelligent arrow placement based on operation magnitude
+      this.createDensityBasedArrows(x, z, heightChange, totalVolumeChange, brushRadius);
+    }
+  }
+
+  /**
+   * Create density-based arrow placement matching reference image
+   */
+  private createDensityBasedArrows(x: number, z: number, heightChange: number, volumeChange: number, radius: number): void {
+    // Determine arrow density based on volume change
+    const maxArrows = Math.min(20, Math.max(1, Math.floor(volumeChange * 10)));
+    const arrowSpacing = Math.max(1, radius * 2 / Math.sqrt(maxArrows));
+    
+    // Calculate grid dimensions for arrow placement
+    const gridSize = Math.ceil(Math.sqrt(maxArrows));
+    const startX = x - (gridSize * arrowSpacing) / 2;
+    const startZ = z - (gridSize * arrowSpacing) / 2;
+    
+    let arrowCount = 0;
+    
+    for (let row = 0; row < gridSize && arrowCount < maxArrows; row++) {
+      for (let col = 0; col < gridSize && arrowCount < maxArrows; col++) {
+        const arrowX = startX + col * arrowSpacing;
+        const arrowZ = startZ + row * arrowSpacing;
+        
+        // Check if this position is within the brush area
+        const distanceFromCenter = Math.sqrt((arrowX - x) ** 2 + (arrowZ - z) ** 2);
+        if (distanceFromCenter <= radius) {
+          
+          // Get height at arrow position
+          const arrowHeight = this.getHeightAtPosition(arrowX, arrowZ);
+          
+          // Create arrow based on operation type
+          if (heightChange < 0) {
+            // Cut operation - blue downward arrows
+            this.createCutArrow(arrowX, arrowZ, arrowHeight, heightChange, distanceFromCenter / radius);
+          } else {
+            // Fill operation - red upward arrows  
+            this.createFillArrow(arrowX, arrowZ, arrowHeight, heightChange, distanceFromCenter / radius);
+          }
+          
+          arrowCount++;
         }
       }
-      const avgHeight = count > 0 ? totalHeight / count : 0;
-
-      // Add arrow indicator
-      const color = heightChange < 0 ? 0x0000ff : 0xff0000;
-      const dir = new THREE.Vector3(0, heightChange < 0 ? -1 : 1, 0);
-      const length = Math.abs(heightChange) * 2;
-      const arrowPos = new THREE.Vector3(x, avgHeight + (heightChange < 0 ? 1 : -1), z);
-      const arrow = new THREE.ArrowHelper(dir, arrowPos, length, color);
-      this.terrainGroup.add(arrow);
-      this.arrows.push(arrow);
-
-      // Animate and remove
-      setTimeout(() => {
-        this.terrainGroup.remove(arrow);
-        this.arrows = this.arrows.filter(a => a !== arrow);
-      }, 2000);
     }
+  }
+
+  /**
+   * Create a cut arrow (blue, downward)
+   */
+  private createCutArrow(x: number, z: number, height: number, heightChange: number, falloff: number): void {
+    const arrowLength = Math.abs(heightChange) * (1 - falloff * 0.5) * 3; // Scale by falloff
+    const arrowPos = new THREE.Vector3(x, height + 0.5, z); // Position above surface
+    const arrowDir = new THREE.Vector3(0, -1, 0); // Point downward
+    
+    const arrow = new THREE.ArrowHelper(arrowDir, arrowPos, arrowLength, 0x1976D2); // Blue color
+    arrow.setLength(arrowLength, arrowLength * 0.3, arrowLength * 0.15); // Custom proportions
+    
+    this.terrainGroup.add(arrow);
+    this.arrows.push(arrow);
+    
+    // Animate and remove after delay
+    setTimeout(() => {
+      this.terrainGroup.remove(arrow);
+      this.arrows = this.arrows.filter(a => a !== arrow);
+    }, 3000); // Longer duration for visibility
+  }
+
+  /**
+   * Create a fill arrow (red, upward)
+   */
+  private createFillArrow(x: number, z: number, height: number, heightChange: number, falloff: number): void {
+    const arrowLength = Math.abs(heightChange) * (1 - falloff * 0.5) * 3; // Scale by falloff
+    const arrowPos = new THREE.Vector3(x, height - 0.5, z); // Position below surface
+    const arrowDir = new THREE.Vector3(0, 1, 0); // Point upward
+    
+    const arrow = new THREE.ArrowHelper(arrowDir, arrowPos, arrowLength, 0xD32F2F); // Red color
+    arrow.setLength(arrowLength, arrowLength * 0.3, arrowLength * 0.15); // Custom proportions
+    
+    this.terrainGroup.add(arrow);
+    this.arrows.push(arrow);
+    
+    // Animate and remove after delay
+    setTimeout(() => {
+      this.terrainGroup.remove(arrow);
+      this.arrows = this.arrows.filter(a => a !== arrow);
+    }, 3000); // Longer duration for visibility
+  }
+
+  /**
+   * Get height at a specific X,Z position using interpolation
+   */
+  private getHeightAtPosition(x: number, z: number): number {
+    const vertices = this.geometry.attributes.position.array;
+    let closestHeight = 0;
+    let minDistance = Infinity;
+    
+    // Find closest vertex height
+    for (let i = 0; i < vertices.length; i += 3) {
+      const vertexX = vertices[i];
+      const vertexZ = vertices[i + 2];
+      const distance = Math.sqrt((x - vertexX) ** 2 + (z - vertexZ) ** 2);
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestHeight = vertices[i + 1];
+      }
+    }
+    
+    return closestHeight;
   }
 
   /**

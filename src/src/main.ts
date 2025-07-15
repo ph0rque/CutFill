@@ -1052,6 +1052,32 @@ function setupUI() {
         <div style="margin: 5px 0; font-size: 12px;">Quick Size: 1(1) 2(3) 3(5) 4(8)</div>
       </div>
       
+      <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+        <strong>Cut/Fill Controls:</strong><br>
+        <div style="margin: 5px 0;">
+          <label>Target Elevation: <input type="range" id="target-elevation" min="-5" max="5" step="0.1" value="0" style="width: 100px;"></label>
+          <span id="target-elevation-value">0.0 ft</span>
+        </div>
+        <div style="margin: 5px 0; font-size: 12px;">
+          <div style="display: flex; align-items: center; margin: 2px 0;">
+            <div style="width: 12px; height: 12px; background: #4CAF50; margin-right: 5px; border-radius: 2px;"></div>
+            <span>High Fill (2+ ft above target)</span>
+          </div>
+          <div style="display: flex; align-items: center; margin: 2px 0;">
+            <div style="width: 12px; height: 12px; background: #FF9800; margin-right: 5px; border-radius: 2px;"></div>
+            <span>Medium Fill (0.5-2 ft above)</span>
+          </div>
+          <div style="display: flex; align-items: center; margin: 2px 0;">
+            <div style="width: 12px; height: 12px; background: #FFF59D; margin-right: 5px; border-radius: 2px;"></div>
+            <span>Target Zone (±0.5 ft)</span>
+          </div>
+          <div style="display: flex; align-items: center; margin: 2px 0;">
+            <div style="width: 12px; height: 12px; background: #2196F3; margin-right: 5px; border-radius: 2px;"></div>
+            <span>Cut Area (below target)</span>
+          </div>
+        </div>
+      </div>
+      
               <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
           <strong>Controls (Touch & Mouse):</strong>
           <ul style="margin: 5px 0; padding-left: 20px; font-size: 14px;">
