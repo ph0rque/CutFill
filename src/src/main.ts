@@ -253,6 +253,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   
   // Add X-axis segment markings and labels
   let segmentCount = 0;
+  let displayedSegmentCount = 0;
   for (let x = -50; x <= 50; x += segmentSpacing) {
     
     // Only show segment if it passes the culling interval
@@ -266,15 +267,16 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
       markerGroup.add(tickLine);
       
-      // Add number label at calculated intervals (skip 0ft and show every other label)
-      if (segmentCount % (xLabelInterval * 2) === 0) {
+      // Add number label every other displayed segment (skip 0ft and 100ft)
+      if (displayedSegmentCount % 2 === 0) {
         const labelValue = x + 50; // Distance from left edge (0-100ft)
         if (labelValue !== 0 && labelValue !== 100) { // Skip 0ft and 100ft
           const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
           const labelOffset = cornerZ > 0 ? -2 : 2;
-          markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000', true));
+          markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000', false)); // false = larger labels
         }
       }
+      displayedSegmentCount++;
     }
     segmentCount++;
   }
@@ -296,6 +298,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   
   // Add Z-axis segment markings and labels
   segmentCount = 0;
+  displayedSegmentCount = 0;
   for (let z = -50; z <= 50; z += segmentSpacing) {
     
     // Only show segment if it passes the culling interval
@@ -309,15 +312,16 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
       markerGroup.add(tickLine);
       
-      // Add number label at calculated intervals (skip 0ft and show every other label)
-      if (segmentCount % (zLabelInterval * 2) === 0) {
+      // Add number label every other displayed segment (skip 0ft and 100ft)
+      if (displayedSegmentCount % 2 === 0) {
         const labelValue = z + 50; // Distance from back edge (0-100ft)
         if (labelValue !== 0 && labelValue !== 100) { // Skip 0ft and 100ft
           const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
           const labelOffset = cornerX > 0 ? -2 : 2;
-          markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00', true));
+          markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00', false)); // false = larger labels
         }
       }
+      displayedSegmentCount++;
     }
     segmentCount++;
   }
@@ -338,6 +342,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   
   // Add Y-axis segment markings and labels (every 5 feet for vertical)
   segmentCount = 0;
+  displayedSegmentCount = 0;
   for (let y = 5; y <= zAxisLength; y += 5) {
     // Only show segment if it passes the culling interval
     if (segmentCount % ySegmentInterval === 0) {
@@ -350,13 +355,14 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
       markerGroup.add(tickLine);
       
-      // Add number label at calculated intervals (skip extremes and show every other label)
-      if (segmentCount % (yLabelInterval * 2) === 0) {
+      // Add number label every other displayed segment (skip 20ft)
+      if (displayedSegmentCount % 2 === 0) {
         if (y !== 20) { // Skip 20ft (final label)
           const labelOffset = cornerX > 0 ? -3 : 3;
-          markerGroup.add(createTextMarker(`${y}ft`, cornerX + labelOffset, axisY + y, cornerZ, '#0000ff', true)); // y already represents distance from origin
+          markerGroup.add(createTextMarker(`${y}ft`, cornerX + labelOffset, axisY + y, cornerZ, '#0000ff', false)); // false = larger labels
         }
       }
+      displayedSegmentCount++;
     }
     segmentCount++;
   }
