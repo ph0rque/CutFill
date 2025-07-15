@@ -370,6 +370,9 @@ function animate() {
       updateAxisPosition(scaleReferences.markers, camera);
     }
     
+    // Update operation preview animation
+    updateOperationPreview();
+    
     renderer.render(scene, camera);
   } catch (error) {
     console.error('Render error:', error);
@@ -511,6 +514,11 @@ let isGameReady = false;
 let isModifying = false;
 let lastMousePosition: THREE.Vector3 | null = null;
 let modificationStrength = 0.5;
+
+// Add preview system variables
+let previewMesh: THREE.Mesh | null = null;
+let isPreviewMode = false;
+let lastPreviewPosition: THREE.Vector3 | null = null;
 let gestureControls: GestureControls;
 
 // Initialize authentication (simplified for testing)
@@ -630,6 +638,8 @@ function setupGameControls() {
         isModifying = true;
         lastMousePosition = null; // Reset for new modification
         terrain.startModification();
+        // Hide preview when starting to modify
+        hideOperationPreview();
       } else {
         // Default: Rotate camera
         isModifying = false;
@@ -637,13 +647,15 @@ function setupGameControls() {
     } else if (event.button === 2) { // Right click
       isMouseDown = true;
       isModifying = false; // Right click is for camera rotation
+      // Hide preview during camera rotation
+      hideOperationPreview();
     }
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
   });
 
   renderer.domElement.addEventListener('mousemove', event => {
-    // Enhanced hover tooltips for terrain information
+    // Enhanced hover tooltips for terrain information AND operation preview
     if (!isMouseDown && !isModifying) {
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -655,6 +667,9 @@ function setupGameControls() {
         const layerInfo = terrain.getLayerAtPosition(point.x, point.z);
         const height = point.y;
         const relativeHeight = height - terrain.getTargetElevation();
+        
+        // Show operation preview when hovering
+        showOperationPreview(point);
         
         let tooltip = document.getElementById('terrain-tooltip');
         if (!tooltip) {
@@ -692,11 +707,23 @@ function setupGameControls() {
           zoneColor = '#2196F3';
         }
         
+        // Get current tool info for preview
+        const currentTool = toolManager.getCurrentTool();
+        const toolSettings = currentTool.getSettings();
+        const toolAction = toolSettings.name === 'excavator' ? 'Excavate' : 
+                          toolSettings.name === 'bulldozer' ? 'Push Material' :
+                          toolSettings.name === 'grader' ? 'Smooth/Level' : 'Compact';
+        
         tooltip.innerHTML = `
           <div style="color: ${zoneColor}; font-weight: bold; margin-bottom: 4px;">🎯 ${zoneType}</div>
           <div><strong>Elevation:</strong> ${height.toFixed(2)} ft</div>
           <div><strong>Relative:</strong> ${relativeHeight > 0 ? '+' : ''}${relativeHeight.toFixed(2)} ft</div>
           <div><strong>Material:</strong> ${layerInfo}</div>
+          <div style="margin-top: 4px; padding: 4px; background: rgba(${toolSettings.color.slice(1).match(/.{2}/g)!.map(h => parseInt(h, 16)).join(',')}, 0.2); border-radius: 3px; border-left: 3px solid ${toolSettings.color};">
+            <div style="font-weight: bold; color: ${toolSettings.color};">${toolSettings.icon} ${toolSettings.displayName}</div>
+            <div style="font-size: 10px; color: #ccc;">Preview: ${toolAction} (Ctrl+drag to apply)</div>
+            <div style="font-size: 10px; color: #ccc;">Size: ${terrain.getBrushSettings().size.toFixed(1)}ft | Strength: ${(terrain.getBrushSettings().strength * 100).toFixed(0)}%</div>
+          </div>
           <div style="margin-top: 4px; font-size: 11px; color: #ccc;">
             ${relativeHeight > 0.5 ? '⬆️ Excavate to reduce fill' : relativeHeight < -0.5 ? '⬇️ Add material to cut' : '✅ Near target elevation'}
           </div>
@@ -708,6 +735,7 @@ function setupGameControls() {
       } else {
         const tooltip = document.getElementById('terrain-tooltip');
         if (tooltip) tooltip.style.display = 'none';
+        hideOperationPreview();
       }
     }
 
@@ -1243,6 +1271,9 @@ function setupUI() {
   
   // Initialize performance optimization
   performanceOptimizer.initialize(renderer, scene, camera);
+  
+  // Initialize enhanced accessibility features
+  initializeAccessibilityFeatures();
   
   // Ensure UI stays visible with proper z-index
   const appElement = document.querySelector('#app');
@@ -1854,4 +1885,358 @@ function showXPGained(xp: number, source: string) {
   
   // Update progress display
   updateProgressDisplay();
+}
+
+// Operation Preview System Functions
+function showOperationPreview(point: THREE.Vector3): void {
+  if (!point || (lastPreviewPosition && point.distanceTo(lastPreviewPosition) < 0.5)) {
+    return; // Don't update if position hasn't changed much
+  }
+  
+  hideOperationPreview(); // Remove existing preview
+  
+  const currentTool = toolManager.getCurrentTool();
+  const toolSettings = currentTool.getSettings();
+  const brushSettings = terrain.getBrushSettings();
+  
+  // Create preview geometry based on tool type and brush settings
+  const previewGeometry = brushSettings.shape === 'circle' 
+    ? new THREE.CylinderGeometry(brushSettings.size, brushSettings.size, 0.2, 16)
+    : new THREE.BoxGeometry(brushSettings.size * 2, 0.2, brushSettings.size * 2);
+  
+  // Create preview material with tool color and transparency
+  const toolColor = new THREE.Color(toolSettings.color);
+  const previewMaterial = new THREE.MeshLambertMaterial({
+    color: toolColor,
+    transparent: true,
+    opacity: 0.4,
+    wireframe: false
+  });
+  
+  previewMesh = new THREE.Mesh(previewGeometry, previewMaterial);
+  
+  // Position preview above terrain surface
+  const terrainHeight = point.y;
+  let previewHeight = terrainHeight;
+  
+  // Adjust height based on tool operation
+  if (toolSettings.name === 'excavator') {
+    previewHeight = terrainHeight - (brushSettings.strength * modificationStrength * 2); // Show cut depth
+  } else if (toolSettings.name === 'bulldozer') {
+    previewHeight = terrainHeight + 0.3; // Show slightly above for push operation
+  } else {
+    previewHeight = terrainHeight + 0.1; // Show slightly above for other operations
+  }
+  
+  previewMesh.position.set(point.x, previewHeight, point.z);
+  
+  // Add pulsing animation for better visibility
+  const time = Date.now() * 0.003;
+  previewMaterial.opacity = 0.3 + 0.1 * Math.sin(time);
+  
+  scene.add(previewMesh);
+  lastPreviewPosition = point.clone();
+  isPreviewMode = true;
+}
+
+function hideOperationPreview(): void {
+  if (previewMesh) {
+    scene.remove(previewMesh);
+    previewMesh.geometry.dispose();
+    (previewMesh.material as THREE.Material).dispose();
+    previewMesh = null;
+  }
+  isPreviewMode = false;
+  lastPreviewPosition = null;
+}
+
+// Update preview animation in render loop
+function updateOperationPreview(): void {
+  if (isPreviewMode && previewMesh) {
+    const time = Date.now() * 0.003;
+    const material = previewMesh.material as THREE.MeshLambertMaterial;
+    material.opacity = 0.3 + 0.1 * Math.sin(time);
+    
+    // Gentle rotation for better visibility
+    previewMesh.rotation.y += 0.01;
+  }
+}
+
+// Accessibility helper functions
+function toggleAccessibilityPanel() {
+  uiPolishSystem.toggleAccessibilityPanel();
+}
+
+function toggleAgeGroupSelector() {
+  uiPolishSystem.toggleAgeGroupSelector();
+}
+
+function togglePerformanceMonitor() {
+  performanceMonitorUI?.toggle();
+}
+
+// Enhanced accessibility functions for terrain operations
+function toggleColorBlindMode() {
+  const currentMode = terrain.getAccessibilityMode();
+  const nextMode = currentMode === 'normal' ? 'colorBlind' : 'normal';
+  terrain.setAccessibilityMode(nextMode);
+  
+  // Update UI indicator
+  const indicator = document.getElementById('colorblind-indicator');
+  if (indicator) {
+    indicator.textContent = nextMode === 'colorBlind' ? '🎨 Color-Blind Mode: ON' : '🎨 Color-Blind Mode: OFF';
+    indicator.style.color = nextMode === 'colorBlind' ? '#4CAF50' : '#ccc';
+  }
+  
+  // Announce change for screen readers
+  announceAccessibilityChange(`Color-blind mode ${nextMode === 'colorBlind' ? 'enabled' : 'disabled'}`);
+}
+
+function togglePatternOverlays() {
+  const currentUsePatterns = terrain.getPatternOverlaysEnabled();
+  terrain.setPatternOverlays(!currentUsePatterns);
+  
+  // Update UI indicator
+  const indicator = document.getElementById('patterns-indicator');
+  if (indicator) {
+    indicator.textContent = !currentUsePatterns ? '📋 Patterns: ON' : '📋 Patterns: OFF';
+    indicator.style.color = !currentUsePatterns ? '#4CAF50' : '#ccc';
+  }
+  
+  // Announce change for screen readers
+  announceAccessibilityChange(`Pattern overlays ${!currentUsePatterns ? 'enabled' : 'disabled'}`);
+}
+
+function toggleHighContrastTerrain() {
+  const currentMode = terrain.getAccessibilityMode();
+  const nextMode = currentMode === 'highContrast' ? 'normal' : 'highContrast';
+  terrain.setAccessibilityMode(nextMode);
+  
+  // Update UI indicator
+  const indicator = document.getElementById('highcontrast-indicator');
+  if (indicator) {
+    indicator.textContent = nextMode === 'highContrast' ? '🔆 High Contrast: ON' : '🔆 High Contrast: OFF';
+    indicator.style.color = nextMode === 'highContrast' ? '#4CAF50' : '#ccc';
+  }
+  
+  // Announce change for screen readers
+  announceAccessibilityChange(`High contrast terrain ${nextMode === 'highContrast' ? 'enabled' : 'disabled'}`);
+}
+
+function cycleColorBlindType() {
+  const types = ['normal', 'protanopia', 'deuteranopia', 'tritanopia'] as const;
+  const currentType = terrain.getColorBlindType();
+  const currentIndex = types.indexOf(currentType);
+  const nextType = types[(currentIndex + 1) % types.length];
+  
+  terrain.setColorBlindType(nextType);
+  
+  // Update UI indicator
+  const indicator = document.getElementById('colorblind-type-indicator');
+  if (indicator) {
+    const typeNames = {
+      normal: 'Normal Vision',
+      protanopia: 'Protanopia (Red-blind)',
+      deuteranopia: 'Deuteranopia (Green-blind)',
+      tritanopia: 'Tritanopia (Blue-blind)'
+    };
+    indicator.textContent = `👁️ Vision Type: ${typeNames[nextType]}`;
+  }
+  
+  // If not in color-blind mode, switch to it
+  if (terrain.getAccessibilityMode() !== 'colorBlind') {
+    terrain.setAccessibilityMode('colorBlind');
+  }
+  
+  // Announce change for screen readers
+  announceAccessibilityChange(`Color vision type changed to ${nextType}`);
+}
+
+function showKeyboardInstructions() {
+  const instructions = terrain.getKeyboardInstructions();
+  
+  // Create or update keyboard instructions panel
+  let panel = document.getElementById('keyboard-instructions-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'keyboard-instructions-panel';
+    panel.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.95);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      z-index: 3000;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      border: 2px solid #4CAF50;
+    `;
+    document.body.appendChild(panel);
+  }
+  
+  panel.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <h3 style="margin: 0; color: #4CAF50;">🔤 Keyboard Navigation Instructions</h3>
+      <button onclick="hideKeyboardInstructions()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;" aria-label="Close instructions">×</button>
+    </div>
+    <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">${instructions}</pre>
+    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #555;">
+      <button onclick="hideKeyboardInstructions()" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Got it!</button>
+    </div>
+  `;
+  
+  panel.style.display = 'block';
+  
+  // Focus on the close button for accessibility
+  const closeButton = panel.querySelector('button');
+  if (closeButton) {
+    (closeButton as HTMLElement).focus();
+  }
+}
+
+function hideKeyboardInstructions() {
+  const panel = document.getElementById('keyboard-instructions-panel');
+  if (panel) {
+    panel.style.display = 'none';
+  }
+}
+
+function announceAccessibilityChange(message: string) {
+  // Create an aria-live region for screen reader announcements
+  let announcer = document.getElementById('accessibility-announcer');
+  if (!announcer) {
+    announcer = document.createElement('div');
+    announcer.id = 'accessibility-announcer';
+    announcer.setAttribute('aria-live', 'polite');
+    announcer.setAttribute('aria-atomic', 'true');
+    announcer.style.cssText = `
+      position: absolute;
+      left: -10000px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    `;
+    document.body.appendChild(announcer);
+  }
+  
+  announcer.textContent = message;
+  
+  // Also show a brief visual notification
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #4CAF50;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 4px;
+    z-index: 4000;
+    font-size: 14px;
+    animation: slideInOut 3s ease-in-out;
+  `;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  // Add animation styles if not already present
+  if (!document.getElementById('accessibility-animations')) {
+    const style = document.createElement('style');
+    style.id = 'accessibility-animations';
+    style.textContent = `
+      @keyframes slideInOut {
+        0%, 100% { transform: translateX(100%); opacity: 0; }
+        10%, 90% { transform: translateX(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  // Remove notification after animation
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.parentNode.removeChild(notification);
+    }
+  }, 3000);
+}
+
+// Enhanced keyboard navigation for terrain operations
+function setupEnhancedKeyboardNavigation() {
+  document.addEventListener('keydown', (event) => {
+    // Only handle these keys when not typing in input fields
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+    
+    switch (event.key.toLowerCase()) {
+      case 'a':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+A
+        event.preventDefault();
+        toggleColorBlindMode();
+        break;
+      case 'p':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+P
+        event.preventDefault();
+        togglePatternOverlays();
+        break;
+      case 'h':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+H
+        event.preventDefault();
+        toggleHighContrastTerrain();
+        break;
+      case 'v':
+        event.preventDefault();
+        cycleColorBlindType();
+        break;
+      case 'f1':
+        event.preventDefault();
+        showKeyboardInstructions();
+        break;
+      case 'escape':
+        event.preventDefault();
+        hideOperationPreview();
+        hideKeyboardInstructions();
+        break;
+    }
+  });
+}
+
+// Add enhanced accessibility setup to initialization
+function initializeAccessibilityFeatures() {
+  setupEnhancedKeyboardNavigation();
+  
+  // Add accessibility indicators to the UI
+  const accessibilityStatus = document.createElement('div');
+  accessibilityStatus.id = 'accessibility-status';
+  accessibilityStatus.style.cssText = `
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 2000;
+    max-width: 300px;
+  `;
+  
+  accessibilityStatus.innerHTML = `
+    <div style="margin-bottom: 5px; font-weight: bold;">🔧 Accessibility Status</div>
+    <div id="colorblind-indicator" style="margin: 2px 0;">🎨 Color-Blind Mode: OFF</div>
+    <div id="patterns-indicator" style="margin: 2px 0;">📋 Patterns: OFF</div>
+    <div id="highcontrast-indicator" style="margin: 2px 0;">🔆 High Contrast: OFF</div>
+    <div id="colorblind-type-indicator" style="margin: 2px 0;">👁️ Vision Type: Normal Vision</div>
+    <div style="margin-top: 5px; font-size: 10px; color: #ccc;">
+      Hotkeys: A=Color-blind | P=Patterns | H=Contrast | V=Vision Type | F1=Help
+    </div>
+  `;
+  
+  document.body.appendChild(accessibilityStatus);
 }

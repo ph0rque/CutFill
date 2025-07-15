@@ -54,6 +54,12 @@ export class Terrain {
     cut: { min: number; max: number; color: THREE.Color };
   };
 
+  // Enhanced accessibility properties
+  private accessibilityMode: 'normal' | 'colorBlind' | 'highContrast' | 'patterns' = 'normal';
+  private colorBlindType: 'protanopia' | 'deuteranopia' | 'tritanopia' | 'normal' = 'normal';
+  private usePatternOverlays: boolean = false;
+  private patternMeshes: THREE.Mesh[] = [];
+
   constructor(
     width: number = 100,  // 100 feet x 100 feet
     height: number = 100, // 100 feet x 100 feet  
@@ -142,7 +148,7 @@ export class Terrain {
   }
 
   /**
-   * Initialize elevation zones for cut/fill visualization
+   * Initialize elevation zones for cut/fill visualization with accessibility support
    */
   private initializeElevationZones(): void {
     this.elevationZones = {
@@ -1045,5 +1051,270 @@ export class Terrain {
     const depth = Math.max(0, -height);
     const layer = this.getMaterialAtDepth(depth);
     return `${layer.name} (Hardness: ${layer.hardness})`;
+  }
+
+  /**
+   * Set accessibility mode for terrain visualization
+   */
+  public setAccessibilityMode(mode: 'normal' | 'colorBlind' | 'highContrast' | 'patterns'): void {
+    this.accessibilityMode = mode;
+    this.updateAccessibilityFeatures();
+    this.updateTerrainColors();
+  }
+
+  /**
+   * Set color blind type for specialized color adjustments
+   */
+  public setColorBlindType(type: 'protanopia' | 'deuteranopia' | 'tritanopia' | 'normal'): void {
+    this.colorBlindType = type;
+    if (this.accessibilityMode === 'colorBlind') {
+      this.updateAccessibilityFeatures();
+      this.updateTerrainColors();
+    }
+  }
+
+  /**
+   * Toggle pattern overlays for better zone distinction
+   */
+  public setPatternOverlays(enabled: boolean): void {
+    this.usePatternOverlays = enabled;
+    if (enabled) {
+      this.createPatternOverlays();
+    } else {
+      this.clearPatternOverlays();
+    }
+  }
+
+  /**
+   * Update accessibility features based on current mode
+   */
+  private updateAccessibilityFeatures(): void {
+    switch (this.accessibilityMode) {
+      case 'colorBlind':
+        this.applyColorBlindFriendlyColors();
+        break;
+      case 'highContrast':
+        this.applyHighContrastColors();
+        break;
+      case 'patterns':
+        this.setPatternOverlays(true);
+        break;
+      default:
+        this.restoreNormalColors();
+        this.setPatternOverlays(false);
+        break;
+    }
+  }
+
+  /**
+   * Apply color-blind friendly color palette
+   */
+  private applyColorBlindFriendlyColors(): void {
+    switch (this.colorBlindType) {
+      case 'protanopia': // Red-blind
+        this.elevationZones.high.color = new THREE.Color(0x2E7D32); // Dark green
+        this.elevationZones.medium.color = new THREE.Color(0xFFC107); // Amber (yellow-orange)
+        this.elevationZones.low.color = new THREE.Color(0xF5F5F5); // Light gray
+        this.elevationZones.cut.color = new THREE.Color(0x1976D2); // Dark blue
+        break;
+      case 'deuteranopia': // Green-blind
+        this.elevationZones.high.color = new THREE.Color(0x4FC3F7); // Light blue
+        this.elevationZones.medium.color = new THREE.Color(0xFFB74D); // Orange
+        this.elevationZones.low.color = new THREE.Color(0xF5F5F5); // Light gray
+        this.elevationZones.cut.color = new THREE.Color(0x9C27B0); // Purple
+        break;
+      case 'tritanopia': // Blue-blind
+        this.elevationZones.high.color = new THREE.Color(0x66BB6A); // Green
+        this.elevationZones.medium.color = new THREE.Color(0xFF7043); // Deep orange
+        this.elevationZones.low.color = new THREE.Color(0xF5F5F5); // Light gray
+        this.elevationZones.cut.color = new THREE.Color(0xD32F2F); // Red
+        break;
+    }
+  }
+
+  /**
+   * Apply high contrast colors for better visibility
+   */
+  private applyHighContrastColors(): void {
+    this.elevationZones.high.color = new THREE.Color(0x00FF00); // Bright green
+    this.elevationZones.medium.color = new THREE.Color(0xFFFF00); // Bright yellow
+    this.elevationZones.low.color = new THREE.Color(0xFFFFFF); // White
+    this.elevationZones.cut.color = new THREE.Color(0x0000FF); // Bright blue
+  }
+
+  /**
+   * Restore normal color palette
+   */
+  private restoreNormalColors(): void {
+    this.elevationZones.high.color = new THREE.Color(0x4CAF50); // Green
+    this.elevationZones.medium.color = new THREE.Color(0xFF9800); // Orange
+    this.elevationZones.low.color = new THREE.Color(0xFFF59D); // Light yellow
+    this.elevationZones.cut.color = new THREE.Color(0x2196F3); // Blue
+  }
+
+  /**
+   * Create pattern overlays for additional zone distinction
+   */
+  private createPatternOverlays(): void {
+    this.clearPatternOverlays();
+    
+    const vertices = this.geometry.attributes.position.array;
+    
+    // Create different patterns for each zone type
+    for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const z = vertices[i + 2];
+      const height = vertices[i + 1];
+      const zone = this.getElevationZone(height);
+      
+      // Create pattern based on zone type
+      if (Math.abs(x % 5) < 0.2 || Math.abs(z % 5) < 0.2) { // Grid pattern
+        let patternGeometry: THREE.BufferGeometry;
+        let patternMaterial: THREE.Material;
+        
+        switch (zone.name) {
+          case 'high': // Diagonal lines for high fill
+            patternGeometry = new THREE.PlaneGeometry(0.5, 0.1);
+            patternMaterial = new THREE.MeshBasicMaterial({ 
+              color: 0x000000, 
+              transparent: true, 
+              opacity: 0.3 
+            });
+            break;
+          case 'medium': // Dots for medium fill
+            patternGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.05, 8);
+            patternMaterial = new THREE.MeshBasicMaterial({ 
+              color: 0x000000, 
+              transparent: true, 
+              opacity: 0.4 
+            });
+            break;
+          case 'cut': // Cross-hatch for cut areas
+            patternGeometry = new THREE.PlaneGeometry(0.3, 0.05);
+            patternMaterial = new THREE.MeshBasicMaterial({ 
+              color: 0xFFFFFF, 
+              transparent: true, 
+              opacity: 0.5 
+            });
+            break;
+          default:
+            continue;
+        }
+        
+        const patternMesh = new THREE.Mesh(patternGeometry, patternMaterial);
+        patternMesh.position.set(x, height + 0.05, z);
+        
+        if (zone.name === 'high') {
+          patternMesh.rotation.z = Math.PI / 4; // Diagonal orientation
+        } else if (zone.name === 'cut') {
+          patternMesh.rotation.y = Math.PI / 4; // Angled cross-hatch
+        }
+        
+        this.terrainGroup.add(patternMesh);
+        this.patternMeshes.push(patternMesh);
+      }
+    }
+  }
+
+  /**
+   * Clear existing pattern overlays
+   */
+  private clearPatternOverlays(): void {
+    this.patternMeshes.forEach(mesh => {
+      this.terrainGroup.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    });
+    this.patternMeshes = [];
+  }
+
+  /**
+   * Get accessibility-friendly zone description
+   */
+  public getAccessibleZoneDescription(height: number): string {
+    const zone = this.getElevationZone(height);
+    const relativeHeight = height - this.targetElevation;
+    
+    let description = '';
+    switch (zone.name) {
+      case 'high':
+        description = `High fill zone: ${relativeHeight.toFixed(1)} feet above target. Requires excavation.`;
+        break;
+      case 'medium':
+        description = `Medium fill zone: ${relativeHeight.toFixed(1)} feet above target. Moderate excavation needed.`;
+        break;
+      case 'low':
+        description = `Target zone: ${relativeHeight.toFixed(1)} feet from target. Near optimal elevation.`;
+        break;
+      case 'cut':
+        description = `Cut zone: ${Math.abs(relativeHeight).toFixed(1)} feet below target. Needs fill material.`;
+        break;
+    }
+    
+    // Add pattern information if enabled
+    if (this.usePatternOverlays) {
+      switch (zone.name) {
+        case 'high':
+          description += ' Visual pattern: diagonal lines.';
+          break;
+        case 'medium':
+          description += ' Visual pattern: dots.';
+          break;
+        case 'cut':
+          description += ' Visual pattern: cross-hatch.';
+          break;
+      }
+    }
+    
+    return description;
+  }
+
+  /**
+   * Get keyboard navigation instructions for terrain operations
+   */
+  public getKeyboardInstructions(): string {
+    return `
+      Terrain Navigation Instructions:
+      • Tab: Navigate through tool buttons and controls
+      • Enter/Space: Activate selected tool or button
+      • Arrow keys: Move focus between terrain areas
+      • Ctrl + Arrow keys: Apply current tool to focused area
+      • 1-4: Quick tool selection (1=Excavator, 2=Bulldozer, 3=Grader, 4=Compactor)
+      • +/-: Adjust brush size
+      • Ctrl+Z: Undo last operation
+      • Ctrl+Shift+Z: Redo operation
+      • A: Toggle accessibility mode
+      • P: Toggle pattern overlays
+      • H: Toggle high contrast mode
+      • Escape: Cancel current operation
+      
+      Accessibility Features:
+      • Screen reader announcements for all operations
+      • Color-blind friendly color schemes
+      • Pattern overlays for zone identification
+      • High contrast mode for better visibility
+      • Audio feedback for successful operations
+    `;
+  }
+
+  /**
+   * Get current accessibility mode
+   */
+  public getAccessibilityMode(): 'normal' | 'colorBlind' | 'highContrast' | 'patterns' {
+    return this.accessibilityMode;
+  }
+
+  /**
+   * Get current color blind type
+   */
+  public getColorBlindType(): 'protanopia' | 'deuteranopia' | 'tritanopia' | 'normal' {
+    return this.colorBlindType;
+  }
+
+  /**
+   * Get pattern overlay status
+   */
+  public getPatternOverlaysEnabled(): boolean {
+    return this.usePatternOverlays;
   }
 }
