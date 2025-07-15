@@ -130,11 +130,11 @@ scene.add(directionalLight);
 
 // Add side lighting to illuminate walls better
 const sideLight1 = new THREE.DirectionalLight(0xffffff, 0.3);
-sideLight1.position.set(-50, 20, 0); // Left side
+sideLight1.position.set(0, 20, 50); // Left side (adjusted for 0-100 coords)
 scene.add(sideLight1);
 
 const sideLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
-sideLight2.position.set(50, 20, 0); // Right side
+sideLight2.position.set(100, 20, 50); // Right side (adjusted for 0-100 coords)
 scene.add(sideLight2);
 
 const hemi = new THREE.HemisphereLight(0xddddff, 0x888866, 0.4);
@@ -146,9 +146,9 @@ ambientLight.intensity = 1.0;
 // Add scale reference grid and markers
 const scaleReferences = addScaleReferences(scene);
 
-// Position camera for Y-up system (Z is height)
-camera.position.set(50, 80, 50); // X, Y, Z with Y pointing up
-camera.lookAt(0, 0, 0);
+// Position camera for Y-up system centered on terrain (terrain center is now 50,50)
+camera.position.set(75, 80, 75); // Look at terrain from corner perspective
+camera.lookAt(50, 0, 50); // Look at terrain center
 
 // Allow much more zoom out for better overview
 camera.far = 2000; // Increase far clipping plane
@@ -161,7 +161,7 @@ camera.updateProjectionMatrix();
 function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; markers: THREE.Group } {
   // Create professional grid helper with enhanced styling
   const gridHelper = new THREE.GridHelper(100, 20, 0xAAAAAA, 0x888888); // Much lighter gray colors
-  gridHelper.position.y = 0.05; // Slightly above terrain to avoid z-fighting
+  gridHelper.position.set(50, 0.05, 50); // Center on terrain (terrain spans 0-100, center at 50,50)
   gridHelper.name = 'scaleGrid'; // Name for toggle functionality
   
   // Enhance grid material for professional appearance
@@ -213,15 +213,15 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   camera.getWorldDirection(cameraDirection);
   
   // Calculate camera distance for dynamic scaling
-  const cameraDistance = camera.position.distanceTo(new THREE.Vector3(0, 0, 0));
+  const cameraDistance = camera.position.distanceTo(new THREE.Vector3(50, 0, 50)); // Center of terrain
   
-  // Determine corner position based on camera view
-  let cornerX = -50; // Far left (negative X)
-  let cornerZ = -50; // Far back (negative Z)
+  // Determine corner position based on camera view (terrain spans 0,0 to 100,100)
+  let cornerX = 0; // Near corner (origin)
+  let cornerZ = 0; // Near corner (origin)
   
-  // Adjust corner based on camera direction
-  if (cameraDirection.x > 0) cornerX = 50;  // Switch to positive X if looking from negative X
-  if (cameraDirection.z > 0) cornerZ = 50;  // Switch to positive Z if looking from negative Z
+  // Adjust corner based on camera direction to show axes at visible corner
+  if (cameraDirection.x > 0) cornerX = 100;  // Switch to far corner X if looking from negative X
+  if (cameraDirection.z > 0) cornerZ = 100;  // Switch to far corner Z if looking from negative Z
   
   const axisY = 2; // Height above terrain
   const zAxisLength = 20; // Shortened Z-axis to 20 feet
@@ -273,9 +273,9 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
     return sprite;
   }
   
-  // Create X-axis line (red) - full length
-  const xAxisStart = cornerX > 0 ? 50 : -50;
-  const xAxisEnd = cornerX > 0 ? -50 : 50;
+  // Create X-axis line (red) - full length across terrain (0 to 100)
+  const xAxisStart = 0;
+  const xAxisEnd = 100;
   const xAxisGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(xAxisStart, axisY, cornerZ),
     new THREE.Vector3(xAxisEnd, axisY, cornerZ)
@@ -293,7 +293,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Add X-axis segment markings and labels
   let segmentCount = 0;
   let displayedSegmentCount = 0;
-  for (let x = -50; x <= 50; x += segmentSpacing) {
+  for (let x = 0; x <= 100; x += segmentSpacing) {
     
     // Only show segment if it passes the culling interval
     if (segmentCount % xSegmentInterval === 0) {
@@ -308,10 +308,9 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       
       // Add number label every other displayed segment (skip 0ft and 100ft)
       if (displayedSegmentCount % 2 === 0) {
-        // Calculate distance from axis start (0 at xAxisStart, 100 at xAxisEnd)
-        const labelValue = Math.abs(x - xAxisStart); // Distance from axis origin
-        if (labelValue !== 0 && labelValue !== 100) { // Skip 0ft and 100ft
-          const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
+        // Use actual coordinate value
+        if (x !== 0 && x !== 100) { // Skip 0ft and 100ft
+          const labelText = segmentSpacing >= 5 ? `${x}ft` : `${x}`;
           const labelOffset = cornerZ > 0 ? -2 : 2;
           markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000', false)); // false = larger labels
         }
@@ -321,9 +320,9 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
     segmentCount++;
   }
   
-  // Create Z-axis line (green) - full length  
-  const zAxisStart = cornerZ > 0 ? 50 : -50;
-  const zAxisEnd = cornerZ > 0 ? -50 : 50;
+  // Create Z-axis line (green) - full length across terrain (0 to 100)
+  const zAxisStart = 0;
+  const zAxisEnd = 100;
   const zAxisGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(cornerX, axisY, zAxisStart),
     new THREE.Vector3(cornerX, axisY, zAxisEnd)
@@ -339,7 +338,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Add Z-axis segment markings and labels
   segmentCount = 0;
   displayedSegmentCount = 0;
-  for (let z = -50; z <= 50; z += segmentSpacing) {
+  for (let z = 0; z <= 100; z += segmentSpacing) {
     
     // Only show segment if it passes the culling interval
     if (segmentCount % zSegmentInterval === 0) {
@@ -354,10 +353,9 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       
       // Add number label every other displayed segment (skip 0ft and 100ft)
       if (displayedSegmentCount % 2 === 0) {
-        // Calculate distance from axis start (0 at zAxisStart, 100 at zAxisEnd)
-        const labelValue = Math.abs(z - zAxisStart); // Distance from axis origin
-        if (labelValue !== 0 && labelValue !== 100) { // Skip 0ft and 100ft
-          const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
+        // Use actual coordinate value
+        if (z !== 0 && z !== 100) { // Skip 0ft and 100ft
+          const labelText = segmentSpacing >= 5 ? `${z}ft` : `${z}`;
           const labelOffset = cornerX > 0 ? -2 : 2;
           markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00', false)); // false = larger labels
         }
