@@ -266,12 +266,14 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
       markerGroup.add(tickLine);
       
-      // Add number label at calculated intervals
-      if (segmentCount % xLabelInterval === 0) {
+      // Add number label at calculated intervals (skip 0ft and show every other label)
+      if (segmentCount % (xLabelInterval * 2) === 0) {
         const labelValue = x + 50; // Distance from left edge (0-100ft)
-        const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
-        const labelOffset = cornerZ > 0 ? -2 : 2;
-        markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000', true));
+        if (labelValue !== 0 && labelValue !== 100) { // Skip 0ft and 100ft
+          const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
+          const labelOffset = cornerZ > 0 ? -2 : 2;
+          markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000', true));
+        }
       }
     }
     segmentCount++;
@@ -307,12 +309,14 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
       markerGroup.add(tickLine);
       
-      // Add number label at calculated intervals
-      if (segmentCount % zLabelInterval === 0) {
+      // Add number label at calculated intervals (skip 0ft and show every other label)
+      if (segmentCount % (zLabelInterval * 2) === 0) {
         const labelValue = z + 50; // Distance from back edge (0-100ft)
-        const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
-        const labelOffset = cornerX > 0 ? -2 : 2;
-        markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00', true));
+        if (labelValue !== 0 && labelValue !== 100) { // Skip 0ft and 100ft
+          const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
+          const labelOffset = cornerX > 0 ? -2 : 2;
+          markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00', true));
+        }
       }
     }
     segmentCount++;
@@ -346,19 +350,21 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
       markerGroup.add(tickLine);
       
-      // Add number label at calculated intervals
-      if (segmentCount % yLabelInterval === 0) {
-        const labelOffset = cornerX > 0 ? -3 : 3;
-        markerGroup.add(createTextMarker(`${y}ft`, cornerX + labelOffset, axisY + y, cornerZ, '#0000ff', true)); // y already represents distance from origin
+      // Add number label at calculated intervals (skip extremes and show every other label)
+      if (segmentCount % (yLabelInterval * 2) === 0) {
+        if (y !== 20) { // Skip 20ft (final label)
+          const labelOffset = cornerX > 0 ? -3 : 3;
+          markerGroup.add(createTextMarker(`${y}ft`, cornerX + labelOffset, axisY + y, cornerZ, '#0000ff', true)); // y already represents distance from origin
+        }
       }
     }
     segmentCount++;
   }
 
-  // Add main axis endpoint labels (larger)
-  markerGroup.add(createTextMarker('X: 100ft', xAxisEnd + (xAxisEnd > 0 ? 8 : -8), axisY + 2, cornerZ, '#ff0000'));
-  markerGroup.add(createTextMarker('Z: 100ft', cornerX, axisY + 2, zAxisEnd + (zAxisEnd > 0 ? 8 : -8), '#00ff00'));
-  markerGroup.add(createTextMarker('Y: 20ft', cornerX - 5, axisY + zAxisLength + 3, cornerZ, '#0000ff'));
+  // Add main axis endpoint labels (simple axis names)
+  markerGroup.add(createTextMarker('X', xAxisEnd + (xAxisEnd > 0 ? 6 : -6), axisY + 2, cornerZ, '#ff0000'));
+  markerGroup.add(createTextMarker('Z', cornerX, axisY + 2, zAxisEnd + (zAxisEnd > 0 ? 6 : -6), '#00ff00'));
+  markerGroup.add(createTextMarker('Y', cornerX - 4, axisY + zAxisLength + 3, cornerZ, '#0000ff'));
 }
 
 // Force initialize game if authentication is taking too long
