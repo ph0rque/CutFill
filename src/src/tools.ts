@@ -184,7 +184,7 @@ export class GraderTool extends EarthMovingTool {
     });
 
     // Get current terrain height at the center
-    const mesh = this.terrain.getMesh();
+    const mesh = this.terrain.getSurfaceMesh();
     const vertices = mesh.geometry.attributes.position.array;
     
     // Calculate average height in the area
@@ -262,7 +262,7 @@ export class CompactorTool extends EarthMovingTool {
     });
 
     // Get terrain mesh for direct manipulation
-    const mesh = this.terrain.getMesh();
+    const mesh = this.terrain.getSurfaceMesh();
     const vertices = mesh.geometry.attributes.position.array;
     
     // Find minimum height in the area

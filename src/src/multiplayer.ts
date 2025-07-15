@@ -32,20 +32,17 @@ export class MultiplayerManager {
   private setupEventHandlers(): void {
     // Connection events
     this.socket.on('connect', () => {
-      console.log('Connected to multiplayer server');
       this.isConnected = true;
       this.updateConnectionStatus('Connected');
     });
 
     this.socket.on('disconnect', () => {
-      console.log('Disconnected from multiplayer server');
       this.isConnected = false;
       this.updateConnectionStatus('Disconnected');
     });
 
     // Session events
     this.socket.on('session-joined', data => {
-      console.log('Joined session:', data.sessionId);
       this.currentSession = data.sessionId;
       this.players.clear();
 
@@ -64,19 +61,16 @@ export class MultiplayerManager {
     });
 
     this.socket.on('session-full', data => {
-      console.log('Session full:', data.sessionId);
       this.updateSessionStatus('Session Full');
     });
 
     // Player events
     this.socket.on('player-joined', (playerData: PlayerData) => {
-      console.log('Player joined:', playerData.name);
       this.players.set(playerData.id, playerData);
       this.updatePlayerList();
     });
 
     this.socket.on('player-left', data => {
-      console.log('Player left:', data.playerId);
       this.players.delete(data.playerId);
       this.updatePlayerList();
     });
@@ -98,7 +92,6 @@ export class MultiplayerManager {
     });
 
     this.socket.on('volume-updated', data => {
-      console.log(`Player ${data.playerId} volume:`, data.volumes);
       // Could display other players' volume metrics
     });
   }

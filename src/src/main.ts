@@ -1,6 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
-import { Terrain, type BrushSettings } from './terrain';
+import { Terrain } from './terrain';
 import { MultiplayerManager } from './multiplayer';
 import { AuthService } from './auth';
 import { AuthUI } from './auth-ui';
@@ -11,6 +11,7 @@ import { uiPolishSystem } from './ui-polish';
 import { visualEnhancementSystem } from './visual-enhancements';
 import { responsiveDesignSystem } from './responsive-design';
 import { performanceOptimizer, performanceMonitorUI } from './performance-optimization';
+import { GestureControls, type GestureState } from './gesture-controls';
 
 // Create basic Three.js scene
 const scene = new THREE.Scene();
@@ -26,7 +27,6 @@ let renderer: THREE.WebGLRenderer;
 
 // Check if renderer already exists (prevent duplicate creation)
 if ((window as any).cutfillRenderer) {
-  console.log('Using existing renderer');
   renderer = (window as any).cutfillRenderer;
 } else {
   try {
@@ -42,8 +42,6 @@ if ((window as any).cutfillRenderer) {
     
     // Store globally to prevent duplicate creation
     (window as any).cutfillRenderer = renderer;
-    
-    console.log('WebGL renderer created successfully');
   } catch (error) {
     console.error('Failed to create WebGL renderer:', error);
     // Fallback to basic renderer if WebGL fails
@@ -72,7 +70,9 @@ const canvas = renderer.domElement;
 canvas.style.position = 'fixed';
 canvas.style.top = '0';
 canvas.style.left = '0';
-canvas.style.zIndex = '1';
+canvas.style.zIndex = '1000';
+canvas.style.touchAction = 'none';
+canvas.style.pointerEvents = 'auto';
 
 // Prevent context menu and other canvas interactions that might conflict
 canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -85,16 +85,12 @@ canvas.addEventListener('webglcontextlost', (e) => {
 });
 
 canvas.addEventListener('webglcontextrestored', (e) => {
-  console.log('WebGL context restored:', e);
   // The renderer should automatically handle context restore
 });
 
 // Create terrain
-const terrain = new Terrain(50, 50, 32, 32);
+const terrain = new Terrain(50, 50, 8, 8);
 scene.add(terrain.getMesh());
-
-// Log successful terrain creation
-console.log('Terrain system initialized successfully');
 
 // Add basic lighting immediately so terrain is visible
 const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
@@ -104,17 +100,102 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
 directionalLight.position.set(10, 10, 5);
 scene.add(directionalLight);
 
+// Add scale reference grid and markers
+const scaleReferences = addScaleReferences(scene);
+
 // Position camera
 camera.position.set(0, 15, 40);
 camera.lookAt(0, 0, 0);
 
 // Terrain is now visible - turn off wireframe
-(terrain.getMesh().material as THREE.MeshLambertMaterial).wireframe = false;
+  (terrain.getSurfaceMesh().material as THREE.MeshLambertMaterial).wireframe = false;
+
+// Function to add scale references to the scene
+function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; markers: THREE.Group } {
+  const gridHelper = new THREE.GridHelper(50, 10, 0x444444, 0x222222);
+  gridHelper.position.y = 0.01; // Slightly above terrain to avoid z-fighting
+  scene.add(gridHelper);
+
+  // Add scale markers with axis lines in corner
+  const markerGroup = new THREE.Group();
+  
+  // Create axis lines in far corner
+  const axisLength = 8; // Length of axis lines
+  const cornerX = -25; // Far left
+  const cornerZ = -25; // Far back
+  const axisY = 2; // Height above terrain
+  
+  // Create X-axis line (red)
+  const xAxisGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(cornerX, axisY, cornerZ),
+    new THREE.Vector3(cornerX + axisLength, axisY, cornerZ)
+  ]);
+  const xAxisMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
+  const xAxisLine = new THREE.Line(xAxisGeometry, xAxisMaterial);
+  markerGroup.add(xAxisLine);
+  
+  // Create Z-axis line (blue)
+  const zAxisGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(cornerX, axisY, cornerZ),
+    new THREE.Vector3(cornerX, axisY, cornerZ + axisLength)
+  ]);
+  const zAxisMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 3 });
+  const zAxisLine = new THREE.Line(zAxisGeometry, zAxisMaterial);
+  markerGroup.add(zAxisLine);
+  
+  // Create text sprites for scale markers
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d')!;
+  canvas.width = 96;
+  canvas.height = 48;
+  
+  // Helper function to create text markers
+  function createTextMarker(text: string, x: number, z: number, y: number = 0.5, color: string = '#000000'): THREE.Sprite {
+    // Clear canvas
+    context.fillStyle = '#FFFFFF';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add background with slight transparency
+    context.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add border
+    context.strokeStyle = color;
+    context.lineWidth = 2;
+    context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+    
+    // Add text
+    context.fillStyle = color;
+    context.font = 'bold 16px Arial';
+    context.textAlign = 'center';
+    context.fillText(text, canvas.width / 2, canvas.height / 2 + 6);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(x, y, z);
+    sprite.scale.set(4, 2, 1);
+    
+    return sprite;
+  }
+
+  // Add origin marker at axis intersection
+  markerGroup.add(createTextMarker('0,0', cornerX - 1, cornerZ - 1, axisY + 0.5, '#666666'));
+  
+  // Add X-axis scale marker (red)
+  markerGroup.add(createTextMarker('50m', cornerX + axisLength + 1, cornerZ, axisY + 0.5, '#ff0000'));
+  
+  // Add Z-axis scale marker (blue)
+  markerGroup.add(createTextMarker('50m', cornerX, cornerZ + axisLength + 1, axisY + 0.5, '#0000ff'));
+  
+  scene.add(markerGroup);
+  
+  return { grid: gridHelper, markers: markerGroup };
+}
 
 // Force initialize game if authentication is taking too long
 setTimeout(() => {
   if (!isGameReady) {
-    console.log('Authentication timeout - initializing game directly');
     isGameReady = true;
     initializeGame();
     // Set up guest user
@@ -181,7 +262,7 @@ setTimeout(() => {
     (appElement as HTMLElement).style.visibility = 'visible';
     (appElement as HTMLElement).style.opacity = '1';
     (appElement as HTMLElement).style.zIndex = '1002';
-    console.log('Force ensured UI visibility');
+    (appElement as HTMLElement).style.pointerEvents = 'none';
   }
   
   // Hide any auth UI that might be covering
@@ -211,7 +292,6 @@ if (appDiv && appDiv.innerHTML.trim() === '') {
   
   // Add global function to force initialization
   (window as any).forceInitGame = () => {
-    console.log('Force initializing game...');
     if (!isGameReady) {
       isGameReady = true;
       initializeGame();
@@ -220,10 +300,8 @@ if (appDiv && appDiv.innerHTML.trim() === '') {
 }
 
 // Create authentication service
-console.log('Creating authentication service...');
 const authService = new AuthService();
 const authUI = new AuthUI(authService);
-console.log('Authentication service created');
 
 // Create multiplayer manager
 const multiplayerManager = new MultiplayerManager(terrain);
@@ -270,19 +348,17 @@ let isGameReady = false;
 let isModifying = false;
 let lastMousePosition: THREE.Vector3 | null = null;
 let modificationStrength = 0.5;
+let gestureControls: GestureControls;
 
 // Initialize authentication (simplified for testing)
 try {
   authService.onAuthStateChange(authState => {
-    console.log('Auth state changed:', authState);
-    
     if (authState.isLoading) {
       return;
     }
 
           if (authState.user) {
         // User is authenticated, hide auth UI and ensure game is ready
-        console.log('User authenticated, hiding auth UI');
         authUI.hide();
         if (!isGameReady) {
           isGameReady = true;
@@ -293,10 +369,8 @@ try {
         // User is not authenticated, but keep game UI visible
         // Only show auth UI if game isn't ready yet
         if (!isGameReady) {
-          console.log('No user, showing auth UI');
           authUI.show();
         } else {
-          console.log('Game ready, treating as guest user');
           // Game is ready, just update user info for guest
           updateUserInfo({ email: 'guest@example.com', user_metadata: { username: 'Guest' } });
           // Make sure auth UI is hidden
@@ -315,14 +389,12 @@ try {
 
 // Function to initialize the game after authentication
 function initializeGame() {
-  console.log('Initializing game...');
   // Setup game controls and event handlers
   setupGameControls();
   setupUI();
   
   // Initialize volume display
   updateVolumeDisplay();
-  console.log('Game initialized successfully');
   
   // Set up periodic UI visibility check
   setInterval(() => {
@@ -330,7 +402,6 @@ function initializeGame() {
     if (appElement) {
       const computedStyle = window.getComputedStyle(appElement);
       if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
-        console.log('UI was hidden, restoring...');
         (appElement as HTMLElement).style.display = 'block';
         (appElement as HTMLElement).style.visibility = 'visible';
         (appElement as HTMLElement).style.opacity = '1';
@@ -344,14 +415,10 @@ function updateUserInfo(user: {
   user_metadata?: { username?: string };
   email?: string;
 }) {
-  console.log('Updating user info:', user);
   const userInfoElement = document.getElementById('user-info');
   if (userInfoElement) {
     const username = user.user_metadata?.username || user.email || 'Anonymous';
     userInfoElement.textContent = `👤 ${username}`;
-    console.log('User info updated to:', username);
-  } else {
-    console.log('User info element not found');
   }
   
   // Load user progress
@@ -365,7 +432,6 @@ async function loadUserProgress(userId: string) {
     await progressTracker.loadUserProgress(userId);
     progressTracker.startSession();
     updateProgressDisplay();
-    console.log('User progress loaded successfully');
   } catch (error) {
     console.error('Failed to load user progress:', error);
   }
@@ -373,6 +439,14 @@ async function loadUserProgress(userId: string) {
 
 // Function to setup game controls
 function setupGameControls() {
+  // Initialize gesture controls
+  gestureControls = new GestureControls(camera, renderer.domElement);
+  
+  // Set up gesture state change callback
+  gestureControls.onGestureChange((state: GestureState) => {
+    updateInteractionMode(false, false, state);
+  });
+
   // Mouse interaction
   let isMouseDown = false;
   let lastMouseX = 0;
@@ -388,20 +462,18 @@ function setupGameControls() {
       isMouseDown = true;
       
       // Check for modifier keys
-      if (event.shiftKey) {
-        // Shift + drag = Rotate camera
-        isModifying = false;
-      } else if (event.ctrlKey || event.metaKey) {
+      if (event.ctrlKey || event.metaKey) {
         // Ctrl + drag = Apply tool
         isModifying = true;
         lastMousePosition = null; // Reset for new modification
         terrain.startModification();
       } else {
-        // Default: Apply tool
-        isModifying = true;
-        lastMousePosition = null; // Reset for new modification
-        terrain.startModification();
+        // Default: Rotate camera
+        isModifying = false;
       }
+    } else if (event.button === 2) { // Right click
+      isMouseDown = true;
+      isModifying = false; // Right click is for camera rotation
     }
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
@@ -410,21 +482,13 @@ function setupGameControls() {
   renderer.domElement.addEventListener('mousemove', event => {
     if (isMouseDown) {
       if (event.buttons === 1) { // Left mouse button is down
-        if (event.shiftKey) {
-          // Shift + drag = Camera rotation
-          const deltaX = event.clientX - lastMouseX;
-          const deltaY = event.clientY - lastMouseY;
-
-          camera.position.x += deltaX * 0.01;
-          camera.position.y += deltaY * 0.01;
-          camera.lookAt(0, 0, 0);
-        } else if ((event.ctrlKey || event.metaKey) || isModifying) {
-          // Ctrl + drag OR default = Terrain modification
+        if (event.ctrlKey || event.metaKey || isModifying) {
+          // Ctrl/Cmd + drag = Terrain modification
           mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
           mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
           raycaster.setFromCamera(mouse, camera);
-          const intersects = raycaster.intersectObject(terrain.getMesh());
+          const intersects = raycaster.intersectObject(terrain.getSurfaceMesh());
 
           if (intersects.length > 0) {
             const point = intersects[0].point;
@@ -458,7 +522,18 @@ function setupGameControls() {
               multiplayerManager.sendTerrainModification(point.x, point.z, modificationStrength);
             }
           }
+        } else {
+          // Default left drag = Camera rotation
+          const deltaX = event.clientX - lastMouseX;
+          const deltaY = event.clientY - lastMouseY;
+          gestureControls.handleMouseRotation(deltaX, deltaY);
         }
+      } else if (event.buttons === 2) { // Right mouse button is down
+        // Right click drag = Camera rotation using gesture controls
+        const deltaX = event.clientX - lastMouseX;
+        const deltaY = event.clientY - lastMouseY;
+
+        gestureControls.handleMouseRotation(deltaX, deltaY);
       }
 
       lastMouseX = event.clientX;
@@ -468,27 +543,38 @@ function setupGameControls() {
 
   // Add keyboard event listeners for modifier key feedback
   document.addEventListener('keyup', event => {
-    updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
+    if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
+      updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
+    }
   });
 
   // Mouse move to update interaction mode
   renderer.domElement.addEventListener('mousemove', event => {
-    if (!isMouseDown) {
+    if (!isMouseDown && !gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
       updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
     }
       });
 
-  renderer.domElement.addEventListener('mouseup', event => {
+  renderer.domElement.addEventListener('mouseup', () => {
     isMouseDown = false;
     isModifying = false;
-    // Reset interaction mode when mouse is released
-    updateInteractionMode(false, false);
+    // Reset interaction mode when mouse is released (only if not in gesture mode)
+    if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
+      updateInteractionMode(false, false);
+    }
+  });
+
+  // Prevent context menu on right click (since we use it for camera rotation)
+  renderer.domElement.addEventListener('contextmenu', event => {
+    event.preventDefault();
   });
 
     // Keyboard controls
   document.addEventListener('keydown', event => {
-    // Update interaction mode display
-    updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
+    // Update interaction mode display (only if not in gesture mode)
+    if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
+      updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
+    }
     
     switch (event.key.toLowerCase()) {
       case 'w':
@@ -532,6 +618,13 @@ function setupGameControls() {
           if (multiplayerManager.isInSession()) {
             multiplayerManager.sendTerrainReset();
           }
+        }
+        break;
+      case 'g':
+        terrain.regenerateTerrain();
+        updateVolumeDisplay();
+        if (multiplayerManager.isInSession()) {
+          multiplayerManager.sendTerrainReset();
         }
         break;
       case 't':
@@ -672,7 +765,6 @@ function setupGameControls() {
     autoOptimizeCheckbox.addEventListener('change', (e) => {
       const enabled = (e.target as HTMLInputElement).checked;
       // Auto-optimization is controlled by the performance optimizer internally
-      console.log('Auto-optimize:', enabled ? 'enabled' : 'disabled');
     });
   }
 
@@ -697,10 +789,9 @@ function setupGameControls() {
 
 // Function to setup UI
 function setupUI() {
-  console.log('Setting up UI...');
   // Add UI elements
   document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-    <div class="main-panel ui-responsive enhanced-panel" style="position: fixed; top: 10px; left: 10px; color: white; font-family: Arial; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; min-width: 300px; max-height: 90vh; overflow-y: auto; z-index: 1002;">
+    <div class="main-panel ui-responsive enhanced-panel" style="position: fixed; top: 10px; left: 10px; color: white; font-family: Arial; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; min-width: 300px; max-height: 90vh; overflow-y: auto; z-index: 1001; pointer-events: auto;">
       <h2>CutFill - Enhanced Terrain System</h2>
       
               <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
@@ -812,13 +903,14 @@ function setupUI() {
       </div>
       
               <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
-          <strong>Controls (Mac-friendly):</strong>
+          <strong>Controls (Touch & Mouse):</strong>
           <ul style="margin: 5px 0; padding-left: 20px; font-size: 14px;">
-            <li>Drag: Apply current tool</li>
-            <li>Shift + drag: Rotate camera</li>
-            <li>Ctrl + drag: Apply current tool (alternative)</li>
+            <li><strong>Touch:</strong> One-finger drag: Rotate camera | Two-finger scroll: Zoom</li>
+            <li><strong>Trackpad:</strong> Two-finger scroll: Zoom | Two-finger pinch/rotate: Camera control</li>
+            <li><strong>Mouse:</strong> Left drag: Rotate camera | Scroll wheel: Zoom</li>
+            <li>Ctrl + drag: Apply current tool</li>
             <li>Q: Excavator | E: Bulldozer | T: Grader | Y: Compactor</li>
-            <li>R: Reset terrain | W: Wireframe</li>
+            <li>R: Reset terrain | G: Generate new terrain | W: Wireframe | X: Toggle grid</li>
             <li>A: Assignments | J: Join session | L: Logout</li>
           </ul>
         </div>
@@ -833,6 +925,8 @@ function setupUI() {
       <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
         <strong>Terrain Stats:</strong><br>
         <div id="terrain-stats">
+          <strong>Dimensions:</strong> 50m × 50m<br>
+          <strong>Work Area:</strong> 2,500 m²<br>
           Vertices: 0<br>
           Triangles: 0
         </div>
@@ -880,7 +974,7 @@ function setupUI() {
     (appElement as HTMLElement).style.opacity = '1';
     (appElement as HTMLElement).style.zIndex = '1001'; // Above auth UI
     (appElement as HTMLElement).style.position = 'relative';
-    console.log('UI visibility ensured');
+    (appElement as HTMLElement).style.pointerEvents = 'none';
   }
   
   // Hide any auth containers that might be covering the UI
@@ -972,19 +1066,44 @@ function updateTerrainStats() {
 }
 
 // Update interaction mode display
-function updateInteractionMode(shiftKey: boolean, ctrlKey: boolean) {
+function updateInteractionMode(shiftKey: boolean, ctrlKey: boolean, gestureState?: GestureState) {
   const modeDiv = document.getElementById('interaction-mode');
   if (modeDiv) {
-    if (shiftKey) {
-      modeDiv.innerHTML = '🔄 Camera rotation mode';
-      modeDiv.style.color = '#FF9800';
+    let statusText = '';
+    let statusColor = '#4CAF50';
+    
+    if (gestureState) {
+      // Handle gesture modes
+      if (gestureState.gestureMode === 'rotation') {
+        statusText = '🔄 Two-finger rotation';
+        statusColor = '#FF9800';
+      } else if (gestureState.gestureMode === 'zoom') {
+        statusText = '🔍 Two-finger zoom';
+        statusColor = '#2196F3';
+      } else {
+        statusText = '🔧 Ready to modify terrain';
+        statusColor = '#4CAF50';
+      }
+    } else if (shiftKey) {
+      statusText = '🔄 Camera rotation mode';
+      statusColor = '#FF9800';
     } else if (ctrlKey) {
-      modeDiv.innerHTML = '🔧 Tool application mode';
-      modeDiv.style.color = '#4CAF50';
+      statusText = '🔧 Tool application mode';
+      statusColor = '#4CAF50';
     } else {
-      modeDiv.innerHTML = '🔧 Ready to modify terrain';
-      modeDiv.style.color = '#4CAF50';
+      statusText = '🔧 Ready to modify terrain';
+      statusColor = '#4CAF50';
     }
+    
+    // Add zoom level indicator
+    if (gestureControls) {
+      const distance = gestureControls.getDistance();
+      const zoomLevel = Math.round(((100 - distance) / 90) * 100); // Convert distance to zoom percentage
+      statusText += ` | 🔍 Zoom: ${Math.max(0, zoomLevel)}%`;
+    }
+    
+    modeDiv.innerHTML = statusText;
+    modeDiv.style.color = statusColor;
   }
 }
 

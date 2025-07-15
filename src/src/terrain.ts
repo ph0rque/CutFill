@@ -13,6 +13,13 @@ export interface BrushSettings {
   falloff: 'linear' | 'smooth' | 'sharp';
 }
 
+export interface MaterialLayer {
+  name: string;
+  color: THREE.Color;
+  depth: number;
+  hardness: number; // affects excavation resistance
+}
+
 export class Terrain {
   private mesh: THREE.Mesh;
   private geometry: THREE.PlaneGeometry;
@@ -28,13 +35,28 @@ export class Terrain {
     falloff: 'smooth'
   };
 
+  // 3D terrain enhancement properties
+  private terrainGroup: THREE.Group;
+  private surfaceMesh: THREE.Mesh;
+  private wallMeshes: THREE.Mesh[] = [];
+  // bottomMesh is now part of the box geometry
+  private materialLayers: MaterialLayer[] = [];
+  private blockDepth: number = 10; // 10 meter depth
+  private crossSectionGeometries: THREE.BufferGeometry[] = [];
+
   constructor(
     width: number = 50,
     height: number = 50,
-    widthSegments: number = 32,
-    heightSegments: number = 32
+    widthSegments: number = 8,  // Reduced from 32 for solid appearance
+    heightSegments: number = 8  // Reduced from 32 for solid appearance
   ) {
-    // Create terrain geometry
+    // Create main group for all terrain parts
+    this.terrainGroup = new THREE.Group();
+    
+    // Initialize material layers
+    this.initializeMaterialLayers();
+
+    // Create surface terrain geometry
     this.geometry = new THREE.PlaneGeometry(
       width,
       height,
@@ -50,40 +72,320 @@ export class Terrain {
       this.geometry.attributes.position.array
     );
 
-    // Create material with improved properties
+    // Create surface material with improved properties
     this.material = new THREE.MeshLambertMaterial({
-      color: 0x8B4513, // Brown color for terrain
+      color: 0x8B4513, // Brown color for terrain surface
       wireframe: false,
-      vertexColors: false,
+      vertexColors: true, // Enable vertex colors for layered effects
     });
 
-    // Create the mesh
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    // Create the surface mesh
+    this.surfaceMesh = new THREE.Mesh(this.geometry, this.material);
+    this.mesh = this.surfaceMesh; // Keep backward compatibility
+
+    // Create 3D terrain block structure
+    this.create3DTerrainBlock(width, height);
+
+    // Add all parts to the group
+    this.terrainGroup.add(this.surfaceMesh);
 
     // Generate initial terrain
-    this.generateRandomTerrain();
+    this.regenerateTerrain();
     
     // Save initial state
     this.saveState();
   }
 
   /**
-   * Generate random terrain heights
+   * Initialize realistic material layers
    */
-  private generateRandomTerrain(): void {
-    const vertices = this.geometry.attributes.position.array;
-
-    for (let i = 0; i < vertices.length; i += 3) {
-      // Add random height variation to y-axis
-      vertices[i + 1] += Math.random() * 4 - 2; // Increased variation
-    }
-
-    this.geometry.attributes.position.needsUpdate = true;
-    this.geometry.computeVertexNormals();
+  private initializeMaterialLayers(): void {
+    this.materialLayers = [
+      {
+        name: 'Topsoil',
+        color: new THREE.Color(0x8B4513), // Saddle brown - clean soil color
+        depth: 1.5,
+        hardness: 0.3
+      },
+      {
+        name: 'Subsoil', 
+        color: new THREE.Color(0xA0522D), // Sienna - lighter brown
+        depth: 3.0,
+        hardness: 0.5
+      },
+      {
+        name: 'Clay',
+        color: new THREE.Color(0xD2691E), // Chocolate - orange-brown clay
+        depth: 3.5,
+        hardness: 0.7
+      },
+      {
+        name: 'Rock',
+        color: new THREE.Color(0x808080), // Gray - bedrock
+        depth: 2.0,
+        hardness: 1.0
+      }
+    ];
   }
 
   /**
-   * Update terrain colors based on height
+   * Create the 3D terrain block with sides and bottom
+   */
+  private create3DTerrainBlock(width: number, height: number): void {
+    // Create a solid box geometry for the terrain block
+    const boxGeometry = new THREE.BoxGeometry(width, this.blockDepth, height);
+    
+    // Create materials for each face of the box
+    const materials = [
+      this.createWallMaterial(), // Right face (+X)
+      this.createWallMaterial(), // Left face (-X)  
+      this.material,             // Top face (+Y) - will be replaced by surface mesh
+      new THREE.MeshLambertMaterial({ // Bottom face (-Y)
+        color: this.materialLayers[this.materialLayers.length - 1].color,
+        side: THREE.DoubleSide
+      }),
+      this.createWallMaterial(), // Front face (+Z)
+      this.createWallMaterial()  // Back face (-Z)
+    ];
+    
+    // Create the solid terrain block
+    const terrainBlock = new THREE.Mesh(boxGeometry, materials);
+    terrainBlock.position.set(0, -this.blockDepth / 2, 0);
+    
+    // Store reference to the block for wireframe toggle
+    this.wallMeshes = [terrainBlock];
+    this.terrainGroup.add(terrainBlock);
+    
+    // The surface mesh will be positioned on top of this block
+    this.surfaceMesh.position.y = 0; // At the top of the block
+  }
+
+  /**
+   * Create material for cross-section walls showing layers
+   */
+  private createWallMaterial(): THREE.MeshLambertMaterial {
+    // Create a gradient texture showing material layers
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+    
+    // Create gradient representing soil layers
+    const gradient = ctx.createLinearGradient(0, 0, 0, 64);
+    let currentDepth = 0;
+    
+    for (let i = 0; i < this.materialLayers.length; i++) {
+      const layer = this.materialLayers[i];
+      const startPercent = currentDepth / this.blockDepth;
+      currentDepth += layer.depth;
+      const endPercent = Math.min(currentDepth / this.blockDepth, 1.0);
+      
+      const color = `rgb(${Math.floor(layer.color.r * 255)}, ${Math.floor(layer.color.g * 255)}, ${Math.floor(layer.color.b * 255)})`;
+      gradient.addColorStop(startPercent, color);
+      gradient.addColorStop(endPercent, color);
+    }
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 256, 64);
+    
+    // Add some texture lines for realism
+    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < this.materialLayers.length - 1; i++) {
+      let lineDepth = 0;
+      for (let j = 0; j <= i; j++) {
+        lineDepth += this.materialLayers[j].depth;
+      }
+      const y = (lineDepth / this.blockDepth) * 64;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(256, y);
+      ctx.stroke();
+    }
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.repeat.set(4, 1);
+    
+    return new THREE.MeshLambertMaterial({
+      map: texture,
+      side: THREE.DoubleSide
+    });
+  }
+
+  /**
+   * Get the material layer at a specific depth
+   */
+  private getMaterialAtDepth(depth: number): MaterialLayer {
+    let currentDepth = 0;
+    for (const layer of this.materialLayers) {
+      currentDepth += layer.depth;
+      if (depth <= currentDepth) {
+        return layer;
+      }
+    }
+    return this.materialLayers[this.materialLayers.length - 1]; // Return deepest layer if beyond all layers
+  }
+
+  /**
+   * Regenerate terrain with a new random pattern
+   */
+  public regenerateTerrain(): void {
+    const vertices = this.geometry.attributes.position.array;
+    const width = this.geometry.parameters.width;
+    const height = this.geometry.parameters.height;
+    
+    // Randomly select a terrain pattern
+    const patterns = ['flat', 'gentle_slope', 'valley', 'hill', 'rolling'];
+    const selectedPattern = patterns[Math.floor(Math.random() * patterns.length)];
+    
+    // Generate terrain based on selected pattern
+    this.generateTerrainPattern(vertices as Float32Array, width, height, selectedPattern);
+
+    this.geometry.attributes.position.needsUpdate = true;
+    this.geometry.computeVertexNormals();
+    this.updateTerrainColors();
+    this.saveState();
+  }
+
+  /**
+   * Generate realistic terrain patterns
+   */
+  private generateTerrainPattern(vertices: Float32Array, width: number, height: number, pattern: string): void {
+    const centerX = 0;
+    const centerZ = 0;
+    const maxRadius = Math.max(width, height) / 2;
+
+    for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const z = vertices[i + 2];
+      
+      // Distance from center for radial effects
+      const distanceFromCenter = Math.sqrt(x * x + z * z);
+      const normalizedDistance = Math.min(distanceFromCenter / maxRadius, 1);
+      
+      let terrainHeight = 0;
+
+      switch (pattern) {
+        case 'flat':
+          // Almost completely flat with minimal variation
+          terrainHeight = (Math.random() - 0.5) * 0.05; // Very small variation
+          break;
+
+        case 'gentle_slope':
+          // Very gentle slope across the terrain
+          const slopeDirection = Math.random() * Math.PI * 2;
+          const slopeStrength = 0.2 + Math.random() * 0.3; // Much gentler: 0.2 to 0.5
+          terrainHeight = (x * Math.cos(slopeDirection) + z * Math.sin(slopeDirection)) * slopeStrength / 25; // Reduced divisor
+          // Minimal random variation
+          terrainHeight += (Math.random() - 0.5) * 0.05;
+          break;
+
+        case 'valley':
+          // Gentle U-shaped valley
+          const valleyDepth = 0.5 + Math.random() * 0.5; // Much gentler: 0.5 to 1.0
+          terrainHeight = -(1 - normalizedDistance) * valleyDepth * 0.5; // Reduced intensity
+          // Smooth sides with gentle curve
+          terrainHeight += Math.sin(normalizedDistance * Math.PI) * 0.2;
+          // Minimal random variation
+          terrainHeight += (Math.random() - 0.5) * 0.03;
+          break;
+
+        case 'hill':
+          // Gentle hill in the center
+          const hillHeight = 0.8 + Math.random() * 0.7; // Gentler: 0.8 to 1.5
+          terrainHeight = (1 - normalizedDistance) * hillHeight * 0.5; // Reduced intensity
+          // Smooth falloff with cosine curve
+          terrainHeight *= Math.cos((normalizedDistance) * Math.PI * 0.5);
+          // Minimal random variation
+          terrainHeight += (Math.random() - 0.5) * 0.03;
+          break;
+
+        case 'rolling':
+          // Very gentle rolling hills
+          const waveScale1 = 0.04 + Math.random() * 0.02; // Smaller waves: 0.04 to 0.06
+          const waveScale2 = 0.06 + Math.random() * 0.02; // Smaller waves: 0.06 to 0.08
+          const amplitude = 0.3 + Math.random() * 0.2; // Much lower amplitude: 0.3 to 0.5
+          
+          terrainHeight = Math.sin(x * waveScale1) * amplitude + 
+                         Math.cos(z * waveScale2) * amplitude * 0.6;
+          // Minimal noise
+          terrainHeight += (Math.random() - 0.5) * 0.05;
+          break;
+
+        default:
+          terrainHeight = 0;
+      }
+
+      // Apply the calculated height with additional smoothing
+      vertices[i + 1] = terrainHeight;
+    }
+
+    // Apply smoothing pass to reduce any sharp transitions
+    this.smoothTerrain(vertices, width, height);
+  }
+
+  /**
+   * Apply smoothing to terrain to remove sharp transitions
+   */
+  private smoothTerrain(vertices: Float32Array, width: number, height: number): void {
+    const widthSegments = this.geometry.parameters.widthSegments;
+    const heightSegments = this.geometry.parameters.heightSegments;
+    const smoothedVertices = new Float32Array(vertices.length);
+    
+    // Copy original vertices
+    for (let i = 0; i < vertices.length; i++) {
+      smoothedVertices[i] = vertices[i];
+    }
+
+    // Apply smoothing kernel to height values
+    for (let row = 1; row < heightSegments; row++) {
+      for (let col = 1; col < widthSegments; col++) {
+        const index = (row * (widthSegments + 1) + col) * 3;
+        
+        if (index + 1 < vertices.length) {
+          // Get neighboring heights
+          const currentHeight = vertices[index + 1];
+          const leftIndex = (row * (widthSegments + 1) + (col - 1)) * 3;
+          const rightIndex = (row * (widthSegments + 1) + (col + 1)) * 3;
+          const topIndex = ((row - 1) * (widthSegments + 1) + col) * 3;
+          const bottomIndex = ((row + 1) * (widthSegments + 1) + col) * 3;
+          
+          let neighborCount = 1;
+          let heightSum = currentHeight;
+          
+          if (leftIndex + 1 < vertices.length) {
+            heightSum += vertices[leftIndex + 1];
+            neighborCount++;
+          }
+          if (rightIndex + 1 < vertices.length) {
+            heightSum += vertices[rightIndex + 1];
+            neighborCount++;
+          }
+          if (topIndex + 1 >= 0 && topIndex + 1 < vertices.length) {
+            heightSum += vertices[topIndex + 1];
+            neighborCount++;
+          }
+          if (bottomIndex + 1 < vertices.length) {
+            heightSum += vertices[bottomIndex + 1];
+            neighborCount++;
+          }
+          
+          // Apply smoothed height (weighted average)
+          smoothedVertices[index + 1] = (currentHeight * 0.6) + (heightSum / neighborCount * 0.4);
+        }
+      }
+    }
+    
+    // Copy smoothed heights back
+    for (let i = 1; i < vertices.length; i += 3) {
+      vertices[i] = smoothedVertices[i];
+    }
+  }
+
+  /**
+   * Update terrain colors based on height and material layers
    */
   public updateTerrainColors(): void {
     const vertices = this.geometry.attributes.position.array;
@@ -99,40 +401,48 @@ export class Terrain {
       maxHeight = Math.max(maxHeight, height);
     }
 
-    // Apply colors based on height
+    // Apply colors based on exposed material layers (no vegetation)
     for (let i = 0; i < vertices.length; i += 3) {
       const height = vertices[i + 1];
+      
+      // Determine which material layer is exposed at this height
+      // Negative heights expose deeper layers
+      const exposureDepth = Math.max(0, -height);
+      const materialLayer = this.getMaterialAtDepth(exposureDepth);
+      
+      // Use clean material layer colors (no vegetation tinting)
+      let r = materialLayer.color.r;
+      let g = materialLayer.color.g;
+      let b = materialLayer.color.b;
+      
+      // Add subtle height-based variation for natural look
       const normalizedHeight = (height - minHeight) / (maxHeight - minHeight);
       
-      // Color gradient from blue (low) to brown (mid) to white (high)
-      let r, g, b;
-      if (normalizedHeight < 0.3) {
-        // Low areas - blue to green
-        r = 0.2 + normalizedHeight * 0.8;
-        g = 0.4 + normalizedHeight * 1.2;
-        b = 0.8 - normalizedHeight * 0.4;
-      } else if (normalizedHeight < 0.7) {
-        // Mid areas - green to brown
-        r = 0.4 + (normalizedHeight - 0.3) * 0.8;
-        g = 0.6 + (normalizedHeight - 0.3) * 0.2;
-        b = 0.2;
+      if (height >= 0) {
+        // Surface level - use topsoil color with slight lighting variation
+        const lightingVariation = 0.9 + (normalizedHeight * 0.2); // 0.9 to 1.1 multiplier
+        r *= lightingVariation;
+        g *= lightingVariation;
+        b *= lightingVariation;
       } else {
-        // High areas - brown to white
-        r = 0.8 + (normalizedHeight - 0.7) * 0.2;
-        g = 0.6 + (normalizedHeight - 0.7) * 0.4;
-        b = 0.4 + (normalizedHeight - 0.7) * 0.6;
+        // Below ground - slightly darken based on depth for realism
+        const darkening = Math.min(0.2, exposureDepth * 0.02);
+        r = Math.max(0.2, r - darkening);
+        g = Math.max(0.2, g - darkening);
+        b = Math.max(0.2, b - darkening);
       }
 
-      colors[i] = r;
-      colors[i + 1] = g;
-      colors[i + 2] = b;
+      // Clamp values to valid range
+      colors[i] = Math.min(1.0, Math.max(0.0, r));
+      colors[i + 1] = Math.min(1.0, Math.max(0.0, g));
+      colors[i + 2] = Math.min(1.0, Math.max(0.0, b));
     }
 
     this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   }
 
   /**
-   * Advanced brush-based terrain modification
+   * Enhanced brush-based terrain modification with material awareness
    */
   public modifyHeightBrush(x: number, z: number, heightChange: number): void {
     const vertices = this.geometry.attributes.position.array;
@@ -150,9 +460,25 @@ export class Terrain {
 
       if (this.isInBrush(distance, vertexX - x, vertexZ - z)) {
         const falloff = this.calculateFalloff(distance, brushRadius);
-        const actualChange = heightChange * this.brushSettings.strength * falloff;
         
-        vertices[i + 1] += actualChange;
+        // Get material resistance at current depth
+        const currentHeight = vertices[i + 1];
+        const excavationDepth = Math.max(0, -currentHeight);
+        const currentMaterial = this.getMaterialAtDepth(excavationDepth);
+        
+        // Apply material resistance to excavation
+        let materialResistance = 1.0;
+        if (heightChange < 0) { // Only apply resistance when digging
+          materialResistance = 1.0 - (currentMaterial.hardness * 0.3);
+        }
+        
+        const actualChange = heightChange * this.brushSettings.strength * falloff * materialResistance;
+        
+        // Limit excavation to maximum depth
+        const newHeight = vertices[i + 1] + actualChange;
+        const maxExcavationDepth = -this.blockDepth * 0.9; // Don't dig through the bottom
+        vertices[i + 1] = Math.max(maxExcavationDepth, newHeight);
+        
         modified = true;
       }
     }
@@ -208,7 +534,7 @@ export class Terrain {
   }
 
   /**
-   * Improved volume calculation using triangulation
+   * Enhanced volume calculation for 3D terrain
    */
   public calculateVolumeDifference(): {
     cut: number;
@@ -346,6 +672,8 @@ export class Terrain {
     return {
       vertices: Array.from(this.geometry.attributes.position.array),
       originalVertices: Array.from(this.originalVertices),
+      materialLayers: this.materialLayers,
+      blockDepth: this.blockDepth,
       parameters: {
         width: this.geometry.parameters.width,
         height: this.geometry.parameters.height,
@@ -370,6 +698,14 @@ export class Terrain {
 
       if (data.originalVertices) {
         this.originalVertices = new Float32Array(data.originalVertices);
+      }
+
+      if (data.materialLayers) {
+        this.materialLayers = data.materialLayers;
+      }
+
+      if (data.blockDepth) {
+        this.blockDepth = data.blockDepth;
       }
 
       this.geometry.attributes.position.needsUpdate = true;
@@ -425,24 +761,53 @@ export class Terrain {
    */
   public toggleWireframe(): void {
     this.material.wireframe = !this.material.wireframe;
+    
+    // Also toggle wireframe on the terrain block
+    this.wallMeshes.forEach(block => {
+      if (block.material instanceof Array) {
+        // Handle multi-material mesh (our box)
+        block.material.forEach(mat => {
+          if (mat instanceof THREE.MeshLambertMaterial) {
+            mat.wireframe = this.material.wireframe;
+          }
+        });
+      } else if (block.material instanceof THREE.MeshLambertMaterial) {
+        block.material.wireframe = this.material.wireframe;
+      }
+    });
   }
 
   /**
-   * Get the Three.js mesh
+   * Get the Three.js mesh (returns the group for 3D terrain)
    */
-  public getMesh(): THREE.Mesh {
-    return this.mesh;
+  public getMesh(): THREE.Object3D {
+    return this.terrainGroup;
   }
 
   /**
-   * Get terrain dimensions
+   * Get the surface mesh specifically
    */
-  public getDimensions(): { width: number; height: number } {
+  public getSurfaceMesh(): THREE.Mesh {
+    return this.surfaceMesh;
+  }
+
+  /**
+   * Get terrain dimensions including depth
+   */
+  public getDimensions(): { width: number; height: number; depth: number } {
     const geometry = this.geometry;
     return {
       width: geometry.parameters.width,
       height: geometry.parameters.height,
+      depth: this.blockDepth,
     };
+  }
+
+  /**
+   * Get material layers information
+   */
+  public getMaterialLayers(): MaterialLayer[] {
+    return [...this.materialLayers];
   }
 
   /**
@@ -451,8 +816,9 @@ export class Terrain {
   public getStats(): {
     vertexCount: number;
     triangleCount: number;
-    dimensions: { width: number; height: number };
+    dimensions: { width: number; height: number; depth: number };
     volume: { cut: number; fill: number; net: number };
+    materialLayers: number;
   } {
     const vertices = this.geometry.attributes.position.array;
     const index = this.geometry.index;
@@ -461,7 +827,8 @@ export class Terrain {
       vertexCount: vertices.length / 3,
       triangleCount: index ? index.count / 3 : 0,
       dimensions: this.getDimensions(),
-      volume: this.calculateVolumeDifference()
+      volume: this.calculateVolumeDifference(),
+      materialLayers: this.materialLayers.length
     };
   }
 }

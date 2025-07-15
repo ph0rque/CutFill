@@ -40,7 +40,6 @@ export class AuthService {
 
       // Listen for auth changes
       supabase.auth.onAuthStateChange((event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
         this.updateAuthState({
           user: session?.user || null,
           isLoading: false,

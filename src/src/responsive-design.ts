@@ -608,25 +608,35 @@ class TouchManagerImpl implements TouchManager {
   }
 
   setupTouchGestures(): void {
-    // Add touch-specific event handlers
-    document.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-    document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
-    document.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
+    // Touch handlers disabled to prevent conflicts with canvas gesture controls
+    // Only UI-specific touch interactions are handled by individual components
+    // document.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+    // document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+    // document.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
   }
 
   private handleTouchStart(event: TouchEvent): void {
-    // Handle touch start events
+    // Handle touch start events only for UI elements
     const touch = event.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
     
-    if (element && element.classList.contains('tool-btn')) {
-      element.classList.add('touch-active');
+    // Only handle touches on UI elements, not the game canvas
+    if (element && (element.classList.contains('tool-btn') || element.closest('.main-panel'))) {
+      if (element.classList.contains('tool-btn')) {
+        element.classList.add('touch-active');
+      }
     }
   }
 
   private handleTouchMove(event: TouchEvent): void {
-    // Handle touch move events
-    event.preventDefault(); // Prevent scrolling during tool use
+    // Only prevent default for UI interactions, not canvas interactions
+    const touch = event.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    // Only prevent scrolling if touching UI elements
+    if (element && element.closest('.main-panel')) {
+      event.preventDefault();
+    }
   }
 
   private handleTouchEnd(event: TouchEvent): void {
