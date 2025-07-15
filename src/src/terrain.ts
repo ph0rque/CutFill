@@ -85,7 +85,7 @@ export class Terrain {
 
     // Rotate to be horizontal in Y-up system (terrain in XY plane)
     this.geometry.rotateX(-Math.PI / 2);
-    
+
     // Translate so origin is at corner (terrain spans from 0,0 to width,height)
     this.geometry.translate(width/2, 0, height/2);
 
@@ -225,98 +225,116 @@ export class Terrain {
     const widthSegments = this.geometry.parameters.widthSegments;
     const heightSegments = this.geometry.parameters.heightSegments;
     
-    // Calculate total vertices needed: terrain top + bottom + walls
-    const topVertexCount = terrainVertices.length / 3;
-    const totalVertices = topVertexCount * 2; // top + bottom
+    // Number of vertical layers for horizontal stratification (one every foot for detail)
+    const verticalLayers = 33; // Matches 33 feet depth, one layer per foot
+    
+    // Total vertices: (verticalLayers + 1) levels * (widthSegments + 1) * (heightSegments + 1)
+    const levelVertexCount = (widthSegments + 1) * (heightSegments + 1);
+    const totalVertices = (verticalLayers + 1) * levelVertexCount;
     const positions = new Float32Array(totalVertices * 3);
     const indices = [];
     
-    // Copy terrain vertices for top face (already positioned with corner at origin)
-    for (let i = 0; i < terrainVertices.length; i += 3) {
-      const vertexIndex = i / 3;
-      // Top vertices (use terrain heights and positions)
-      positions[vertexIndex * 3] = terrainVertices[i];     // x
-      positions[vertexIndex * 3 + 1] = terrainVertices[i + 1]; // y (height)
-      positions[vertexIndex * 3 + 2] = terrainVertices[i + 2]; // z
+    // Create vertices for each vertical level with proper terrain surface clipping
+    for (let layer = 0; layer <= verticalLayers; layer++) {
+      // Layer 0 = terrain surface level, Layer verticalLayers = bottom
+      const layerDepth = - (this.blockDepth * (layer / verticalLayers));
       
-      // Bottom vertices (same X,Z but at block bottom depth)
-      const bottomIndex = topVertexCount + vertexIndex;
-      positions[bottomIndex * 3] = terrainVertices[i];     // x (same as top)
-      positions[bottomIndex * 3 + 1] = -this.blockDepth;  // y (bottom depth)
-      positions[bottomIndex * 3 + 2] = terrainVertices[i + 2]; // z (same as top)
-    }
-    
-    // Create triangles for bottom face
-    for (let row = 0; row < heightSegments; row++) {
-      for (let col = 0; col < widthSegments; col++) {
-        const topLeft = topVertexCount + (row * (widthSegments + 1) + col);
-        const topRight = topVertexCount + (row * (widthSegments + 1) + col + 1);
-        const bottomLeft = topVertexCount + ((row + 1) * (widthSegments + 1) + col);
-        const bottomRight = topVertexCount + ((row + 1) * (widthSegments + 1) + col + 1);
-        
-        // Bottom face triangles (flipped for downward normal)
-        indices.push(bottomLeft, topRight, topLeft);
-        indices.push(bottomLeft, bottomRight, topRight);
+      for (let row = 0; row <= heightSegments; row++) {
+        for (let col = 0; col <= widthSegments; col++) {
+          const terrainIndex = (row * (widthSegments + 1) + col) * 3;
+          const vertexIndex = (layer * levelVertexCount + row * (widthSegments + 1) + col) * 3;
+          
+          positions[vertexIndex] = terrainVertices[terrainIndex];     // x
+          positions[vertexIndex + 2] = terrainVertices[terrainIndex + 2]; // z
+          
+          const terrainHeight = terrainVertices[terrainIndex + 1];
+          
+          if (layer === 0) {
+            // Top layer: Use terrain height minus tiny offset to avoid z-fighting
+            positions[vertexIndex + 1] = terrainHeight - 0.005;
+          } else {
+            // Lower layers: Go straight down from the bottom of terrain
+            // Use the terrain height as reference, then go down by layerDepth
+            const actualDepth = terrainHeight + layerDepth;
+            positions[vertexIndex + 1] = actualDepth;
+          }
+        }
       }
     }
     
-    // Create side walls connecting top to bottom
-    // Front edge (positive Z) - now at z=height instead of z=height/2
-    for (let col = 0; col < widthSegments; col++) {
-      const row = heightSegments;
-      const topLeft = row * (widthSegments + 1) + col;
-      const topRight = row * (widthSegments + 1) + col + 1;
-      const bottomLeft = topVertexCount + topLeft;
-      const bottomRight = topVertexCount + topRight;
+    // Create outer perimeter walls only
+    for (let layer = 0; layer < verticalLayers; layer++) {
+      const topOffset = layer * levelVertexCount;
+      const bottomOffset = (layer + 1) * levelVertexCount;
       
-      indices.push(topLeft, bottomLeft, topRight);
-      indices.push(topRight, bottomLeft, bottomRight);
+      // Front edge (positive Z) - only the outermost edge
+      for (let col = 0; col < widthSegments; col++) {
+        const topLeft = topOffset + (heightSegments * (widthSegments + 1) + col);
+        const topRight = topLeft + 1;
+        const bottomLeft = bottomOffset + (heightSegments * (widthSegments + 1) + col);
+        const bottomRight = bottomLeft + 1;
+        
+        indices.push(topLeft, bottomLeft, topRight);
+        indices.push(topRight, bottomLeft, bottomRight);
+      }
+      
+      // Back edge (negative Z) - only the outermost edge
+      for (let col = 0; col < widthSegments; col++) {
+        const topLeft = topOffset + col;
+        const topRight = topLeft + 1;
+        const bottomLeft = bottomOffset + col;
+        const bottomRight = bottomLeft + 1;
+        
+        indices.push(topRight, bottomLeft, topLeft);
+        indices.push(bottomRight, bottomLeft, topRight);
+      }
+      
+      // Left edge (negative X) - only the outermost edge
+      for (let row = 0; row < heightSegments; row++) {
+        const topTop = topOffset + (row * (widthSegments + 1));
+        const topBottom = topTop + (widthSegments + 1);
+        const bottomTop = bottomOffset + (row * (widthSegments + 1));
+        const bottomBottom = bottomTop + (widthSegments + 1);
+        
+        indices.push(topTop, bottomTop, topBottom);
+        indices.push(topBottom, bottomTop, bottomBottom);
+      }
+      
+      // Right edge (positive X) - only the outermost edge
+      for (let row = 0; row < heightSegments; row++) {
+        const topTop = topOffset + (row * (widthSegments + 1) + widthSegments);
+        const topBottom = topTop + (widthSegments + 1);
+        const bottomTop = bottomOffset + (row * (widthSegments + 1) + widthSegments);
+        const bottomBottom = bottomTop + (widthSegments + 1);
+        
+        indices.push(topBottom, bottomTop, topTop);
+        indices.push(bottomBottom, bottomTop, topBottom);
+      }
     }
     
-    // Back edge (negative Z) - now at z=0 instead of z=-height/2
-    for (let col = 0; col < widthSegments; col++) {
-      const row = 0;
-      const topLeft = row * (widthSegments + 1) + col;
-      const topRight = row * (widthSegments + 1) + col + 1;
-      const bottomLeft = topVertexCount + topLeft;
-      const bottomRight = topVertexCount + topRight;
-      
-      indices.push(topRight, bottomLeft, topLeft);
-      indices.push(bottomRight, bottomLeft, topRight);
-    }
-    
-    // Left edge (negative X) - now at x=0 instead of x=-width/2
+    // Create bottom face at deepest layer
+    const bottomLevelOffset = verticalLayers * levelVertexCount;
     for (let row = 0; row < heightSegments; row++) {
-      const col = 0;
-      const topTop = row * (widthSegments + 1) + col;
-      const topBottom = (row + 1) * (widthSegments + 1) + col;
-      const bottomTop = topVertexCount + topTop;
-      const bottomBottom = topVertexCount + topBottom;
-      
-      indices.push(topTop, bottomTop, topBottom);
-      indices.push(topBottom, bottomTop, bottomBottom);
-    }
-    
-    // Right edge (positive X) - now at x=width instead of x=width/2
-    for (let row = 0; row < heightSegments; row++) {
-      const col = widthSegments;
-      const topTop = row * (widthSegments + 1) + col;
-      const topBottom = (row + 1) * (widthSegments + 1) + col;
-      const bottomTop = topVertexCount + topTop;
-      const bottomBottom = topVertexCount + topBottom;
-      
-      indices.push(topBottom, bottomTop, topTop);
-      indices.push(bottomBottom, bottomTop, topBottom);
+      for (let col = 0; col < widthSegments; col++) {
+        const topLeft = bottomLevelOffset + (row * (widthSegments + 1) + col);
+        const topRight = topLeft + 1;
+        const bottomLeft = topLeft + (widthSegments + 1);
+        const bottomRight = bottomLeft + 1;
+        
+        indices.push(bottomLeft, topRight, topLeft);
+        indices.push(bottomLeft, bottomRight, topRight);
+      }
     }
     
     blockGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     blockGeometry.setIndex(indices);
     blockGeometry.computeVertexNormals();
     
-    // Create earth material for the block
+    // Create earth material for the block with vertex colors enabled
     const earthMaterial = new THREE.MeshLambertMaterial({
-      color: 0x8B5A2B, // Rich earth brown
-      side: THREE.DoubleSide
+      color: 0x8B5A2B, // Rich earth brown (will be overridden by vertex colors)
+      side: THREE.DoubleSide,
+      vertexColors: true // Enable vertex colors for geological variation
     });
     
     // Create the terrain block that follows the surface contours
@@ -395,49 +413,52 @@ export class Terrain {
 
       switch (pattern) {
         case 'flat':
-          // Mostly flat with some variation (±2 feet)
-          terrainHeight = (Math.random() - 0.5) * 4; // ±2 feet variation
+          // Mostly flat with moderate smooth variation
+          const flatNoise = this.smoothNoise(x * 0.02, z * 0.02) * 2.5; // Gentle undulation, ±2.5 feet
+          const flatDetail = this.smoothNoise(x * 0.05, z * 0.05) * 0.8; // Fine detail
+          terrainHeight = flatNoise + flatDetail;
           break;
 
         case 'gentle_slope':
-          // Gentle slope with ±10 feet variation
-          const slopeDirection = Math.random() * Math.PI * 2;
-          const slopeStrength = 2 + Math.random() * 3; // 2 to 5 feet slope
-          terrainHeight = (x * Math.cos(slopeDirection) + z * Math.sin(slopeDirection)) * slopeStrength / 50;
-          // Add variation
-          terrainHeight += (Math.random() - 0.5) * 10; // ±5 feet additional variation
+          // Broad gentle slope with natural variation
+          const slopeDirection = Math.PI * 0.3 + this.smoothNoise(x * 0.005, z * 0.005) * 0.3; // Slightly varying direction
+          const slopeStrength = 0.04 + this.smoothNoise(x * 0.008, z * 0.008) * 0.02; // Variable slope strength
+          terrainHeight = (x * Math.cos(slopeDirection) + z * Math.sin(slopeDirection)) * slopeStrength;
+          // Add broader undulations with some variation
+          terrainHeight += this.smoothNoise(x * 0.02, z * 0.02) * 4; // ±4 feet broad variations
+          terrainHeight += this.smoothNoise(x * 0.04, z * 0.04) * 1.5; // ±1.5 feet detail
           break;
 
         case 'valley':
-          // Deep valley (up to -10 feet)
-          const valleyDepth = 5 + Math.random() * 10; // 5 to 15 feet deep
-          terrainHeight = -(1 - normalizedDistance) * valleyDepth;
-          // Smooth sides with variation
-          terrainHeight += Math.sin(normalizedDistance * Math.PI) * 3;
-          // Random variation
-          terrainHeight += (Math.random() - 0.5) * 6; // ±3 feet variation
+          // Broad valley with natural variation
+          const valleyDepth = 6 + this.smoothNoise(x * 0.01, z * 0.01) * 3; // 3-9 feet deep, varying
+          const valleyWidth = 0.6 + this.smoothNoise(x * 0.008, z * 0.008) * 0.2; // Variable width
+          const valleyFactor = Math.exp(-Math.pow(normalizedDistance / valleyWidth, 2));
+          terrainHeight = -valleyDepth * valleyFactor;
+          // Add natural side slope variation
+          terrainHeight += this.smoothNoise(x * 0.025, z * 0.025) * 2.5; // ±2.5 feet variation
+          terrainHeight += this.smoothNoise(x * 0.06, z * 0.06) * 1; // ±1 foot fine detail
           break;
 
         case 'hill':
-          // High hill (up to +10 feet)
-          const hillHeight = 5 + Math.random() * 10; // 5 to 15 feet high
-          terrainHeight = (1 - normalizedDistance) * hillHeight;
-          // Smooth falloff with cosine curve
-          terrainHeight *= Math.cos((normalizedDistance) * Math.PI * 0.5);
-          // Random variation
-          terrainHeight += (Math.random() - 0.5) * 6; // ±3 feet variation
+          // Broad hill with natural variation
+          const hillHeight = 6 + this.smoothNoise(x * 0.01, z * 0.01) * 3; // 3-9 feet high, varying
+          const hillWidth = 0.5 + this.smoothNoise(x * 0.008, z * 0.008) * 0.2; // Variable width
+          const hillFactor = Math.exp(-Math.pow(normalizedDistance / hillWidth, 2));
+          terrainHeight = hillHeight * hillFactor;
+          // Add natural undulations
+          terrainHeight += this.smoothNoise(x * 0.03, z * 0.03) * 2.5; // ±2.5 feet variation
+          terrainHeight += this.smoothNoise(x * 0.07, z * 0.07) * 1; // ±1 foot fine detail
           break;
 
         case 'rolling':
-          // Rolling hills with large variation
-          const waveScale1 = 0.02 + Math.random() * 0.03; // Larger waves: 0.02 to 0.05
-          const waveScale2 = 0.03 + Math.random() * 0.04; // Larger waves: 0.03 to 0.07
-          const amplitude = 5 + Math.random() * 5; // Much higher amplitude: 5 to 10 feet
+          // Rolling hills with multiple scales and natural variation
+          const largeWaves = Math.sin(x * 0.018) * Math.cos(z * 0.015) * (4 + this.smoothNoise(x * 0.01, z * 0.01) * 2); // 2-6 foot large waves
+          const mediumWaves = Math.sin(x * 0.035) * Math.cos(z * 0.03) * (2 + this.smoothNoise(x * 0.02, z * 0.02) * 1.5); // 0.5-3.5 foot medium waves
+          const smallWaves = this.smoothNoise(x * 0.05, z * 0.05) * 1.8; // Small 1.8-foot variation
+          const fineDetail = this.smoothNoise(x * 0.08, z * 0.08) * 0.7; // Fine 0.7-foot detail
           
-          terrainHeight = Math.sin(x * waveScale1) * amplitude + 
-                         Math.cos(z * waveScale2) * amplitude * 0.6;
-          // Additional large variation
-          terrainHeight += (Math.random() - 0.5) * 8; // ±4 feet additional noise
+          terrainHeight = largeWaves + mediumWaves + smallWaves + fineDetail;
           break;
 
         default:
@@ -447,12 +468,25 @@ export class Terrain {
       // Clamp to ±10 feet maximum
       terrainHeight = Math.max(-10, Math.min(10, terrainHeight));
 
-      // Apply the calculated height with additional smoothing
+      // Apply the calculated height
       vertices[i + 1] = terrainHeight;
     }
 
-    // Apply smoothing pass to reduce any sharp transitions
+    // Apply multiple smoothing passes for very smooth terrain
     this.smoothTerrain(vertices, width, height);
+    this.smoothTerrain(vertices, width, height); // Second pass for extra smoothness
+  }
+
+  /**
+   * Generate smooth noise using simple interpolated noise
+   */
+  private smoothNoise(x: number, z: number): number {
+    // Create predictable but smooth noise using sine functions
+    const noise1 = Math.sin(x * 2.4 + z * 1.7) * 0.5;
+    const noise2 = Math.sin(x * 1.2 - z * 2.1) * 0.3;
+    const noise3 = Math.sin(x * 3.1 + z * 0.8) * 0.2;
+    
+    return noise1 + noise2 + noise3;
   }
 
   /**
@@ -546,7 +580,7 @@ export class Terrain {
   }
 
   /**
-   * Enhanced terrain color update with elevation zones
+   * Enhanced terrain color update with natural variation and elevation zones
    */
   public updateTerrainColors(): void {
     const vertices = this.geometry.attributes.position.array;
@@ -570,82 +604,244 @@ export class Terrain {
       maxHeight = 10;
     }
 
-    // Apply depth-based material colors
+    // Calculate slope information for variation
+    const widthSegments = this.geometry.parameters.widthSegments;
+    const heightSegments = this.geometry.parameters.heightSegments;
+
+    // Apply enhanced color variation
     for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const z = vertices[i + 2];
       const height = vertices[i + 1];
       
+      // Calculate vertex index for slope calculation
+      const vertexIndex = i / 3;
+      const row = Math.floor(vertexIndex / (widthSegments + 1));
+      const col = vertexIndex % (widthSegments + 1);
+      
       // Default to surface sandy color
-      let r = 0.85, g = 0.7, b = 0.55; // Sandy topsoil
+      let r = 0.85, g = 0.7, b = 0.55; // Base sandy topsoil
       
       if (isFinite(height) && !isNaN(height)) {
-        // Determine material based on depth below surface (0 = surface)
-        const depthBelowSurface = Math.max(0, -height); // Negative heights = below surface
-        
-        // Get material at this depth
-        const materialLayer = this.getMaterialAtDepth(depthBelowSurface);
-        
-        // Base color from material layer
-        r = materialLayer.color.r;
-        g = materialLayer.color.g;
-        b = materialLayer.color.b;
-        
-        // Add height variation for surface areas
-        if (height > 0) {
-          // Above surface - lighter, sandier colors
-          const surfaceVariation = height / 10; // 0 to 1 for heights 0 to 10
-          r = Math.min(1.0, r + surfaceVariation * 0.2); // Lighter
-          g = Math.min(1.0, g + surfaceVariation * 0.15); // Sandier
-          b = Math.min(1.0, b + surfaceVariation * 0.1); // Warmer
-        } else if (height < 0) {
-          // Below surface - show subsurface materials
+        if (height >= 0) {
+          // Surface areas - enhanced natural variation
+          
+          // Base material color from height
+          const normalizedHeight = (height - minHeight) / (maxHeight - minHeight);
+          
+          // Elevation-based color variation
+          if (height > 5) {
+            // Higher elevations - drier, sandier
+            r = 0.9 + this.smoothNoise(x * 0.1, z * 0.1) * 0.08;
+            g = 0.8 + this.smoothNoise(x * 0.12, z * 0.08) * 0.1;
+            b = 0.6 + this.smoothNoise(x * 0.08, z * 0.15) * 0.15;
+          } else if (height > 2) {
+            // Medium elevations - mixed soil
+            r = 0.75 + this.smoothNoise(x * 0.08, z * 0.1) * 0.15;
+            g = 0.65 + this.smoothNoise(x * 0.1, z * 0.12) * 0.15;
+            b = 0.45 + this.smoothNoise(x * 0.12, z * 0.08) * 0.2;
+          } else if (height > -2) {
+            // Lower elevations - darker, moister soil
+            r = 0.65 + this.smoothNoise(x * 0.15, z * 0.12) * 0.15;
+            g = 0.55 + this.smoothNoise(x * 0.12, z * 0.15) * 0.15;
+            b = 0.35 + this.smoothNoise(x * 0.1, z * 0.1) * 0.2;
+          }
+          
+          // Calculate slope for additional variation
+          let slope = 0;
+          if (row > 0 && row < heightSegments && col > 0 && col < widthSegments) {
+            const leftIndex = (row * (widthSegments + 1) + (col - 1)) * 3;
+            const rightIndex = (row * (widthSegments + 1) + (col + 1)) * 3;
+            const topIndex = ((row - 1) * (widthSegments + 1) + col) * 3;
+            const bottomIndex = ((row + 1) * (widthSegments + 1) + col) * 3;
+            
+            if (leftIndex + 1 < vertices.length && rightIndex + 1 < vertices.length && 
+                topIndex + 1 >= 0 && bottomIndex + 1 < vertices.length) {
+              const dx = vertices[rightIndex + 1] - vertices[leftIndex + 1];
+              const dz = vertices[bottomIndex + 1] - vertices[topIndex + 1];
+              slope = Math.sqrt(dx * dx + dz * dz) / 4; // Normalize slope
+            }
+          }
+          
+          // Slope-based variation - steeper slopes get rockier/sandier
+          if (slope > 0.5) {
+            r += slope * 0.1; // More sandy on slopes
+            g += slope * 0.05;
+            b -= slope * 0.1; // Less organic matter
+          }
+          
+          // Add moisture variation in low areas
+          if (height < 1) {
+            const moistureNoise = this.smoothNoise(x * 0.05, z * 0.05);
+            if (moistureNoise > 0.3) {
+              // Moist areas - darker, richer soil
+              r *= 0.8;
+              g *= 0.9;
+              b *= 0.7;
+            }
+          }
+          
+          // Add organic variation (patches of different soil types)
+          const organicVariation = this.smoothNoise(x * 0.03, z * 0.04) * 0.1;
+          if (organicVariation > 0.05) {
+            // Richer organic areas
+            r *= 0.9;
+            g += 0.05;
+            b *= 0.8;
+          }
+          
+          // Add mineral deposits for visual interest
+          const mineralNoise = this.smoothNoise(x * 0.2, z * 0.25);
+          if (mineralNoise > 0.7) {
+            // Iron-rich areas - more reddish
+            r += 0.1;
+            g *= 0.95;
+          } else if (mineralNoise < -0.7) {
+            // Clay deposits - more yellowish
+            g += 0.05;
+            b += 0.1;
+          }
+          
+        } else {
+          // Below surface - show subsurface materials with enhanced variation
           const exposureDepth = Math.abs(height);
           
-          // Blend between material layers based on depth
-          if (exposureDepth <= this.materialLayers[0].depth) {
-            // Topsoil layer
-            const topsoil = this.materialLayers[0];
-            r = topsoil.color.r;
-            g = topsoil.color.g; 
-            b = topsoil.color.b;
-          } else if (exposureDepth <= this.materialLayers[0].depth + this.materialLayers[1].depth) {
-            // Subsoil layer
-            const subsoil = this.materialLayers[1];
-            r = subsoil.color.r;
-            g = subsoil.color.g;
-            b = subsoil.color.b;
-          } else if (exposureDepth <= this.materialLayers[0].depth + this.materialLayers[1].depth + this.materialLayers[2].depth) {
-            // Clay layer
-            const clay = this.materialLayers[2];
-            r = clay.color.r;
-            g = clay.color.g;
-            b = clay.color.b;
-          } else {
-            // Rock layer (deepest)
-            const rock = this.materialLayers[3];
-            r = rock.color.r;
-            g = rock.color.g;
-            b = rock.color.b;
-          }
+          // Get base material color from depth
+          const materialLayer = this.getMaterialAtDepth(exposureDepth);
+          r = materialLayer.color.r;
+          g = materialLayer.color.g;
+          b = materialLayer.color.b;
+          
+          // Add geological variation to subsurface materials
+          const geoNoise = this.smoothNoise(x * 0.05, z * 0.05);
+          r += geoNoise * 0.1;
+          g += geoNoise * 0.08;
+          b += geoNoise * 0.06;
+          
+          // Add stratification patterns
+          const strataNoise = Math.sin(exposureDepth * 0.5) * 0.05;
+          r += strataNoise;
+          g += strataNoise * 0.8;
+          b += strataNoise * 0.6;
         }
         
-        // Add subtle variation based on elevation zones for surface areas
-        if (height >= 0) {
-          const zone = this.getElevationZone(height);
-          // Subtle zone influence (10% blend)
-          r = r * 0.9 + zone.color.r * 0.1;
-          g = g * 0.9 + zone.color.g * 0.1;
-          b = b * 0.9 + zone.color.b * 0.1;
-        }
+        // Add subtle elevation zone influence
+        const zone = this.getElevationZone(height);
+        r = r * 0.95 + zone.color.r * 0.05;
+        g = g * 0.95 + zone.color.g * 0.05;
+        b = b * 0.95 + zone.color.b * 0.05;
       }
 
       // Ensure natural earth colors - prevent too dark or too bright
-      colors[i] = Math.min(1.0, Math.max(0.3, r || 0.3)); // Natural earth tones
-      colors[i + 1] = Math.min(1.0, Math.max(0.25, g || 0.25)); // Earth browns
-      colors[i + 2] = Math.min(1.0, Math.max(0.2, b || 0.2)); // Natural browns
+      colors[i] = Math.min(1.0, Math.max(0.25, r || 0.25));
+      colors[i + 1] = Math.min(1.0, Math.max(0.2, g || 0.2));
+      colors[i + 2] = Math.min(1.0, Math.max(0.15, b || 0.15));
     }
 
     this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     this.geometry.attributes.color.needsUpdate = true;
+    
+    // Update wall colors to match
+    this.updateWallColors();
+  }
+
+  /**
+   * Update wall colors with geological layers and natural variation
+   */
+  private updateWallColors(): void {
+    if (this.wallMeshes.length === 0) return;
+    
+    const wallGeometry = this.wallMeshes[0].geometry as THREE.BufferGeometry;
+    const positions = wallGeometry.attributes.position.array;
+    const wallColors = new Float32Array(positions.length);
+    
+    // Calculate colors for each vertex in the wall geometry
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i];
+      const y = positions[i + 1]; // Height/depth
+      const z = positions[i + 2];
+      
+      let r = 0.6, g = 0.45, b = 0.3; // Default earth brown
+      
+      if (y >= 0) {
+        // Surface and above - match terrain surface colors
+        // Use same logic as surface for consistency
+        if (y > 5) {
+          // Higher elevations - drier, sandier
+          r = 0.9 + this.smoothNoise(x * 0.1, z * 0.1) * 0.08;
+          g = 0.8 + this.smoothNoise(x * 0.12, z * 0.08) * 0.1;
+          b = 0.6 + this.smoothNoise(x * 0.08, z * 0.15) * 0.15;
+        } else if (y > 2) {
+          // Medium elevations - mixed soil
+          r = 0.75 + this.smoothNoise(x * 0.08, z * 0.1) * 0.15;
+          g = 0.65 + this.smoothNoise(x * 0.1, z * 0.12) * 0.15;
+          b = 0.45 + this.smoothNoise(x * 0.12, z * 0.08) * 0.2;
+        } else {
+          // Lower elevations - darker, moister soil
+          r = 0.65 + this.smoothNoise(x * 0.15, z * 0.12) * 0.15;
+          g = 0.55 + this.smoothNoise(x * 0.12, z * 0.15) * 0.15;
+          b = 0.35 + this.smoothNoise(x * 0.1, z * 0.1) * 0.2;
+        }
+        
+        // Add mineral deposits for visual interest
+        const mineralNoise = this.smoothNoise(x * 0.2, z * 0.25);
+        if (mineralNoise > 0.7) {
+          // Iron-rich areas - more reddish
+          r += 0.1;
+          g *= 0.95;
+        } else if (mineralNoise < -0.7) {
+          // Clay deposits - more yellowish
+          g += 0.05;
+          b += 0.1;
+        }
+        
+      } else {
+        // Below surface - create TRUE horizontal geological layers
+        // Let's start with solid color bands to debug the coordinate system
+        
+        // For horizontal layers, color should ONLY depend on Y (elevation/depth)
+        // and be the same for all X,Z positions at the same Y level
+        
+        if (y >= 0) {
+          // Surface level - should not happen in walls but just in case
+          r = 0.8; g = 0.7; b = 0.5; // Sandy surface
+        } else if (y >= -5) {
+          // Topsoil layer (0 to -5 feet) - Dark brown - SOLID COLOR
+          r = 0.35; g = 0.25; b = 0.15;
+        } else if (y >= -15) {
+          // Subsoil layer (-5 to -15 feet) - Medium brown - SOLID COLOR  
+          r = 0.55; g = 0.35; b = 0.20;
+        } else if (y >= -26) {
+          // Clay layer (-15 to -26 feet) - Light brown/tan - SOLID COLOR
+          r = 0.70; g = 0.50; b = 0.30;
+        } else {
+          // Rock layer (below -26 feet) - Gray - SOLID COLOR
+          r = 0.45; g = 0.45; b = 0.45;
+        }
+        
+        // DEBUG: Add a subtle horizontal stripe every 5 feet to verify orientation
+        const stripeTest = Math.floor(Math.abs(y) / 2) % 2; // Every 2 feet, alternate
+        if (stripeTest === 0) {
+          r *= 1.1; // Slightly brighter every other 2-foot band
+          g *= 1.1;
+          b *= 1.1;
+        }
+      }
+      
+      // Ensure natural earth colors
+      wallColors[i] = Math.min(1.0, Math.max(0.2, r || 0.2));
+      wallColors[i + 1] = Math.min(1.0, Math.max(0.15, g || 0.15));
+      wallColors[i + 2] = Math.min(1.0, Math.max(0.1, b || 0.1));
+    }
+    
+    // Apply colors to wall geometry and switch to vertex colors
+    wallGeometry.setAttribute('color', new THREE.BufferAttribute(wallColors, 3));
+    wallGeometry.attributes.color.needsUpdate = true;
+    
+    // Update material to use vertex colors
+    const wallMaterial = this.wallMeshes[0].material as THREE.MeshLambertMaterial;
+    wallMaterial.vertexColors = true;
+    wallMaterial.needsUpdate = true;
   }
 
   /**
@@ -1064,7 +1260,7 @@ export class Terrain {
     this.geometry.computeVertexNormals();
     this.updateTerrainColors();
     this.updateBlockGeometry(); // Update block to match reset terrain
-
+    
     // Clear undo/redo stacks and save initial state
     this.undoStack = [];
     this.redoStack = [];
