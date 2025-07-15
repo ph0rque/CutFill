@@ -269,7 +269,8 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       
       // Add number label every other displayed segment (skip 0ft and 100ft)
       if (displayedSegmentCount % 2 === 0) {
-        const labelValue = x + 50; // Distance from left edge (0-100ft)
+        // Calculate distance from axis start (0 at xAxisStart, 100 at xAxisEnd)
+        const labelValue = Math.abs(x - xAxisStart); // Distance from axis origin
         if (labelValue !== 0 && labelValue !== 100) { // Skip 0ft and 100ft
           const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
           const labelOffset = cornerZ > 0 ? -2 : 2;
@@ -314,7 +315,8 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       
       // Add number label every other displayed segment (skip 0ft and 100ft)
       if (displayedSegmentCount % 2 === 0) {
-        const labelValue = z + 50; // Distance from back edge (0-100ft)
+        // Calculate distance from axis start (0 at zAxisStart, 100 at zAxisEnd)
+        const labelValue = Math.abs(z - zAxisStart); // Distance from axis origin
         if (labelValue !== 0 && labelValue !== 100) { // Skip 0ft and 100ft
           const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
           const labelOffset = cornerX > 0 ? -2 : 2;
