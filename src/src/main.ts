@@ -157,12 +157,49 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   
   // Calculate dynamic segment spacing based on zoom level
   let segmentSpacing = 10; // Default 10ft segments
-  if (cameraDistance < 50) {
-    segmentSpacing = 5; // 5ft segments when zoomed in
-  } else if (cameraDistance < 25) {
+  if (cameraDistance < 25) {
     segmentSpacing = 1; // 1ft segments when very zoomed in
+  } else if (cameraDistance < 50) {
+    segmentSpacing = 5; // 5ft segments when zoomed in
   } else if (cameraDistance > 200) {
     segmentSpacing = 25; // 25ft segments when zoomed out
+  }
+  
+  // Helper function to create text markers
+  function createTextMarker(text: string, x: number, y: number, z: number = 0.5, color: string = '#000000', small: boolean = false): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d')!;
+    canvas.width = small ? 64 : 96;
+    canvas.height = small ? 32 : 48;
+    
+    // Clear canvas
+    context.fillStyle = '#FFFFFF';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add background with slight transparency
+    context.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add border for larger labels only
+    if (!small) {
+      context.strokeStyle = color;
+      context.lineWidth = 2;
+      context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+    }
+    
+    // Add text
+    context.fillStyle = color;
+    context.font = small ? 'bold 12px Arial' : 'bold 16px Arial';
+    context.textAlign = 'center';
+    context.fillText(text, canvas.width / 2, canvas.height / 2 + (small ? 4 : 6));
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(x, y, z);
+    sprite.scale.set(small ? 5 : 8, small ? 2.5 : 4, 1);
+    
+    return sprite;
   }
   
   // Create X-axis line (red) - full length
@@ -176,17 +213,37 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   const xAxisLine = new THREE.Line(xAxisGeometry, xAxisMaterial);
   markerGroup.add(xAxisLine);
   
-  // Add X-axis segment markings
+  // Calculate dynamic intervals for X-axis
+  const totalXSegments = Math.floor(100 / segmentSpacing);
+  const targetLabels = 4; // Aim for 4 labels per axis
+  const xLabelInterval = Math.max(1, Math.ceil(totalXSegments / targetLabels));
+  const xSegmentInterval = Math.max(1, Math.ceil(totalXSegments / (targetLabels * 2))); // Up to 2x labels worth of segments
+  
+  // Add X-axis segment markings and labels
+  let segmentCount = 0;
   for (let x = -50; x <= 50; x += segmentSpacing) {
     if (x === 0) continue; // Skip origin
-    const tickHeight = 1;
-    const tickGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(x, axisY, cornerZ),
-      new THREE.Vector3(x, axisY + tickHeight, cornerZ)
-    ]);
-    const tickMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 1 });
-    const tickLine = new THREE.Line(tickGeometry, tickMaterial);
-    markerGroup.add(tickLine);
+    
+    // Only show segment if it passes the culling interval
+    if (segmentCount % xSegmentInterval === 0) {
+      const tickHeight = 1;
+      const tickGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(x, axisY, cornerZ),
+        new THREE.Vector3(x, axisY + tickHeight, cornerZ)
+      ]);
+      const tickMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 1 });
+      const tickLine = new THREE.Line(tickGeometry, tickMaterial);
+      markerGroup.add(tickLine);
+      
+      // Add number label at calculated intervals
+      if (segmentCount % xLabelInterval === 0) {
+        const labelValue = Math.abs(x); // Distance from origin
+        const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
+        const labelOffset = cornerZ > 0 ? -2 : 2;
+        markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000', true));
+      }
+    }
+    segmentCount++;
   }
   
   // Create Z-axis line (green) - full length  
@@ -200,17 +257,35 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   const zAxisLine = new THREE.Line(zAxisGeometry, zAxisMaterial);
   markerGroup.add(zAxisLine);
   
-  // Add Z-axis segment markings
+  // Calculate dynamic intervals for Z-axis (same as X-axis)
+  const zLabelInterval = xLabelInterval;
+  const zSegmentInterval = xSegmentInterval;
+  
+  // Add Z-axis segment markings and labels
+  segmentCount = 0;
   for (let z = -50; z <= 50; z += segmentSpacing) {
     if (z === 0) continue; // Skip origin
-    const tickHeight = 1;
-    const tickGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(cornerX, axisY, z),
-      new THREE.Vector3(cornerX, axisY + tickHeight, z)
-    ]);
-    const tickMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 1 });
-    const tickLine = new THREE.Line(tickGeometry, tickMaterial);
-    markerGroup.add(tickLine);
+    
+    // Only show segment if it passes the culling interval
+    if (segmentCount % zSegmentInterval === 0) {
+      const tickHeight = 1;
+      const tickGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(cornerX, axisY, z),
+        new THREE.Vector3(cornerX, axisY + tickHeight, z)
+      ]);
+      const tickMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 1 });
+      const tickLine = new THREE.Line(tickGeometry, tickMaterial);
+      markerGroup.add(tickLine);
+      
+      // Add number label at calculated intervals
+      if (segmentCount % zLabelInterval === 0) {
+        const labelValue = Math.abs(z); // Distance from origin
+        const labelText = segmentSpacing >= 5 ? `${labelValue}ft` : `${labelValue}`;
+        const labelOffset = cornerX > 0 ? -2 : 2;
+        markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00', true));
+      }
+    }
+    segmentCount++;
   }
   
   // Create Y-axis line (blue) - shortened to 20 feet
@@ -222,62 +297,38 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   const yAxisLine = new THREE.Line(yAxisGeometry, yAxisMaterial);
   markerGroup.add(yAxisLine);
   
-  // Add Y-axis segment markings (every 5 feet for vertical)
+  // Calculate dynamic intervals for Y-axis
+  const totalYSegments = Math.floor(zAxisLength / 5); // Y-axis has 5ft segments
+  const yLabelInterval = Math.max(1, Math.ceil(totalYSegments / targetLabels));
+  const ySegmentInterval = Math.max(1, Math.ceil(totalYSegments / (targetLabels * 2))); // Up to 2x labels worth of segments
+  
+  // Add Y-axis segment markings and labels (every 5 feet for vertical)
+  segmentCount = 0;
   for (let y = 5; y <= zAxisLength; y += 5) {
-    const tickLength = 1;
-    const tickGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(cornerX, axisY + y, cornerZ),
-      new THREE.Vector3(cornerX + tickLength, axisY + y, cornerZ)
-    ]);
-    const tickMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 1 });
-    const tickLine = new THREE.Line(tickGeometry, tickMaterial);
-    markerGroup.add(tickLine);
-  }
-  
-  // Create text sprites for axis labels (only at ends, no origin marker)
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d')!;
-  canvas.width = 96;
-  canvas.height = 48;
-  
-  // Helper function to create text markers
-  function createTextMarker(text: string, x: number, y: number, z: number = 0.5, color: string = '#000000'): THREE.Sprite {
-    // Clear canvas
-    context.fillStyle = '#FFFFFF';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add background with slight transparency
-    context.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add border
-    context.strokeStyle = color;
-    context.lineWidth = 2;
-    context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
-    
-    // Add text
-    context.fillStyle = color;
-    context.font = 'bold 16px Arial';
-    context.textAlign = 'center';
-    context.fillText(text, canvas.width / 2, canvas.height / 2 + 6);
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture });
-    const sprite = new THREE.Sprite(material);
-    sprite.position.set(x, y, z);
-    sprite.scale.set(8, 4, 1); // Slightly smaller scale
-    
-    return sprite;
+    // Only show segment if it passes the culling interval
+    if (segmentCount % ySegmentInterval === 0) {
+      const tickLength = 1;
+      const tickGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(cornerX, axisY + y, cornerZ),
+        new THREE.Vector3(cornerX + tickLength, axisY + y, cornerZ)
+      ]);
+      const tickMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 1 });
+      const tickLine = new THREE.Line(tickGeometry, tickMaterial);
+      markerGroup.add(tickLine);
+      
+      // Add number label at calculated intervals
+      if (segmentCount % yLabelInterval === 0) {
+        const labelOffset = cornerX > 0 ? -3 : 3;
+        markerGroup.add(createTextMarker(`${y}ft`, cornerX + labelOffset, axisY + y, cornerZ, '#0000ff', true)); // y already represents distance from origin
+      }
+    }
+    segmentCount++;
   }
 
-  // Add X-axis scale marker (red) at the end
-  markerGroup.add(createTextMarker('100ft', xAxisEnd + (xAxisEnd > 0 ? 5 : -5), axisY + 2, cornerZ, '#ff0000'));
-  
-  // Add Z-axis scale marker (green) at the end
-  markerGroup.add(createTextMarker('100ft', cornerX, axisY + 2, zAxisEnd + (zAxisEnd > 0 ? 5 : -5), '#00ff00'));
-  
-  // Add Y-axis scale marker (blue) at the top
-  markerGroup.add(createTextMarker('20ft', cornerX - 3, axisY + zAxisLength + 3, cornerZ, '#0000ff'));
+  // Add main axis endpoint labels (larger)
+  markerGroup.add(createTextMarker('X: 100ft', xAxisEnd + (xAxisEnd > 0 ? 8 : -8), axisY + 2, cornerZ, '#ff0000'));
+  markerGroup.add(createTextMarker('Z: 100ft', cornerX, axisY + 2, zAxisEnd + (zAxisEnd > 0 ? 8 : -8), '#00ff00'));
+  markerGroup.add(createTextMarker('Y: 20ft', cornerX - 5, axisY + zAxisLength + 3, cornerZ, '#0000ff'));
 }
 
 // Force initialize game if authentication is taking too long
