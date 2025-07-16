@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { supabase } from './supabase';
 
 export interface TerrainState {
   vertices: Float32Array;
@@ -15,9 +16,9 @@ export interface BrushSettings {
 
 export interface MaterialLayer {
   name: string;
-  color: THREE.Color;
   depth: number;
-  hardness: number; // affects excavation resistance
+  color: THREE.Color;
+  hardness: number; // 0-1, affects excavation resistance
 }
 
 export class Terrain {
@@ -59,6 +60,17 @@ export class Terrain {
   private colorBlindType: 'protanopia' | 'deuteranopia' | 'tritanopia' | 'normal' = 'normal';
   private usePatternOverlays: boolean = false;
   private patternMeshes: THREE.Mesh[] = [];
+  
+  // Camera reference for zoom-independent arrow scaling
+  private camera: THREE.Camera | null = null;
+
+  // Database persistence properties
+  private currentUserId: string | null = null;
+  private currentSessionId: string | null = null;
+  private autoSaveEnabled: boolean = true;
+  private lastSaveTime: number = 0;
+  private saveThrottleMs: number = 30000; // Save every 30 seconds at most
+  private pendingModifications: Array<{x: number, z: number, heightChange: number, tool: string}> = [];
 
   constructor(
     width: number = 100,  // 100 feet x 100 feet
@@ -860,10 +872,12 @@ export class Terrain {
     for (let i = 0; i < vertices.length; i += 3) {
       const vertexX = vertices[i];
       const vertexZ = vertices[i + 2];
-      const distance = Math.sqrt((x - vertexX) ** 2 + (z - vertexZ) ** 2);
+      const deltaX = vertexX - x;
+      const deltaZ = vertexZ - z;
+      const distance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
 
-      if (this.isInBrush(distance, vertexX - x, vertexZ - z)) {
-        const falloff = this.calculateFalloff(distance, brushRadius);
+      if (this.isInBrush(distance, deltaX, deltaZ)) {
+        const falloff = this.calculateFalloff(distance, brushRadius, deltaX, deltaZ);
         
         // Get material resistance at current depth
         const currentHeight = vertices[i + 1];
@@ -928,10 +942,10 @@ export class Terrain {
           
           // Create arrow based on operation type
           if (heightChange < 0) {
-            // Cut operation - blue downward arrows
+            // Cut operation - red downward arrows
             this.createCutArrow(arrowX, arrowZ, arrowHeight, heightChange, distanceFromCenter / radius);
           } else {
-            // Fill operation - red upward arrows  
+            // Fill operation - blue upward arrows  
             this.createFillArrow(arrowX, arrowZ, arrowHeight, heightChange, distanceFromCenter / radius);
           }
           
@@ -942,45 +956,71 @@ export class Terrain {
   }
 
   /**
-   * Create a cut arrow (blue, downward)
+   * Create a cut arrow (red, downward) - PERSISTENT for session with zoom-independent scaling
    */
   private createCutArrow(x: number, z: number, height: number, heightChange: number, falloff: number): void {
-    const arrowLength = Math.abs(heightChange) * (1 - falloff * 0.5) * 3; // Scale by falloff
-    const arrowPos = new THREE.Vector3(x, height + 0.5, z); // Position above surface
+    // Much larger base arrow length for better visibility
+    const baseArrowLength = Math.max(3, Math.abs(heightChange) * (1 - falloff * 0.3) * 8); 
+    const arrowPos = new THREE.Vector3(x, height + 1, z); // Position higher above surface
     const arrowDir = new THREE.Vector3(0, -1, 0); // Point downward
     
-    const arrow = new THREE.ArrowHelper(arrowDir, arrowPos, arrowLength, 0x1976D2); // Blue color
-    arrow.setLength(arrowLength, arrowLength * 0.3, arrowLength * 0.15); // Custom proportions
+    const arrow = new THREE.ArrowHelper(arrowDir, arrowPos, baseArrowLength, 0xFF0000); // Red color
+    
+    // Set larger proportions for better visibility
+    const headLength = baseArrowLength * 0.4; // Bigger arrow head
+    const headWidth = baseArrowLength * 0.2; // Wider arrow head
+    arrow.setLength(baseArrowLength, headLength, headWidth);
+    
+    // Store original length for scaling calculations
+    (arrow as any).originalLength = baseArrowLength;
+    (arrow as any).originalHeadLength = headLength;
+    (arrow as any).originalHeadWidth = headWidth;
+    
+    // Mark as persistent cut arrow
+    (arrow as any).isPersistentCut = true;
     
     this.terrainGroup.add(arrow);
     this.arrows.push(arrow);
     
-    // Animate and remove after delay
-    setTimeout(() => {
-      this.terrainGroup.remove(arrow);
-      this.arrows = this.arrows.filter(a => a !== arrow);
-    }, 3000); // Longer duration for visibility
+    // Apply initial zoom-independent scaling
+    this.updateArrowScale(arrow);
+    
+    // Red cut arrows persist for the entire session - no timeout removal
+    // They will only be cleared when terrain is reset or manually cleared
   }
 
   /**
-   * Create a fill arrow (red, upward)
+   * Create a fill arrow (blue, upward) - PERSISTENT for session with zoom-independent scaling
    */
   private createFillArrow(x: number, z: number, height: number, heightChange: number, falloff: number): void {
-    const arrowLength = Math.abs(heightChange) * (1 - falloff * 0.5) * 3; // Scale by falloff
-    const arrowPos = new THREE.Vector3(x, height - 0.5, z); // Position below surface
+    // Much larger base arrow length for better visibility
+    const baseArrowLength = Math.max(3, Math.abs(heightChange) * (1 - falloff * 0.3) * 8);
+    const arrowPos = new THREE.Vector3(x, height - 1, z); // Position lower below surface
     const arrowDir = new THREE.Vector3(0, 1, 0); // Point upward
     
-    const arrow = new THREE.ArrowHelper(arrowDir, arrowPos, arrowLength, 0xD32F2F); // Red color
-    arrow.setLength(arrowLength, arrowLength * 0.3, arrowLength * 0.15); // Custom proportions
+    const arrow = new THREE.ArrowHelper(arrowDir, arrowPos, baseArrowLength, 0x0000FF); // Blue color
+    
+    // Set larger proportions for better visibility
+    const headLength = baseArrowLength * 0.4; // Bigger arrow head
+    const headWidth = baseArrowLength * 0.2; // Wider arrow head
+    arrow.setLength(baseArrowLength, headLength, headWidth);
+    
+    // Store original length for scaling calculations
+    (arrow as any).originalLength = baseArrowLength;
+    (arrow as any).originalHeadLength = headLength;
+    (arrow as any).originalHeadWidth = headWidth;
+    
+    // Mark as persistent fill arrow
+    (arrow as any).isPersistentFill = true;
     
     this.terrainGroup.add(arrow);
     this.arrows.push(arrow);
     
-    // Animate and remove after delay
-    setTimeout(() => {
-      this.terrainGroup.remove(arrow);
-      this.arrows = this.arrows.filter(a => a !== arrow);
-    }, 3000); // Longer duration for visibility
+    // Apply initial zoom-independent scaling
+    this.updateArrowScale(arrow);
+    
+    // Blue fill arrows persist for the entire session - no timeout removal
+    // They will only be cleared when terrain is reset or manually cleared
   }
 
   /**
@@ -1023,20 +1063,31 @@ export class Terrain {
   }
 
   /**
-   * Calculate falloff based on distance and falloff type
+   * Calculate falloff based on distance and falloff type, with proper handling for different brush shapes
    */
-  private calculateFalloff(distance: number, radius: number): number {
-    if (distance >= radius) return 0;
+  private calculateFalloff(distance: number, radius: number, deltaX?: number, deltaZ?: number): number {
+    let normalizedDistance: number;
     
-    const normalizedDistance = distance / radius;
+    // Calculate normalized distance based on brush shape
+    if (this.brushSettings.shape === 'square' && deltaX !== undefined && deltaZ !== undefined) {
+      // For square brushes, use the maximum distance along either axis
+      const maxAxisDistance = Math.max(Math.abs(deltaX), Math.abs(deltaZ));
+      if (maxAxisDistance >= radius) return 0;
+      normalizedDistance = maxAxisDistance / radius;
+    } else {
+      // For circular brushes (or fallback), use radial distance
+      if (distance >= radius) return 0;
+      normalizedDistance = distance / radius;
+    }
     
+    // Apply falloff curve based on type
     switch (this.brushSettings.falloff) {
       case 'linear':
         return 1 - normalizedDistance;
       case 'smooth':
         return Math.cos(normalizedDistance * Math.PI * 0.5);
       case 'sharp':
-        return 1;
+        return normalizedDistance < 0.8 ? 1 : (1 - normalizedDistance) / 0.2; // Sharp drop-off at 80% radius
       default:
         return 1 - normalizedDistance;
     }
@@ -1261,11 +1312,20 @@ export class Terrain {
     this.updateTerrainColors();
     this.updateBlockGeometry(); // Update block to match reset terrain
     
+    // Clear all arrows including persistent cut arrows
+    this.clearAllArrows();
+    
     // Clear undo/redo stacks and save initial state
     this.undoStack = [];
     this.redoStack = [];
     this.saveState();
   }
+
+  /**
+   * Save current terrain state as new baseline - preserves terrain but resets volume calculations to zero
+   * Enhanced version with database persistence is available in the DATABASE PERSISTENCE METHODS section
+   */
+  // Method moved to DATABASE PERSISTENCE METHODS section with enhanced functionality
 
   /**
    * Start terrain modification (for undo/redo)
@@ -1652,22 +1712,135 @@ export class Terrain {
       • Enter/Space: Activate selected tool or button
       • Arrow keys: Move focus between terrain areas
       • Ctrl + Arrow keys: Apply current tool to focused area
-      • 1-4: Quick tool selection (1=Excavator, 2=Bulldozer, 3=Grader, 4=Compactor)
+      • 1-2: Quick brush size selection (1=Small, 2=Medium)
       • +/-: Adjust brush size
       • Ctrl+Z: Undo last operation
-      • Ctrl+Shift+Z: Redo operation
-      • A: Toggle accessibility mode
-      • P: Toggle pattern overlays
-      • H: Toggle high contrast mode
+      • Ctrl+Y: Redo last operation
+      • W: Toggle wireframe mode
+      • X: Toggle grid display
+      • R: Reset terrain
       • Escape: Cancel current operation
-      
-      Accessibility Features:
-      • Screen reader announcements for all operations
-      • Color-blind friendly color schemes
-      • Pattern overlays for zone identification
-      • High contrast mode for better visibility
-      • Audio feedback for successful operations
     `;
+  }
+
+  /**
+   * Clear only persistent cut arrows (blue arrows)
+   */
+  public clearPersistentCutArrows(): void {
+    // Filter out persistent cut arrows and remove them from scene
+    const persistentCutArrows = this.arrows.filter(arrow => (arrow as any).isPersistentCut);
+    
+    persistentCutArrows.forEach(arrow => {
+      this.terrainGroup.remove(arrow);
+    });
+    
+    // Remove persistent cut arrows from the arrows array
+    this.arrows = this.arrows.filter(arrow => !(arrow as any).isPersistentCut);
+    
+    console.log(`Cleared ${persistentCutArrows.length} persistent cut arrows`);
+  }
+
+  /**
+   * Clear only persistent fill arrows (red arrows)
+   */
+  public clearPersistentFillArrows(): void {
+    // Filter out persistent fill arrows and remove them from scene
+    const persistentFillArrows = this.arrows.filter(arrow => (arrow as any).isPersistentFill);
+    
+    persistentFillArrows.forEach(arrow => {
+      this.terrainGroup.remove(arrow);
+    });
+    
+    // Remove persistent fill arrows from the arrows array
+    this.arrows = this.arrows.filter(arrow => !(arrow as any).isPersistentFill);
+    
+    console.log(`Cleared ${persistentFillArrows.length} persistent fill arrows`);
+  }
+
+  /**
+   * Clear all persistent arrows (both cut and fill)
+   */
+  public clearAllPersistentArrows(): void {
+    const persistentArrows = this.arrows.filter(arrow => 
+      (arrow as any).isPersistentCut || (arrow as any).isPersistentFill
+    );
+    
+    persistentArrows.forEach(arrow => {
+      this.terrainGroup.remove(arrow);
+    });
+    
+    // Remove persistent arrows from the arrows array
+    this.arrows = this.arrows.filter(arrow => 
+      !(arrow as any).isPersistentCut && !(arrow as any).isPersistentFill
+    );
+    
+    console.log(`Cleared ${persistentArrows.length} persistent arrows`);
+  }
+
+  /**
+   * Clear all arrows (both persistent and temporary)
+   */
+  public clearAllArrows(): void {
+    this.arrows.forEach(arrow => {
+      this.terrainGroup.remove(arrow);
+    });
+    this.arrows = [];
+    console.log('Cleared all arrows');
+  }
+
+  /**
+   * Get count of persistent cut arrows
+   */
+  public getPersistentCutArrowCount(): number {
+    return this.arrows.filter(arrow => (arrow as any).isPersistentCut).length;
+  }
+
+  /**
+   * Get count of persistent fill arrows
+   */
+  public getPersistentFillArrowCount(): number {
+    return this.arrows.filter(arrow => (arrow as any).isPersistentFill).length;
+  }
+
+  /**
+   * Get total count of persistent arrows
+   */
+  public getTotalPersistentArrowCount(): number {
+    return this.arrows.filter(arrow => 
+      (arrow as any).isPersistentCut || (arrow as any).isPersistentFill
+    ).length;
+  }
+
+  /**
+   * Toggle visibility of persistent cut arrows
+   */
+  public togglePersistentCutArrows(visible: boolean): void {
+    const persistentCutArrows = this.arrows.filter(arrow => (arrow as any).isPersistentCut);
+    persistentCutArrows.forEach(arrow => {
+      arrow.visible = visible;
+    });
+  }
+
+  /**
+   * Toggle visibility of persistent fill arrows
+   */
+  public togglePersistentFillArrows(visible: boolean): void {
+    const persistentFillArrows = this.arrows.filter(arrow => (arrow as any).isPersistentFill);
+    persistentFillArrows.forEach(arrow => {
+      arrow.visible = visible;
+    });
+  }
+
+  /**
+   * Toggle visibility of all persistent arrows
+   */
+  public toggleAllPersistentArrows(visible: boolean): void {
+    const persistentArrows = this.arrows.filter(arrow => 
+      (arrow as any).isPersistentCut || (arrow as any).isPersistentFill
+    );
+    persistentArrows.forEach(arrow => {
+      arrow.visible = visible;
+    });
   }
 
   /**
@@ -1689,5 +1862,338 @@ export class Terrain {
    */
   public getPatternOverlaysEnabled(): boolean {
     return this.usePatternOverlays;
+  }
+
+  /**
+   * Set camera reference for zoom-independent arrow scaling
+   */
+  public setCameraReference(camera: THREE.Camera): void {
+    this.camera = camera;
+    // Update all existing arrows when camera is set
+    this.updateAllArrowScales();
+  }
+
+  /**
+   * Update individual arrow scale based on camera distance for zoom-independent sizing
+   */
+  private updateArrowScale(arrow: THREE.ArrowHelper): void {
+    if (!this.camera) return;
+    
+    // Calculate distance from camera to terrain center (50, 0, 50)
+    const terrainCenter = new THREE.Vector3(50, 0, 50);
+    const cameraDistance = this.camera.position.distanceTo(terrainCenter);
+    
+    // Calculate scale factor based on camera distance
+    // Scale arrows to maintain consistent visual size
+    // Base distance of 100 units = scale factor 1.0
+    const baseDistance = 100;
+    const scaleFactor = Math.max(0.3, Math.min(3.0, cameraDistance / baseDistance));
+    
+    // Apply scaling to arrow dimensions
+    const originalLength = (arrow as any).originalLength || 5;
+    const originalHeadLength = (arrow as any).originalHeadLength || 2;
+    const originalHeadWidth = (arrow as any).originalHeadWidth || 1;
+    
+    const scaledLength = originalLength * scaleFactor;
+    const scaledHeadLength = originalHeadLength * scaleFactor;
+    const scaledHeadWidth = originalHeadWidth * scaleFactor;
+    
+    arrow.setLength(scaledLength, scaledHeadLength, scaledHeadWidth);
+  }
+
+  /**
+   * Update all arrow scales based on current camera distance
+   */
+  public updateAllArrowScales(): void {
+    if (!this.camera) return;
+    
+    this.arrows.forEach(arrow => {
+      // Only update persistent arrows (cut and fill)
+      if ((arrow as any).isPersistentCut || (arrow as any).isPersistentFill) {
+        this.updateArrowScale(arrow);
+      }
+    });
+  }
+
+  // ============================================================================
+  // DATABASE PERSISTENCE METHODS
+  // ============================================================================
+
+  /**
+   * Set user ID for database operations
+   */
+  public setUserId(userId: string): void {
+    this.currentUserId = userId;
+  }
+
+  /**
+   * Set session ID for database operations
+   */
+  public setSessionId(sessionId: string | null): void {
+    this.currentSessionId = sessionId;
+  }
+
+  /**
+   * Enable or disable auto-save functionality
+   */
+  public setAutoSave(enabled: boolean): void {
+    this.autoSaveEnabled = enabled;
+  }
+
+  /**
+   * Save current terrain state to database
+   */
+  public async saveTerrainToDatabase(name?: string): Promise<boolean> {
+    if (!this.currentUserId) {
+      console.warn('Cannot save terrain: No user ID set');
+      return false;
+    }
+
+    try {
+      const terrainData = this.exportTerrain();
+      const { error } = await supabase
+        .from('terrain_states')
+        .insert({
+          user_id: this.currentUserId,
+          session_id: this.currentSessionId,
+          name: name || `Terrain_${new Date().toISOString().slice(0, 19).replace('T', '_')}`,
+          terrain_data: terrainData,
+          volume_data: terrainData.volume,
+          created_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Error saving terrain to database:', error);
+        return false;
+      }
+
+      this.lastSaveTime = Date.now();
+      console.log('Terrain saved to database successfully');
+      return true;
+    } catch (error) {
+      console.error('Failed to save terrain to database:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Load terrain state from database
+   */
+  public async loadTerrainFromDatabase(terrainId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('terrain_states')
+        .select('terrain_data')
+        .eq('id', terrainId)
+        .single();
+
+      if (error || !data) {
+        console.error('Error loading terrain from database:', error);
+        return false;
+      }
+
+      this.importTerrain(data.terrain_data);
+      console.log('Terrain loaded from database successfully');
+      return true;
+    } catch (error) {
+      console.error('Failed to load terrain from database:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get user's saved terrain states
+   */
+  public async getUserTerrainStates(): Promise<any[]> {
+    if (!this.currentUserId) {
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('terrain_states')
+        .select('id, name, created_at, volume_data')
+        .eq('user_id', this.currentUserId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching user terrain states:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Failed to fetch user terrain states:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Save individual terrain modification to database
+   */
+  public async saveModificationToDatabase(x: number, z: number, heightChange: number, tool: string): Promise<void> {
+    if (!this.currentUserId) {
+      // Store for batch save later if no user ID
+      this.pendingModifications.push({ x, z, heightChange, tool });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('terrain_modifications')
+        .insert({
+          session_id: this.currentSessionId,
+          user_id: this.currentUserId,
+          x: x,
+          z: z,
+          height_change: heightChange,
+          tool: tool,
+          created_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Error saving terrain modification:', error);
+      }
+    } catch (error) {
+      console.error('Failed to save terrain modification:', error);
+    }
+  }
+
+  /**
+   * Auto-save terrain if conditions are met
+   */
+  public async autoSaveIfNeeded(): Promise<void> {
+    if (!this.autoSaveEnabled || !this.currentUserId) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - this.lastSaveTime >= this.saveThrottleMs) {
+      await this.saveTerrainToDatabase(`AutoSave_${new Date().toISOString().slice(0, 19).replace('T', '_')}`);
+    }
+  }
+
+  /**
+   * Enhanced save current state - now saves to database too
+   */
+  public async saveCurrentState(): Promise<boolean> {
+    const vertices = this.geometry.attributes.position.array;
+
+    // Copy current terrain state to become new original/baseline
+    for (let i = 0; i < vertices.length; i++) {
+      this.originalVertices[i] = vertices[i];
+    }
+
+    // Clear all persistent arrows since we're establishing new baseline
+    this.clearAllPersistentArrows();
+    
+    // Clear undo/redo stacks since we're establishing new baseline
+    this.undoStack = [];
+    this.redoStack = [];
+    
+    // Save this new state as the starting point
+    this.saveState();
+    
+    // Force update the terrain colors and geometry
+    this.updateTerrainColors();
+    this.updateBlockGeometry();
+
+    // Save to database as a checkpoint
+    if (this.currentUserId) {
+      const success = await this.saveTerrainToDatabase(`Checkpoint_${new Date().toISOString().slice(0, 19).replace('T', '_')}`);
+      return success;
+    }
+
+    return true;
+  }
+
+  /**
+   * Save any pending modifications when user ID becomes available
+   */
+  public async savePendingModifications(): Promise<void> {
+    if (!this.currentUserId || this.pendingModifications.length === 0) {
+      return;
+    }
+
+    try {
+      const modifications = this.pendingModifications.map(mod => ({
+        session_id: this.currentSessionId,
+        user_id: this.currentUserId,
+        x: mod.x,
+        z: mod.z,
+        height_change: mod.heightChange,
+        tool: mod.tool,
+        created_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase
+        .from('terrain_modifications')
+        .insert(modifications);
+
+      if (error) {
+        console.error('Error saving pending modifications:', error);
+      } else {
+        this.pendingModifications = [];
+        console.log(`Saved ${modifications.length} pending modifications`);
+      }
+    } catch (error) {
+      console.error('Failed to save pending modifications:', error);
+    }
+  }
+
+  /**
+   * Load terrain modifications from database for a session
+   */
+  public async loadSessionModifications(sessionId: string): Promise<void> {
+    try {
+      const { data, error } = await supabase
+        .from('terrain_modifications')
+        .select('x, z, height_change, tool, created_at')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error loading session modifications:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        // Apply modifications in chronological order
+        for (const mod of data) {
+          this.modifyHeightBrush(mod.x, mod.z, mod.height_change);
+        }
+        console.log(`Applied ${data.length} session modifications`);
+      }
+    } catch (error) {
+      console.error('Failed to load session modifications:', error);
+    }
+  }
+
+  /**
+   * Delete old auto-saves to prevent database bloat
+   */
+  public async cleanupOldAutoSaves(): Promise<void> {
+    if (!this.currentUserId) {
+      return;
+    }
+
+    try {
+      // Delete auto-saves older than 7 days
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 7);
+
+      const { error } = await supabase
+        .from('terrain_states')
+        .delete()
+        .eq('user_id', this.currentUserId)
+        .like('name', 'AutoSave_%')
+        .lt('created_at', cutoffDate.toISOString());
+
+      if (error) {
+        console.error('Error cleaning up old auto-saves:', error);
+      }
+    } catch (error) {
+      console.error('Failed to cleanup old auto-saves:', error);
+    }
   }
 }

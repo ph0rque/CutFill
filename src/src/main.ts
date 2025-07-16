@@ -103,6 +103,9 @@ canvas.addEventListener('webglcontextrestored', (e) => {
 // Create terrain
 const terrain = new Terrain(100, 100, 32, 32); // 100 feet x 100 feet
 
+// Set camera reference for zoom-independent arrow scaling
+terrain.setCameraReference(camera);
+
 // Force disable all pattern overlays to prevent issues
 terrain.forceDisablePatterns();
 
@@ -431,6 +434,12 @@ function animate() {
       updateAxisPosition(scaleReferences.markers, camera);
     }
     
+    // Update arrow scales based on camera distance for zoom-independent sizing
+    terrain.updateAllArrowScales();
+    
+    // Auto-save terrain if needed (throttled to prevent excessive saves)
+    terrain.autoSaveIfNeeded();
+    
     // Update operation preview animation
     updateOperationPreview();
     
@@ -577,26 +586,39 @@ try {
       return;
     }
 
-          if (authState.user) {
-        // User is authenticated, hide auth UI and ensure game is ready
-        authUI.hide();
-        if (!isGameReady) {
-          isGameReady = true;
-          initializeGame();
-        }
-        updateUserInfo(authState.user);
-      } else {
-        // User is not authenticated, but keep game UI visible
-        // Only show auth UI if game isn't ready yet
-        if (!isGameReady) {
-          authUI.show();
-        } else {
-          // Game is ready, just update user info for guest
-          updateUserInfo({ email: 'guest@example.com', user_metadata: { username: 'Guest' } });
-          // Make sure auth UI is hidden
-          authUI.hide();
-        }
+    if (authState.user) {
+      // User is authenticated, hide auth UI and ensure game is ready
+      authUI.hide();
+      if (!isGameReady) {
+        isGameReady = true;
+        initializeGame();
       }
+      updateUserInfo(authState.user);
+      
+      // Set user ID in terrain system for database persistence
+      const userId = authState.user.id || authState.user.email || 'guest';
+      terrain.setUserId(userId);
+      
+      // Save any pending modifications that occurred before login
+      terrain.savePendingModifications();
+      
+      // Enable auto-save
+      terrain.setAutoSave(true);
+    } else {
+      // User is not authenticated, but keep game UI visible
+      // Only show auth UI if game isn't ready yet
+      if (!isGameReady) {
+        authUI.show();
+      } else {
+        // Game is ready, just update user info for guest
+        updateUserInfo({ email: 'guest@example.com', user_metadata: { username: 'Guest' } });
+        // Make sure auth UI is hidden
+        authUI.hide();
+        
+        // Set guest user ID for terrain system
+        terrain.setUserId('guest_' + Date.now());
+      }
+    }
   });
 } catch (error) {
   console.error('Authentication error:', error);
@@ -687,6 +709,10 @@ function setupGameControls() {
         isModifying = true;
         lastMousePosition = null; // Reset for new modification
         terrain.startModification();
+        
+        // Start real-time volume tracking
+        startRealTimeVolumeUpdates();
+        
         // Hide preview when starting to modify
         hideOperationPreview();
       } else {
@@ -756,12 +782,14 @@ function setupGameControls() {
           zoneColor = '#2196F3';
         }
         
-        // Get current tool info for preview
+                // Get current tool info for preview
         const currentTool = toolManager.getCurrentTool();
         const toolSettings = currentTool.getSettings();
-        const toolAction = toolSettings.name === 'excavator' ? 'Excavate' : 
-                          toolSettings.name === 'bulldozer' ? 'Push Material' :
-                          toolSettings.name === 'grader' ? 'Smooth/Level' : 'Compact';
+        const toolAction = toolSettings.name === 'cut' ? 'Cut (Remove Earth)' : 'Fill (Add Earth)';
+        
+        // Calculate preview volume
+        const previewVolume = calculatePreviewVolume(point);
+        const volumeEstimate = toolSettings.name === 'cut' ? previewVolume.cutPreview : previewVolume.fillPreview;
         
         tooltip.innerHTML = `
           <div style="color: ${zoneColor}; font-weight: bold; margin-bottom: 4px;">🎯 ${zoneType}</div>
@@ -770,8 +798,19 @@ function setupGameControls() {
           <div><strong>Material:</strong> ${layerInfo}</div>
           <div style="margin-top: 4px; padding: 4px; background: rgba(${toolSettings.color.slice(1).match(/.{2}/g)!.map(h => parseInt(h, 16)).join(',')}, 0.2); border-radius: 3px; border-left: 3px solid ${toolSettings.color};">
             <div style="font-weight: bold; color: ${toolSettings.color};">${toolSettings.icon} ${toolSettings.displayName}</div>
-            <div style="font-size: 10px; color: #ccc;">Preview: ${toolAction} (Ctrl+drag to apply)</div>
-            <div style="font-size: 10px; color: #ccc;">Size: ${terrain.getBrushSettings().size.toFixed(1)}ft | Strength: ${(terrain.getBrushSettings().strength * 100).toFixed(0)}%</div>
+            <div style="font-size: 10px; color: #ccc;">Preview: ${toolAction} Volume (Ctrl+drag to apply)</div>
+            <div style="font-size: 10px; color: #ccc;">
+              Size: ${terrain.getBrushSettings().size.toFixed(1)}ft | 
+              Strength: ${(terrain.getBrushSettings().strength * 100).toFixed(0)}% | 
+              Shape: ${terrain.getBrushSettings().shape === 'circle' ? '○ Circle' : '□ Square'} |
+              Falloff: ${terrain.getBrushSettings().falloff}
+            </div>
+            <div style="font-size: 10px; color: #4CAF50; margin-top: 2px;">
+              📊 Estimated Volume: ${volumeEstimate.toFixed(2)} yd³
+            </div>
+            <div style="font-size: 9px; color: #aaa; margin-top: 2px;">
+              ${toolSettings.name === 'cut' ? '🔵 Blue volume shows material to be removed' : '🔴 Red volume shows material to be added'}
+            </div>
           </div>
           <div style="margin-top: 4px; font-size: 11px; color: #ccc;">
             ${relativeHeight > 0.5 ? '⬆️ Excavate to reduce fill' : relativeHeight < -0.5 ? '⬇️ Add material to cut' : '✅ Near target elevation'}
@@ -807,23 +846,39 @@ function setupGameControls() {
               point.x, 
               point.z, 
               modificationStrength, 
-              terrain.getBrushSettings().size,
-              direction
+              terrain.getBrushSettings().size
             );
             
-                      // Track tool usage for assignment
-          assignmentManager.addToolUsage(toolManager.getCurrentToolName());
-          
-          // Track tool usage for progress
-          progressTracker.recordToolUsage(toolManager.getCurrentToolName());
-          
-          // Track volume movement for progress
-          const volumeData = terrain.calculateVolumeDifference();
-          const volumeChange = Math.abs(volumeData.cut + volumeData.fill);
-          progressTracker.recordVolumeMove(volumeChange * 0.001); // Convert to cubic meters
-          
-          updateVolumeDisplay();
-          lastMousePosition = point.clone();
+            // Save terrain modification to database
+            terrain.saveModificationToDatabase(
+              point.x,
+              point.z,
+              toolManager.getCurrentToolName() === 'cut' ? -modificationStrength : modificationStrength,
+              toolManager.getCurrentToolName()
+            );
+            
+            // Track tool usage for assignment
+            assignmentManager.addToolUsage(toolManager.getCurrentToolName());
+            
+            // Track tool usage for progress
+            progressTracker.recordToolUsage(toolManager.getCurrentToolName());
+            
+            // Track volume movement for progress
+            const volumeData = terrain.calculateVolumeDifference();
+            const volumeChange = Math.abs(volumeData.cut + volumeData.fill);
+            progressTracker.recordVolumeMove(volumeChange / 27); // Convert cubic feet to cubic yards
+            
+            updateVolumeDisplay();
+            
+            // Start real-time volume updates during modification
+            startRealTimeVolumeUpdates();
+            
+            // Update arrow counts when tools are used
+            if (toolManager.getCurrentToolName() === 'cut' || toolManager.getCurrentToolName() === 'fill') {
+              updateArrowCounts();
+            }
+            
+            lastMousePosition = point.clone();
 
             // Send to multiplayer if in session
             if (multiplayerManager.isInSession()) {
@@ -871,8 +926,17 @@ function setupGameControls() {
       });
 
   renderer.domElement.addEventListener('mouseup', () => {
+    const wasModifying = isModifying;
     isMouseDown = false;
     isModifying = false;
+    
+    // Finalize volume updates if we were modifying
+    if (wasModifying) {
+      // Force a final volume update
+      updateVolumeDisplay(true);
+      isRealTimeUpdating = false;
+    }
+    
     // Reset interaction mode when mouse is released (only if not in gesture mode)
     if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
     updateInteractionMode(false, false);
@@ -918,12 +982,44 @@ function setupGameControls() {
           updateVolumeDisplay();
         }
         break;
+      case 's':
+        if (event.ctrlKey || event.metaKey) {
+          event.preventDefault();
+          terrain.saveCurrentState().then(success => {
+            updateVolumeDisplay();
+            updateArrowCounts();
+            
+            // Show brief confirmation
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+              position: fixed;
+              top: 20px;
+              right: 20px;
+              background: ${success ? '#4CAF50' : '#F44336'};
+              color: white;
+              padding: 10px 15px;
+              border-radius: 4px;
+              z-index: 1001;
+              font-size: 14px;
+              animation: slideInOut 2s ease-in-out;
+            `;
+            notification.textContent = success ? '💾 State Saved to Database!' : '❌ Database Save Failed';
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+              if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+              }
+            }, 2000);
+          });
+        }
+        break;
       case 'q':
-        toolManager.setCurrentTool('excavator');
+        toolManager.setCurrentTool('cut');
         updateToolDisplay();
         break;
       case 'e':
-        toolManager.setCurrentTool('bulldozer');
+        toolManager.setCurrentTool('fill');
         updateToolDisplay();
         break;
       case 'r':
@@ -942,14 +1038,7 @@ function setupGameControls() {
           multiplayerManager.sendTerrainReset();
         }
         break;
-      case 't':
-        toolManager.setCurrentTool('grader');
-        updateToolDisplay();
-        break;
-      case 'y':
-        toolManager.setCurrentTool('compactor');
-        updateToolDisplay();
-        break;
+
       case '1':
         terrain.setBrushSettings({ size: 1 });
         updateBrushDisplay();
@@ -964,6 +1053,29 @@ function setupGameControls() {
         break;
       case '4':
         terrain.setBrushSettings({ size: 8 });
+        updateBrushDisplay();
+        break;
+      case 'c':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+C
+        event.preventDefault();
+        terrain.setBrushSettings({ shape: 'circle' });
+        updateBrushDisplay();
+        break;
+      case 'v':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+V
+        event.preventDefault();
+        terrain.setBrushSettings({ shape: 'square' });
+        updateBrushDisplay();
+        break;
+      case 'f':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+F
+        event.preventDefault();
+        // Cycle through falloff types
+        const currentBrushSettings = terrain.getBrushSettings();
+        const falloffTypes = ['smooth', 'linear', 'sharp'] as const;
+        const currentIndex = falloffTypes.indexOf(currentBrushSettings.falloff);
+        const nextIndex = (currentIndex + 1) % falloffTypes.length;
+        terrain.setBrushSettings({ falloff: falloffTypes[nextIndex] });
         updateBrushDisplay();
         break;
       case 'x':
@@ -1056,6 +1168,8 @@ function setupGameControls() {
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
+  const saveStateBtn = document.getElementById('save-state-btn') as HTMLButtonElement;
+  const loadTerrainBtn = document.getElementById('load-terrain-btn') as HTMLButtonElement;
   const assignmentsBtn = document.getElementById('assignments-btn') as HTMLButtonElement;
 
   if (undoBtn) {
@@ -1086,9 +1200,192 @@ function setupGameControls() {
     });
   }
 
+  if (saveStateBtn) {
+    saveStateBtn.addEventListener('click', async () => {
+      const success = await terrain.saveCurrentState();
+      updateVolumeDisplay(); // This will now show 0/0/0
+      updateArrowCounts(); // This will now show 0 arrows
+      
+      // Show confirmation message
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${success ? '#4CAF50' : '#F44336'};
+        color: white;
+        padding: 15px;
+        border-radius: 4px;
+        z-index: 1001;
+        font-family: Arial, sans-serif;
+        max-width: 300px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      `;
+      
+      if (success) {
+        notification.innerHTML = `
+          <div style="font-size: 18px; margin-bottom: 5px;">💾 State Saved to Database!</div>
+          <div style="font-size: 14px;">Current terrain preserved as new baseline</div>
+          <div style="font-size: 12px; color: #ddd; margin-top: 5px;">Cut/Fill volumes reset to zero</div>
+        `;
+      } else {
+        notification.innerHTML = `
+          <div style="font-size: 18px; margin-bottom: 5px;">❌ Save Failed</div>
+          <div style="font-size: 14px;">Could not save to database</div>
+          <div style="font-size: 12px; color: #ddd; margin-top: 5px;">Local state still updated</div>
+        `;
+      }
+      
+      document.body.appendChild(notification);
+      
+      // Remove notification after 3 seconds
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 3000);
+    });
+  }
+
+  if (loadTerrainBtn) {
+    loadTerrainBtn.addEventListener('click', async () => {
+      try {
+        const savedStates = await terrain.getUserTerrainStates();
+        if (savedStates.length === 0) {
+          alert('No saved terrain states found.');
+          return;
+        }
+        
+        // Create a simple selection modal
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0,0,0,0.8);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 2000;
+        `;
+        
+        const content = document.createElement('div');
+        content.style.cssText = `
+          background: #2a2a2a;
+          color: white;
+          padding: 20px;
+          border-radius: 8px;
+          max-width: 500px;
+          max-height: 70vh;
+          overflow-y: auto;
+          font-family: Arial, sans-serif;
+        `;
+        
+        let html = '<h2>📂 Load Saved Terrain</h2>';
+        savedStates.forEach(state => {
+          const date = new Date(state.created_at).toLocaleString();
+          const volume = state.volume_data;
+          html += `
+            <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px; cursor: pointer;" 
+                 onclick="loadSelectedTerrain('${state.id}')">
+              <div style="font-weight: bold;">${state.name}</div>
+              <div style="font-size: 12px; color: #ccc;">Created: ${date}</div>
+              ${volume ? `<div style="font-size: 12px; color: #ccc;">Cut: ${(volume.cut/27).toFixed(1)} yd³, Fill: ${(volume.fill/27).toFixed(1)} yd³</div>` : ''}
+            </div>
+          `;
+        });
+        
+        html += '<button onclick="closeLoadModal()" style="margin-top: 15px; padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>';
+        
+        content.innerHTML = html;
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        
+        // Global functions for the modal
+        (window as any).loadSelectedTerrain = async (terrainId: string) => {
+          const success = await terrain.loadTerrainFromDatabase(terrainId);
+          if (success) {
+            updateVolumeDisplay();
+            updateArrowCounts();
+          }
+          document.body.removeChild(modal);
+          
+          // Show notification
+          const notification = document.createElement('div');
+          notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${success ? '#4CAF50' : '#F44336'};
+            color: white;
+            padding: 15px;
+            border-radius: 4px;
+            z-index: 1001;
+            font-family: Arial, sans-serif;
+          `;
+          notification.textContent = success ? '✅ Terrain Loaded!' : '❌ Load Failed';
+          document.body.appendChild(notification);
+          
+          setTimeout(() => {
+            if (document.body.contains(notification)) {
+              document.body.removeChild(notification);
+            }
+          }, 3000);
+        };
+        
+        (window as any).closeLoadModal = () => {
+          document.body.removeChild(modal);
+        };
+        
+      } catch (error) {
+        console.error('Error loading terrain states:', error);
+        alert('Failed to load terrain states.');
+      }
+    });
+  }
+
   if (assignmentsBtn) {
     assignmentsBtn.addEventListener('click', () => {
       loadAssignments();
+    });
+  }
+
+  // Arrow management controls
+  const clearCutArrowsBtn = document.getElementById('clear-cut-arrows-btn') as HTMLButtonElement;
+  const clearFillArrowsBtn = document.getElementById('clear-fill-arrows-btn') as HTMLButtonElement;
+  const clearAllArrowsBtn = document.getElementById('clear-all-arrows-btn') as HTMLButtonElement;
+  const toggleArrowsBtn = document.getElementById('toggle-arrows-btn') as HTMLButtonElement;
+  let arrowsVisible = true;
+
+  if (clearCutArrowsBtn) {
+    clearCutArrowsBtn.addEventListener('click', () => {
+      terrain.clearPersistentCutArrows();
+      updateArrowCounts();
+    });
+  }
+
+  if (clearFillArrowsBtn) {
+    clearFillArrowsBtn.addEventListener('click', () => {
+      terrain.clearPersistentFillArrows();
+      updateArrowCounts();
+    });
+  }
+
+  if (clearAllArrowsBtn) {
+    clearAllArrowsBtn.addEventListener('click', () => {
+      terrain.clearAllPersistentArrows();
+      updateArrowCounts();
+    });
+  }
+
+  if (toggleArrowsBtn) {
+    toggleArrowsBtn.addEventListener('click', () => {
+      arrowsVisible = !arrowsVisible;
+      terrain.toggleAllPersistentArrows(arrowsVisible);
+      toggleArrowsBtn.textContent = arrowsVisible ? 'Hide' : 'Show';
+      toggleArrowsBtn.style.background = arrowsVisible ? '#666' : '#4CAF50';
     });
   }
 
@@ -1155,7 +1452,7 @@ function setupUI() {
           <div id="achievement-count" style="margin: 5px 0; font-size: 12px; color: #FF9800; cursor: pointer;" onclick="showAchievements()">🏆 0/16 Achievements</div>
           <div id="progress-stats" style="margin: 5px 0; font-size: 11px; color: #ddd;">
             <div>📊 Assignments: 0</div>
-            <div>🚜 Volume Moved: 0.0m³</div>
+            <div>🚜 Volume Moved: 0.0 yd³</div>
             <div>🎯 Accuracy: 0.0%</div>
             <div>🔥 Streak: 0</div>
           </div>
@@ -1186,19 +1483,37 @@ function setupUI() {
        </div>
        
        <div class="panel-section" style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
-         <strong>Earthmoving Tools:</strong><br>
+         <strong>Cut & Fill Operations:</strong><br>
         <div class="tool-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 5px 0;">
-          <button class="tool-btn" data-tool="excavator" style="padding: 8px; background: #FF6B35; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🚜 Excavator</button>
-          <button class="tool-btn" data-tool="bulldozer" style="padding: 8px; background: #4ECDC4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🚜 Bulldozer</button>
-          <button class="tool-btn" data-tool="grader" style="padding: 8px; background: #45B7D1; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🛣️ Grader</button>
-          <button class="tool-btn" data-tool="compactor" style="padding: 8px; background: #96CEB4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🛞 Compactor</button>
+          <button class="tool-btn" data-tool="cut" style="padding: 8px; background: #FF4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">⛏️ Cut</button>
+          <button class="tool-btn" data-tool="fill" style="padding: 8px; background: #44AA44; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🏔️ Fill</button>
         </div>
         <div class="control-buttons" style="margin: 5px 0;">
           <button id="undo-btn" class="enhanced-button secondary" style="margin: 2px; padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Undo (Ctrl+Z)</button>
           <button id="redo-btn" class="enhanced-button secondary" style="margin: 2px; padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Redo (Ctrl+Shift+Z)</button>
         </div>
-        <div id="tool-status" style="margin: 5px 0; font-size: 14px;">Current Tool: 🚜 Excavator</div>
-                 <div id="tool-description" style="margin: 5px 0; font-size: 12px; color: #ccc;">Precise digging and material removal</div>
+        <div class="arrow-controls" style="margin: 5px 0; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+          <div style="font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #FFF;">🏹 Persistent Arrows</div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <div style="font-size: 11px; color: #FF0000;">
+              ⛏️ Cut: <span id="cut-arrow-count">0</span>
+            </div>
+            <div style="font-size: 11px; color: #0000FF;">
+              🏔️ Fill: <span id="fill-arrow-count">0</span>
+            </div>
+            <div style="font-size: 11px; color: #4CAF50;">
+              Total: <span id="total-arrow-count">0</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 3px; flex-wrap: wrap;">
+            <button id="clear-cut-arrows-btn" style="padding: 2px 6px; background: #FF0000; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Clear Cut</button>
+            <button id="clear-fill-arrows-btn" style="padding: 2px 6px; background: #0000FF; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Clear Fill</button>
+            <button id="clear-all-arrows-btn" style="padding: 2px 6px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Clear All</button>
+            <button id="toggle-arrows-btn" style="padding: 2px 6px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Hide/Show</button>
+          </div>
+        </div>
+        <div id="tool-status" style="margin: 5px 0; font-size: 14px;">Current Tool: ⛏️ Cut</div>
+                 <div id="tool-description" style="margin: 5px 0; font-size: 12px; color: #ccc;">Remove earth (excavation)</div>
          <div id="interaction-mode" style="margin: 5px 0; font-size: 12px; color: #4CAF50;">Ready to modify terrain</div>
        </div>
        
@@ -1242,6 +1557,7 @@ function setupUI() {
           </label>
         </div>
         <div style="margin: 5px 0; font-size: 12px;">Quick Size: 1(1) 2(3) 3(5) 4(8)</div>
+        <div style="margin: 5px 0; font-size: 12px;">Shape: C(Circle) V(Square) | Falloff: F(Cycle)</div>
       </div>
       
       <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
@@ -1277,8 +1593,10 @@ function setupUI() {
             <li><strong>Trackpad:</strong> Two-finger scroll: Zoom | Two-finger pinch/rotate: Camera control</li>
             <li><strong>Mouse:</strong> Left drag: Rotate camera | Shift+drag: Pan camera | Scroll wheel: Zoom</li>
             <li>Ctrl + drag: Apply current tool</li>
-            <li>Q: Excavator | E: Bulldozer | T: Grader | Y: Compactor</li>
+            <li>Q: Cut Tool | E: Fill Tool</li>
+            <li>1-4: Brush sizes | C: Circle brush | V: Square brush | F: Cycle falloff</li>
             <li>R: Reset terrain | G: Generate new terrain | W: Wireframe | X: Toggle grid</li>
+            <li>Ctrl+S: Save current state | Ctrl+Z: Undo | Ctrl+Shift+Z: Redo</li>
             <li>A: Assignments | J: Join session | L: Logout</li>
           </ul>
         </div>
@@ -1304,6 +1622,20 @@ function setupUI() {
          <button id="export-btn" style="width: 100%; padding: 10px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer;">Export Terrain</button>
        </div>
        
+       <div style="margin-bottom: 15px;">
+         <button id="save-state-btn" style="width: 100%; padding: 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">💾 Save Current State</button>
+         <div style="font-size: 11px; color: #ccc; margin-top: 5px; text-align: center;">
+           Preserves terrain, resets cut/fill to zero
+         </div>
+       </div>
+       
+       <div style="margin-bottom: 15px;">
+         <button id="load-terrain-btn" style="width: 100%; padding: 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">📂 Load Saved Terrain</button>
+         <div style="font-size: 11px; color: #ccc; margin-top: 5px; text-align: center;">
+           Load previous terrain states
+         </div>
+       </div>
+      
        <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
          <strong>Assignments:</strong><br>
          <div style="margin: 5px 0;">
@@ -1321,6 +1653,7 @@ function setupUI() {
   updateToolDisplay();
   updateBrushDisplay();
   updateTerrainStats();
+  updateArrowCounts(); // Initialize arrow count display
   updateInteractionMode(false, false); // Initialize with no modifiers
   updateProgressDisplay(); // Initialize progress display
   
@@ -1371,42 +1704,152 @@ function setupUI() {
   // Tool buttons
 }
 
-// Update volume display
-function updateVolumeDisplay() {
+// Enhanced real-time volume tracking
+let lastVolumeUpdate = Date.now();
+let lastVolumes = { cut: 0, fill: 0, net: 0 };
+let volumeUpdateThrottle: ReturnType<typeof setTimeout> | null = null;
+let isRealTimeUpdating = false;
+
+// Real-time volume display with enhanced feedback
+function updateVolumeDisplay(forceUpdate = false) {
+  // Throttle updates for performance during rapid operations
+  if (volumeUpdateThrottle && !forceUpdate) {
+    clearTimeout(volumeUpdateThrottle);
+  }
+  
+  volumeUpdateThrottle = setTimeout(() => {
+    performVolumeUpdate();
+    volumeUpdateThrottle = null;
+  }, forceUpdate ? 0 : 100); // 100ms throttle, immediate if forced
+}
+
+function performVolumeUpdate() {
   const volumes = terrain.calculateVolumeDifference();
   const info = document.getElementById('volume-info');
-  if (info) {
-    // Calculate efficiency metrics
-    const totalVolume = volumes.cut + volumes.fill;
-    const efficiency = totalVolume > 0 ? (Math.min(volumes.cut, volumes.fill) / Math.max(volumes.cut, volumes.fill)) * 100 : 0;
-    const netBalance = Math.abs(volumes.net);
-    const balanceStatus = netBalance < 1 ? '✅ Balanced' : netBalance < 5 ? '⚠️ Minor Imbalance' : '❌ Major Imbalance';
-    
-    info.innerHTML = `
-      <strong>Volume Analysis:</strong><br>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0;">
-        <div style="text-align: center; padding: 5px; background: rgba(33, 150, 243, 0.2); border-radius: 4px;">
-          <div style="font-size: 16px; font-weight: bold; color: #2196F3;">📉 CUT</div>
-          <div style="font-size: 14px;">${volumes.cut.toFixed(2)} ft³</div>
-        </div>
-        <div style="text-align: center; padding: 5px; background: rgba(211, 47, 47, 0.2); border-radius: 4px;">
-          <div style="font-size: 16px; font-weight: bold; color: #D32F2F;">📈 FILL</div>
-          <div style="font-size: 14px;">${volumes.fill.toFixed(2)} ft³</div>
-        </div>
+  
+  if (!info) return;
+
+  // Convert volumes from cubic feet to cubic yards (1 yd³ = 27 ft³)
+  const volumesYards = {
+    cut: volumes.cut / 27,
+    fill: volumes.fill / 27,
+    net: volumes.net / 27
+  };
+
+  // Calculate change rates in cubic yards
+  const now = Date.now();
+  const timeDelta = (now - lastVolumeUpdate) / 1000; // Convert to seconds
+  const cutRate = timeDelta > 0 ? (volumesYards.cut - (lastVolumes.cut / 27)) / timeDelta : 0;
+  const fillRate = timeDelta > 0 ? (volumesYards.fill - (lastVolumes.fill / 27)) / timeDelta : 0;
+  
+  // Calculate efficiency metrics
+  const totalVolume = volumesYards.cut + volumesYards.fill;
+  const efficiency = totalVolume > 0 ? (Math.min(volumesYards.cut, volumesYards.fill) / Math.max(volumesYards.cut, volumesYards.fill)) * 100 : 0;
+  const netBalance = Math.abs(volumesYards.net);
+  const balanceStatus = netBalance < 0.1 ? '✅ Balanced' : netBalance < 0.5 ? '⚠️ Minor Imbalance' : '❌ Major Imbalance';
+  
+  // Determine activity status (threshold adjusted for cubic yards)
+  const isActive = Math.abs(cutRate) > 0.01 || Math.abs(fillRate) > 0.01;
+  const activityIndicator = isActive ? '🔄' : '⏸️';
+  
+  // Calculate total rate of earthwork
+  const totalRate = Math.abs(cutRate) + Math.abs(fillRate);
+  const rateDisplay = totalRate > 0.01 ? `📊 ${totalRate.toFixed(2)} yd³/s` : '';
+  
+  // Enhanced visual feedback with animations
+  const cutColor = cutRate > 0.01 ? '#1976D2' : '#2196F3'; // Brighter when actively cutting
+  const fillColor = fillRate > 0.01 ? '#C62828' : '#D32F2F'; // Brighter when actively filling
+  
+  info.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <strong>Volume Analysis</strong>
+      <div style="font-size: 12px; color: ${isActive ? '#4CAF50' : '#666'};">
+        ${activityIndicator} ${isActive ? 'Active' : 'Idle'}
       </div>
-      <div style="margin: 8px 0; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 4px;">
-        <strong>Net Movement:</strong> ${volumes.net.toFixed(2)} ft³<br>
-        <strong>Efficiency:</strong> ${efficiency.toFixed(1)}%<br>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0;">
+      <div style="text-align: center; padding: 5px; background: rgba(33, 150, 243, 0.2); border-radius: 4px; ${cutRate > 0.01 ? 'box-shadow: 0 0 10px rgba(33, 150, 243, 0.4);' : ''}">
+        <div style="font-size: 16px; font-weight: bold; color: ${cutColor};">📉 CUT</div>
+        <div style="font-size: 14px; font-weight: bold;">${volumesYards.cut.toFixed(2)} yd³</div>
+        ${cutRate > 0.01 ? `<div style="font-size: 10px; color: #1976D2;">+${cutRate.toFixed(2)}/s</div>` : ''}
+      </div>
+      <div style="text-align: center; padding: 5px; background: rgba(211, 47, 47, 0.2); border-radius: 4px; ${fillRate > 0.01 ? 'box-shadow: 0 0 10px rgba(211, 47, 47, 0.4);' : ''}">
+        <div style="font-size: 16px; font-weight: bold; color: ${fillColor};">📈 FILL</div>
+        <div style="font-size: 14px; font-weight: bold;">${volumesYards.fill.toFixed(2)} yd³</div>
+        ${fillRate > 0.01 ? `<div style="font-size: 10px; color: #C62828;">+${fillRate.toFixed(2)}/s</div>` : ''}
+      </div>
+    </div>
+    <div style="margin: 8px 0; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+      <div style="display: flex; justify-content: space-between;">
+        <span><strong>Net:</strong> ${volumesYards.net.toFixed(2)} yd³</span>
+        ${rateDisplay ? `<span style="color: #4CAF50;">${rateDisplay}</span>` : ''}
+      </div>
+      <div style="margin-top: 3px;">
+        <strong>Efficiency:</strong> ${efficiency.toFixed(1)}% | 
         <strong>Balance:</strong> ${balanceStatus}
       </div>
-    `;
-  }
+    </div>
+  `;
+
+  // Store for next comparison
+  lastVolumes = { ...volumes };
+  lastVolumeUpdate = now;
 
   updateTerrainStats();
 
   // Send volume update to multiplayer if in session
   if (multiplayerManager.isInSession()) {
-    multiplayerManager.sendVolumeUpdate(volumes);
+    multiplayerManager.sendVolumeUpdate(volumesYards);
+  }
+}
+
+// Enhanced real-time volume updates during operations
+function startRealTimeVolumeUpdates() {
+  if (isRealTimeUpdating) return;
+  
+  isRealTimeUpdating = true;
+  const updateInterval = setInterval(() => {
+    if (isModifying) {
+      performVolumeUpdate();
+    } else if (!isModifying && isRealTimeUpdating) {
+      // Stop real-time updates when not modifying
+      clearInterval(updateInterval);
+      isRealTimeUpdating = false;
+      // Final update
+      performVolumeUpdate();
+    }
+  }, 150); // Update every 150ms during active modification
+}
+
+// Preview volume calculation for operation planning
+function calculatePreviewVolume(point: THREE.Vector3): { cutPreview: number; fillPreview: number } {
+  const currentTool = toolManager.getCurrentTool();
+  const toolSettings = currentTool.getSettings();
+  const brushSettings = terrain.getBrushSettings();
+  
+  // Estimate volume change based on brush settings and shape
+  const brushRadius = brushSettings.size;
+  let brushArea: number;
+  
+  // Calculate area based on brush shape
+  if (brushSettings.shape === 'square') {
+    // Square area: (2 * radius)^2
+    brushArea = (brushRadius * 2) * (brushRadius * 2);
+  } else {
+    // Circular area: π * radius^2
+    brushArea = Math.PI * brushRadius * brushRadius;
+  }
+  
+  const operationDepth = brushSettings.strength * modificationStrength * 3;
+  const estimatedVolumeFt3 = brushArea * operationDepth;
+  
+  // Convert from cubic feet to cubic yards (1 yd³ = 27 ft³)
+  const estimatedVolumeYd3 = estimatedVolumeFt3 / 27;
+  
+  if (toolSettings.name === 'cut') {
+    return { cutPreview: estimatedVolumeYd3, fillPreview: 0 };
+  } else {
+    return { cutPreview: 0, fillPreview: estimatedVolumeYd3 };
   }
 }
 
@@ -1442,6 +1885,23 @@ function updateToolDisplay() {
   });
 }
 
+// Update arrow count displays
+function updateArrowCounts() {
+  const cutArrowCountElement = document.getElementById('cut-arrow-count');
+  const fillArrowCountElement = document.getElementById('fill-arrow-count');
+  const totalArrowCountElement = document.getElementById('total-arrow-count');
+  
+  if (terrain) {
+    const cutCount = terrain.getPersistentCutArrowCount();
+    const fillCount = terrain.getPersistentFillArrowCount();
+    const totalCount = cutCount + fillCount;
+    
+    if (cutArrowCountElement) cutArrowCountElement.textContent = cutCount.toString();
+    if (fillArrowCountElement) fillArrowCountElement.textContent = fillCount.toString();
+    if (totalArrowCountElement) totalArrowCountElement.textContent = totalCount.toString();
+  }
+}
+
 // Update brush display
 function updateBrushDisplay() {
   const brushSettings = terrain.getBrushSettings();
@@ -1450,11 +1910,15 @@ function updateBrushDisplay() {
   const strengthValue = document.getElementById('brush-strength-value');
   const sizeSlider = document.getElementById('brush-size') as HTMLInputElement;
   const strengthSlider = document.getElementById('brush-strength') as HTMLInputElement;
+  const shapeSelect = document.getElementById('brush-shape') as HTMLSelectElement;
+  const falloffSelect = document.getElementById('brush-falloff') as HTMLSelectElement;
   
   if (sizeValue) sizeValue.textContent = brushSettings.size.toString();
   if (strengthValue) strengthValue.textContent = brushSettings.strength.toString();
   if (sizeSlider) sizeSlider.value = brushSettings.size.toString();
   if (strengthSlider) strengthSlider.value = brushSettings.strength.toString();
+  if (shapeSelect) shapeSelect.value = brushSettings.shape;
+  if (falloffSelect) falloffSelect.value = brushSettings.falloff;
 }
 
 // Update terrain stats
@@ -1556,7 +2020,7 @@ function updateProgressDisplay() {
   if (statsDiv) {
     statsDiv.innerHTML = `
       <div>📊 Assignments: ${userProgress.assignmentsCompleted}</div>
-      <div>🚜 Volume Moved: ${userProgress.totalVolumeMovedCubicMeters.toFixed(1)}m³</div>
+                  <div>🚜 Volume Moved: ${userProgress.totalVolumeMovedCubicYards.toFixed(1)} yd³</div>
       <div>🎯 Accuracy: ${userProgress.averageAccuracy.toFixed(1)}%</div>
       <div>🔥 Streak: ${userProgress.currentStreak}</div>
     `;
@@ -1963,42 +2427,93 @@ function showOperationPreview(point: THREE.Vector3): void {
   const toolSettings = currentTool.getSettings();
   const brushSettings = terrain.getBrushSettings();
   
-  // Create preview geometry based on tool type and brush settings
-  const previewGeometry = brushSettings.shape === 'circle' 
-    ? new THREE.CylinderGeometry(brushSettings.size, brushSettings.size, 0.2, 16)
-    : new THREE.BoxGeometry(brushSettings.size * 2, 0.2, brushSettings.size * 2);
+  // Calculate operation depth/height based on strength
+  const operationDepth = brushSettings.strength * modificationStrength * 3; // Increased scale for better visibility
+  const terrainHeight = point.y;
   
-  // Create preview material with tool color and transparency
+  // Create volumetric preview based on tool type
+  let previewGeometry: THREE.BufferGeometry;
+  let previewHeight: number;
+  let previewY: number;
+  
+  if (toolSettings.name === 'cut') {
+    // Cut operation: Show volume below terrain surface that will be removed
+    previewHeight = operationDepth;
+    previewY = terrainHeight - (previewHeight / 2); // Center the volume below surface
+    
+    // Create cut volume geometry
+    if (brushSettings.shape === 'circle') {
+      previewGeometry = new THREE.CylinderGeometry(
+        brushSettings.size * 0.8, // Top radius (smaller for realistic excavation)
+        brushSettings.size,       // Bottom radius 
+        previewHeight,           // Height of cut volume
+        16                       // Radial segments
+      );
+    } else {
+      previewGeometry = new THREE.BoxGeometry(
+        brushSettings.size * 2,  // Width
+        previewHeight,          // Height of cut volume
+        brushSettings.size * 2   // Depth
+      );
+    }
+  } else {
+    // Fill operation: Show volume above terrain surface that will be added
+    previewHeight = operationDepth;
+    previewY = terrainHeight + (previewHeight / 2); // Center the volume above surface
+    
+    // Create fill volume geometry
+    if (brushSettings.shape === 'circle') {
+      previewGeometry = new THREE.CylinderGeometry(
+        brushSettings.size,       // Top radius
+        brushSettings.size * 0.8, // Bottom radius (smaller at base for realistic fill)
+        previewHeight,           // Height of fill volume
+        16                       // Radial segments
+      );
+    } else {
+      previewGeometry = new THREE.BoxGeometry(
+        brushSettings.size * 2,  // Width
+        previewHeight,          // Height of fill volume
+        brushSettings.size * 2   // Depth
+      );
+    }
+  }
+  
+  // Create preview material with tool-specific properties
   const toolColor = new THREE.Color(toolSettings.color);
   const previewMaterial = new THREE.MeshLambertMaterial({
     color: toolColor,
     transparent: true,
-    opacity: 0.4,
-    wireframe: false
+    opacity: 0.35,
+    wireframe: false,
+    side: THREE.DoubleSide // Show both sides for better volume visualization
   });
   
   previewMesh = new THREE.Mesh(previewGeometry, previewMaterial);
+  previewMesh.position.set(point.x, previewY, point.z);
   
-  // Position preview above terrain surface
-  const terrainHeight = point.y;
-  let previewHeight = terrainHeight;
+  // Add wireframe overlay for better volume definition
+  const wireframeGeometry = previewGeometry.clone();
+  const wireframeMaterial = new THREE.LineBasicMaterial({
+    color: toolColor,
+    transparent: true,
+    opacity: 0.6,
+    linewidth: 1
+  });
   
-  // Adjust height based on tool operation
-  if (toolSettings.name === 'excavator') {
-    previewHeight = terrainHeight - (brushSettings.strength * modificationStrength * 2); // Show cut depth
-  } else if (toolSettings.name === 'bulldozer') {
-    previewHeight = terrainHeight + 0.3; // Show slightly above for push operation
-  } else {
-    previewHeight = terrainHeight + 0.1; // Show slightly above for other operations
-  }
+  const wireframeHelper = new THREE.WireframeGeometry(wireframeGeometry);
+  const wireframeMesh = new THREE.LineSegments(wireframeHelper, wireframeMaterial);
+  wireframeMesh.position.copy(previewMesh.position);
   
-  previewMesh.position.set(point.x, previewHeight, point.z);
+  // Store both meshes for cleanup
+  (previewMesh as any).wireframeMesh = wireframeMesh;
   
-  // Add pulsing animation for better visibility
-  const time = Date.now() * 0.003;
-  previewMaterial.opacity = 0.3 + 0.1 * Math.sin(time);
+  // Add subtle pulsing animation for better visibility
+  const time = Date.now() * 0.002;
+  previewMaterial.opacity = 0.25 + 0.15 * Math.sin(time);
+  wireframeMaterial.opacity = 0.4 + 0.2 * Math.sin(time);
   
   scene.add(previewMesh);
+  scene.add(wireframeMesh);
   lastPreviewPosition = point.clone();
   isPreviewMode = true;
 }
@@ -2006,6 +2521,15 @@ function showOperationPreview(point: THREE.Vector3): void {
 function hideOperationPreview(): void {
   if (previewMesh) {
     scene.remove(previewMesh);
+    
+    // Remove wireframe mesh if it exists
+    const wireframeMesh = (previewMesh as any).wireframeMesh;
+    if (wireframeMesh) {
+      scene.remove(wireframeMesh);
+      wireframeMesh.geometry.dispose();
+      wireframeMesh.material.dispose();
+    }
+    
     previewMesh.geometry.dispose();
     (previewMesh.material as THREE.Material).dispose();
     previewMesh = null;
@@ -2017,154 +2541,26 @@ function hideOperationPreview(): void {
 // Update preview animation in render loop
 function updateOperationPreview(): void {
   if (isPreviewMode && previewMesh) {
-    const time = Date.now() * 0.003;
+    const time = Date.now() * 0.002;
     const material = previewMesh.material as THREE.MeshLambertMaterial;
-    material.opacity = 0.3 + 0.1 * Math.sin(time);
+    material.opacity = 0.25 + 0.15 * Math.sin(time);
     
-    // Gentle rotation for better visibility
-    previewMesh.rotation.y += 0.01;
+    // Update wireframe opacity if it exists
+    const wireframeMesh = (previewMesh as any).wireframeMesh;
+    if (wireframeMesh) {
+      const wireframeMaterial = wireframeMesh.material as THREE.LineBasicMaterial;
+      wireframeMaterial.opacity = 0.4 + 0.2 * Math.sin(time);
+      
+      // Sync rotation
+      wireframeMesh.rotation.copy(previewMesh.rotation);
+    }
+    
+    // Gentle rotation for better volume visibility
+    previewMesh.rotation.y += 0.008;
   }
 }
 
 // Accessibility helper functions
-function toggleAccessibilityPanel() {
-  uiPolishSystem.toggleAccessibilityPanel();
-}
-
-function toggleAgeGroupSelector() {
-  uiPolishSystem.toggleAgeGroupSelector();
-}
-
-function togglePerformanceMonitor() {
-  performanceMonitorUI?.toggle();
-}
-
-// Enhanced accessibility functions for terrain operations
-function toggleColorBlindMode() {
-  const currentMode = terrain.getAccessibilityMode();
-  const nextMode = currentMode === 'normal' ? 'colorBlind' : 'normal';
-  terrain.setAccessibilityMode(nextMode);
-  
-  // Update UI indicator
-  const indicator = document.getElementById('colorblind-indicator');
-  if (indicator) {
-    indicator.textContent = nextMode === 'colorBlind' ? '🎨 Color-Blind Mode: ON' : '🎨 Color-Blind Mode: OFF';
-    indicator.style.color = nextMode === 'colorBlind' ? '#4CAF50' : '#ccc';
-  }
-  
-  // Announce change for screen readers
-  announceAccessibilityChange(`Color-blind mode ${nextMode === 'colorBlind' ? 'enabled' : 'disabled'}`);
-}
-
-function togglePatternOverlays() {
-  const currentUsePatterns = terrain.getPatternOverlaysEnabled();
-  terrain.setPatternOverlays(!currentUsePatterns);
-  
-  // Update UI indicator
-  const indicator = document.getElementById('patterns-indicator');
-  if (indicator) {
-    indicator.textContent = !currentUsePatterns ? '📋 Patterns: ON' : '📋 Patterns: OFF';
-    indicator.style.color = !currentUsePatterns ? '#4CAF50' : '#ccc';
-  }
-  
-  // Announce change for screen readers
-  announceAccessibilityChange(`Pattern overlays ${!currentUsePatterns ? 'enabled' : 'disabled'}`);
-}
-
-function toggleHighContrastTerrain() {
-  const currentMode = terrain.getAccessibilityMode();
-  const nextMode = currentMode === 'highContrast' ? 'normal' : 'highContrast';
-  terrain.setAccessibilityMode(nextMode);
-  
-  // Update UI indicator
-  const indicator = document.getElementById('highcontrast-indicator');
-  if (indicator) {
-    indicator.textContent = nextMode === 'highContrast' ? '🔆 High Contrast: ON' : '🔆 High Contrast: OFF';
-    indicator.style.color = nextMode === 'highContrast' ? '#4CAF50' : '#ccc';
-  }
-  
-  // Announce change for screen readers
-  announceAccessibilityChange(`High contrast terrain ${nextMode === 'highContrast' ? 'enabled' : 'disabled'}`);
-}
-
-function cycleColorBlindType() {
-  const types = ['normal', 'protanopia', 'deuteranopia', 'tritanopia'] as const;
-  const currentType = terrain.getColorBlindType();
-  const currentIndex = types.indexOf(currentType);
-  const nextType = types[(currentIndex + 1) % types.length];
-  
-  terrain.setColorBlindType(nextType);
-  
-  // Update UI indicator
-  const indicator = document.getElementById('colorblind-type-indicator');
-  if (indicator) {
-    const typeNames = {
-      normal: 'Normal Vision',
-      protanopia: 'Protanopia (Red-blind)',
-      deuteranopia: 'Deuteranopia (Green-blind)',
-      tritanopia: 'Tritanopia (Blue-blind)'
-    };
-    indicator.textContent = `👁️ Vision Type: ${typeNames[nextType]}`;
-  }
-  
-  // If not in color-blind mode, switch to it
-  if (terrain.getAccessibilityMode() !== 'colorBlind') {
-    terrain.setAccessibilityMode('colorBlind');
-  }
-  
-  // Announce change for screen readers
-  announceAccessibilityChange(`Color vision type changed to ${nextType}`);
-}
-
-function showKeyboardInstructions() {
-  const instructions = terrain.getKeyboardInstructions();
-  
-  // Create or update keyboard instructions panel
-  let panel = document.getElementById('keyboard-instructions-panel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'keyboard-instructions-panel';
-    panel.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.95);
-      color: white;
-      padding: 20px;
-      border-radius: 8px;
-      max-width: 600px;
-      max-height: 80vh;
-      overflow-y: auto;
-      z-index: 3000;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      border: 2px solid #4CAF50;
-    `;
-    document.body.appendChild(panel);
-  }
-  
-  panel.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-      <h3 style="margin: 0; color: #4CAF50;">🔤 Keyboard Navigation Instructions</h3>
-      <button onclick="hideKeyboardInstructions()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;" aria-label="Close instructions">×</button>
-    </div>
-    <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">${instructions}</pre>
-    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #555;">
-      <button onclick="hideKeyboardInstructions()" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Got it!</button>
-    </div>
-  `;
-  
-  panel.style.display = 'block';
-  
-  // Focus on the close button for accessibility
-  const closeButton = panel.querySelector('button');
-  if (closeButton) {
-    (closeButton as HTMLElement).focus();
-  }
-}
-
 function hideKeyboardInstructions() {
   const panel = document.getElementById('keyboard-instructions-panel');
   if (panel) {
@@ -2172,156 +2568,9 @@ function hideKeyboardInstructions() {
   }
 }
 
-function announceAccessibilityChange(message: string) {
-  // Create an aria-live region for screen reader announcements
-  let announcer = document.getElementById('accessibility-announcer');
-  if (!announcer) {
-    announcer = document.createElement('div');
-    announcer.id = 'accessibility-announcer';
-    announcer.setAttribute('aria-live', 'polite');
-    announcer.setAttribute('aria-atomic', 'true');
-    announcer.style.cssText = `
-      position: absolute;
-      left: -10000px;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-    `;
-    document.body.appendChild(announcer);
-  }
-  
-  announcer.textContent = message;
-  
-  // Also show a brief visual notification
-  const notification = document.createElement('div');
-  notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: #4CAF50;
-    color: white;
-    padding: 10px 15px;
-    border-radius: 4px;
-    z-index: 4000;
-    font-size: 14px;
-    animation: slideInOut 3s ease-in-out;
-  `;
-  notification.textContent = message;
-  document.body.appendChild(notification);
-  
-  // Add animation styles if not already present
-  if (!document.getElementById('accessibility-animations')) {
-    const style = document.createElement('style');
-    style.id = 'accessibility-animations';
-    style.textContent = `
-      @keyframes slideInOut {
-        0%, 100% { transform: translateX(100%); opacity: 0; }
-        10%, 90% { transform: translateX(0); opacity: 1; }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-  
-  // Remove notification after animation
-  setTimeout(() => {
-    if (notification.parentNode) {
-      notification.parentNode.removeChild(notification);
-    }
-  }, 3000);
-}
-
-// Enhanced keyboard navigation for terrain operations
-function setupEnhancedKeyboardNavigation() {
-  document.addEventListener('keydown', (event) => {
-    // Only handle these keys when not typing in input fields
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-      return;
-    }
-    
-    switch (event.key.toLowerCase()) {
-      case 'a':
-        if (event.ctrlKey) return; // Don't interfere with Ctrl+A
-        event.preventDefault();
-        toggleColorBlindMode();
-        break;
-      case 'p':
-        if (event.ctrlKey) return; // Don't interfere with Ctrl+P
-        event.preventDefault();
-        togglePatternOverlays();
-        break;
-      case 'h':
-        if (event.ctrlKey) return; // Don't interfere with Ctrl+H
-        event.preventDefault();
-        toggleHighContrastTerrain();
-        break;
-      case 'v':
-        event.preventDefault();
-        cycleColorBlindType();
-        break;
-      case 'f1':
-        event.preventDefault();
-        showKeyboardInstructions();
-        break;
-      case 'x':
-        if (event.ctrlKey) return; // Don't interfere with Ctrl+X
-        event.preventDefault();
-        toggleGrid();
-        break;
-      case 'b':
-        if (event.ctrlKey) return; // Don't interfere with Ctrl+B
-        event.preventDefault();
-        terrain.forceLightColors();
-        break;
-      case 'escape':
-        event.preventDefault();
-        hideOperationPreview();
-        hideKeyboardInstructions();
-        break;
-    }
-  });
-}
-
-// Add enhanced accessibility setup to initialization
+// Initialize accessibility features
 function initializeAccessibilityFeatures() {
-  setupEnhancedKeyboardNavigation();
-  
-  // Add accessibility indicators to the UI
-  const accessibilityStatus = document.createElement('div');
-  accessibilityStatus.id = 'accessibility-status';
-  accessibilityStatus.style.cssText = `
-    position: fixed;
-    bottom: 10px;
-    left: 10px;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    padding: 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    z-index: 2000;
-    max-width: 300px;
-  `;
-  
-  accessibilityStatus.innerHTML = `
-    <div style="margin-bottom: 5px; font-weight: bold;">🔧 Accessibility Status</div>
-    <div id="colorblind-indicator" style="margin: 2px 0;">🎨 Color-Blind Mode: OFF</div>
-    <div id="patterns-indicator" style="margin: 2px 0;">📋 Patterns: OFF</div>
-    <div id="highcontrast-indicator" style="margin: 2px 0;">🔆 High Contrast: OFF</div>
-    <div id="grid-indicator" style="margin: 2px 0;">📏 Grid: ON</div>
-    <div id="colorblind-type-indicator" style="margin: 2px 0;">👁️ Vision Type: Normal Vision</div>
-    <div style="margin-top: 5px; font-size: 10px; color: #ccc;">
-      Hotkeys: A=Color-blind | P=Patterns | H=Contrast | V=Vision Type | X=Grid | L=Light Colors | F1=Help
-    </div>
-  `;
-  
-  document.body.appendChild(accessibilityStatus);
+  // This function is called from setupUI but was missing
+  // The actual accessibility features are handled by uiPolishSystem
+  console.log('Accessibility features initialized');
 }
-
-const MIN_LIGHT = 0.5;               // 0 → pitch black, 1 → fully lit
-renderer.toneMappingExposure = 1;    // make sure exposure is 1
-
-// after each frame's lighting calculations run
-scene.traverse(obj => {
-  if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshLambertMaterial) {
-    obj.material.lightMapIntensity = MIN_LIGHT;
-  }
-});

@@ -93,7 +93,7 @@ export class AssignmentManager {
           {
             id: 'volume_efficiency',
             type: 'volume_target',
-            description: 'Minimize material waste (net movement < 50 cubic meters)',
+            description: 'Minimize material waste (net movement < 50 cubic yards)',
             target: { maxNetMovement: 50 },
             tolerance: 0.1,
             weight: 0.2,
@@ -106,11 +106,11 @@ export class AssignmentManager {
           height: 50,
           initialTerrain: 'rolling'
         },
-        tools: ['excavator', 'bulldozer', 'grader', 'compactor'],
+        tools: ['cut', 'fill'],
         hints: [
-          'Use the excavator to remove high spots first',
-          'The grader is perfect for final leveling',
-          'Compactor helps achieve stable foundation'
+          'Use the cut tool to remove high spots',
+          'Use the fill tool to build up low areas',
+          'Balance cut and fill volumes for efficiency'
         ],
         successCriteria: {
           minimumScore: 70,
@@ -158,11 +158,11 @@ export class AssignmentManager {
           height: 40,
           initialTerrain: 'rough'
         },
-        tools: ['excavator', 'bulldozer', 'grader'],
+        tools: ['cut', 'fill'],
         hints: [
-          'Start excavation at the high end',
+          'Start cutting at the high end',
           'Maintain consistent slope throughout',
-          'Use bulldozer to shape side slopes'
+          'Use fill tool to shape side slopes'
         ],
         successCriteria: {
           minimumScore: 75,
@@ -214,7 +214,7 @@ export class AssignmentManager {
           height: 30,
           initialTerrain: 'rolling'
         },
-        tools: ['bulldozer', 'grader'],
+        tools: ['cut', 'fill'],
         hints: [
           'Plan cut/fill sections to balance volumes',
           'Use grader for precise crown formation',
@@ -280,7 +280,7 @@ export class AssignmentManager {
           height: 80,
           initialTerrain: 'rough'
         },
-        tools: ['excavator', 'bulldozer', 'grader', 'compactor'],
+        tools: ['cut', 'fill'],
         hints: [
           'Plan the overall site layout first',
           'Establish benchmark elevations',
@@ -346,7 +346,7 @@ export class AssignmentManager {
           height: 100,
           initialTerrain: 'custom'
         },
-        tools: ['excavator', 'bulldozer', 'grader', 'compactor'],
+        tools: ['cut', 'fill'],
         hints: [
           'Plan your approach carefully',
           'Use the right tool for each task',
@@ -395,7 +395,7 @@ export class AssignmentManager {
         height: 50,
         initialTerrain: 'rolling'
       },
-      tools: ['excavator', 'bulldozer', 'grader', 'compactor'],
+      tools: ['cut', 'fill'],
       hints: ['Complete the objectives within tolerance'],
       successCriteria: {
         minimumScore: 70,

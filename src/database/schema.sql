@@ -89,6 +89,26 @@ CREATE TABLE user_assignments (
     UNIQUE(user_id, assignment_id)
 );
 
+-- Create terrain_states table for storing complete terrain snapshots
+CREATE TABLE terrain_states (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    session_id UUID REFERENCES game_sessions(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    terrain_data JSONB NOT NULL,
+    volume_data JSONB DEFAULT '{}',
+    is_checkpoint BOOLEAN DEFAULT FALSE,
+    is_auto_save BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for terrain_states
+CREATE INDEX idx_terrain_states_user_id ON terrain_states(user_id);
+CREATE INDEX idx_terrain_states_session_id ON terrain_states(session_id);
+CREATE INDEX idx_terrain_states_created_at ON terrain_states(created_at);
+CREATE INDEX idx_terrain_states_auto_save ON terrain_states(is_auto_save) WHERE is_auto_save = true;
+
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -113,6 +133,45 @@ CREATE TRIGGER update_assignments_updated_at BEFORE UPDATE ON assignments
 
 CREATE TRIGGER update_user_assignments_updated_at BEFORE UPDATE ON user_assignments
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_terrain_states_updated_at BEFORE UPDATE ON terrain_states
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Enable Row Level Security on all tables
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_progress ENABLE ROW LEVEL SECURITY;
+ALTER TABLE game_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE terrain_modifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE session_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE terrain_states ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for terrain_states
+CREATE POLICY "Users can view their own terrain states" ON terrain_states
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own terrain states" ON terrain_states
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own terrain states" ON terrain_states
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own terrain states" ON terrain_states
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- RLS Policies for terrain_modifications
+CREATE POLICY "Users can view terrain modifications in their sessions" ON terrain_modifications
+    FOR SELECT USING (
+        auth.uid() = user_id OR
+        session_id IN (
+            SELECT session_id FROM session_participants 
+            WHERE user_id = auth.uid() AND is_active = true
+        )
+    );
+
+CREATE POLICY "Users can insert terrain modifications" ON terrain_modifications
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Create indexes for better performance
 CREATE INDEX idx_terrain_modifications_session_id ON terrain_modifications(session_id);

@@ -33,7 +33,7 @@ export interface UserProgress {
   currentXP: number;
   totalXP: number;
   assignmentsCompleted: number;
-  totalVolumeMovedCubicMeters: number;
+  totalVolumeMovedCubicYards: number;
   toolUsageStats: Record<string, number>;
   averageAccuracy: number;
   totalTimeSpentMinutes: number;
@@ -90,7 +90,7 @@ export class ProgressTracker {
       {
         id: 'first_dig',
         name: 'First Dig',
-        description: 'Move your first cubic meter of earth',
+        description: 'Move your first cubic yard of earth',
         icon: '🚜',
         condition: { type: 'volume_moved', threshold: 1 },
         xpReward: 50
@@ -98,7 +98,7 @@ export class ProgressTracker {
       {
         id: 'earth_mover',
         name: 'Earth Mover',
-        description: 'Move 100 cubic meters of earth',
+        description: 'Move 100 cubic yards of earth',
         icon: '🏔️',
         condition: { type: 'volume_moved', threshold: 100 },
         xpReward: 200
@@ -106,7 +106,7 @@ export class ProgressTracker {
       {
         id: 'mountain_mover',
         name: 'Mountain Mover',
-        description: 'Move 1000 cubic meters of earth',
+        description: 'Move 1000 cubic yards of earth',
         icon: '⛰️',
         condition: { type: 'volume_moved', threshold: 1000 },
         xpReward: 500
@@ -148,19 +148,19 @@ export class ProgressTracker {
         xpReward: 150
       },
       {
-        id: 'bulldozer_operator',
-        name: 'Bulldozer Operator',
-        description: 'Use the bulldozer 100 times',
-        icon: '🚜',
-        condition: { type: 'tool_usage', threshold: 100, toolType: 'bulldozer' },
+        id: 'cut_operator',
+        name: 'Cut Operator',
+        description: 'Use the cut tool 100 times',
+        icon: '⛏️',
+        condition: { type: 'tool_usage', threshold: 100, toolType: 'cut' },
         xpReward: 200
       },
       {
-        id: 'grader_master',
-        name: 'Grader Master',
-        description: 'Use the grader 75 times',
-        icon: '🛣️',
-        condition: { type: 'tool_usage', threshold: 75, toolType: 'grader' },
+        id: 'fill_master',
+        name: 'Fill Master',
+        description: 'Use the fill tool 75 times',
+        icon: '🏔️',
+        condition: { type: 'tool_usage', threshold: 75, toolType: 'fill' },
         xpReward: 250
       },
       {
@@ -341,7 +341,7 @@ export class ProgressTracker {
         currentXP: data.experience % this.getXPForLevel(data.level + 1),
         totalXP: data.experience,
         assignmentsCompleted: data.assignments_completed,
-        totalVolumeMovedCubicMeters: data.total_volume_moved,
+        totalVolumeMovedCubicYards: data.total_volume_moved,
         toolUsageStats: this.parseToolUsage(data.tool_usage_stats),
         averageAccuracy: this.calculateAverageAccuracy(data.accuracy_history),
         totalTimeSpentMinutes: data.total_time_spent_minutes || 0,
@@ -366,7 +366,7 @@ export class ProgressTracker {
       currentXP: 0,
       totalXP: 0,
       assignmentsCompleted: 0,
-      totalVolumeMovedCubicMeters: 0,
+              totalVolumeMovedCubicYards: 0,
       toolUsageStats: {},
       averageAccuracy: 0,
       totalTimeSpentMinutes: 0,
@@ -438,7 +438,7 @@ export class ProgressTracker {
           level: this.userProgress.level,
           experience: this.userProgress.totalXP,
           assignments_completed: this.userProgress.assignmentsCompleted,
-          total_volume_moved: this.userProgress.totalVolumeMovedCubicMeters,
+          total_volume_moved: this.userProgress.totalVolumeMovedCubicYards,
           tool_usage_stats: this.userProgress.toolUsageStats,
           current_streak: this.userProgress.currentStreak,
           longest_streak: this.userProgress.longestStreak,
@@ -514,13 +514,13 @@ export class ProgressTracker {
     this.saveUserProgress();
   }
 
-  public async recordVolumeMove(cubicMeters: number): Promise<void> {
+    public async recordVolumeMove(cubicYards: number): Promise<void> {
     if (!this.userProgress) return;
-
-    this.userProgress.totalVolumeMovedCubicMeters += cubicMeters;
     
-    // Award XP for volume moved (1 XP per cubic meter)
-    this.awardXP(Math.floor(cubicMeters), 'Moving terrain');
+    this.userProgress.totalVolumeMovedCubicYards += cubicYards;
+    
+    // Award XP for volume moved (1 XP per cubic yard)
+    this.awardXP(Math.floor(cubicYards), 'Moving terrain');
     
     // Debounced save will handle persistence
     this.saveUserProgress();
@@ -573,7 +573,7 @@ export class ProgressTracker {
 
     switch (achievement.condition.type) {
       case 'volume_moved':
-        return this.userProgress.totalVolumeMovedCubicMeters >= achievement.condition.threshold;
+        return this.userProgress.totalVolumeMovedCubicYards >= achievement.condition.threshold;
       
       case 'assignments_completed':
         return this.userProgress.assignmentsCompleted >= achievement.condition.threshold;
@@ -584,7 +584,7 @@ export class ProgressTracker {
           return usage >= achievement.condition.threshold;
         } else {
           // Check if all tools meet the threshold
-          const tools = ['excavator', 'bulldozer', 'grader', 'compactor'];
+          const tools = ['cut', 'fill'];
           return tools.every(tool => (this.userProgress!.toolUsageStats[tool] || 0) >= achievement.condition.threshold);
         }
       
