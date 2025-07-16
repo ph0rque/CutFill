@@ -318,8 +318,8 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
             color: color,
             linewidth: 3,
             depthTest: false,
-            dashSize: 3,
-            gapSize: 2
+            dashSize: 1, // Smaller for dotted effect
+            gapSize: 1 // Smaller for dotted effect
           });
         } else {
           // Solid line for visible segments
@@ -359,39 +359,34 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   function createTextMarker(text: string, x: number, y: number, z: number = 0.5, color: string = '#000000', small: boolean = false): THREE.Sprite {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
-    canvas.width = small ? 64 : 96;
-    canvas.height = small ? 32 : 48;
+    canvas.width = small ? 128 : 192; // Doubled
+    canvas.height = small ? 64 : 96; // Doubled
     
-    // Clear canvas
-    context.fillStyle = '#FFFFFF';
+    // Style matching contours
+    context.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black
     context.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Add background with slight transparency
-    context.fillStyle = 'rgba(255, 255, 255, 0.95)';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add border for larger labels only
-    if (!small) {
-      context.strokeStyle = color;
-      context.lineWidth = 2;
-      context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
-    }
+    // Add border
+    context.strokeStyle = color;
+    context.lineWidth = 1;
+    context.strokeRect(0, 0, canvas.width, canvas.height);
     
     // Add text
-    context.fillStyle = color;
-    context.font = small ? 'bold 12px Arial' : 'bold 16px Arial';
+    context.fillStyle = '#FFFFFF';
+    context.font = small ? 'bold 24px Arial' : 'bold 32px Arial'; // Doubled
     context.textAlign = 'center';
-    context.fillText(text, canvas.width / 2, canvas.height / 2 + (small ? 4 : 6));
+    context.textBaseline = 'middle';
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
     
     const texture = new THREE.CanvasTexture(canvas);
     const material = new THREE.SpriteMaterial({ 
       map: texture,
-      depthTest: false // Always render on top
+      depthTest: false
     });
     const sprite = new THREE.Sprite(material);
     sprite.position.set(x, y, z);
-    sprite.scale.set(small ? 5 : 8, small ? 2.5 : 4, 1);
-    sprite.renderOrder = 1002; // High render order to appear on top
+    sprite.scale.set(small ? 10 : 16, small ? 5 : 8, 1); // Doubled
+    sprite.renderOrder = 1002;
     
     return sprite;
   }
@@ -527,10 +522,7 @@ function animate() {
       updateAxisPosition(scaleReferences.markers, camera);
     }
     
-      // Update arrow scales based on camera distance for zoom-independent sizing
-  terrain.updateAllArrowScales();
-  
-      // Update dynamic contour lines based on camera zoom level
+    // Update dynamic contour lines based on camera zoom level
     terrain.updateContoursForZoom();
     
     // Update contour stats display (throttled)
@@ -978,10 +970,8 @@ function setupGameControls() {
             startRealTimeVolumeUpdates();
             
             // Update arrow counts when tools are used
-            if (toolManager.getCurrentToolName() === 'cut' || toolManager.getCurrentToolName() === 'fill') {
-              updateArrowCounts();
-            }
-            
+            // Removed: updateArrowCounts();
+
             lastMousePosition = point.clone();
 
             // Send to multiplayer if in session
@@ -1091,7 +1081,7 @@ function setupGameControls() {
           event.preventDefault();
           terrain.saveCurrentState().then(success => {
             updateVolumeDisplay();
-            updateArrowCounts();
+            // Removed: updateArrowCounts();
             
             // Show brief confirmation
             const notification = document.createElement('div');
@@ -1339,7 +1329,7 @@ function setupGameControls() {
     saveStateBtn.addEventListener('click', async () => {
       const success = await terrain.saveCurrentState();
       updateVolumeDisplay(); // This will now show 0/0/0
-      updateArrowCounts(); // This will now show 0 arrows
+      // Removed: updateArrowCounts(); // This will now show 0 arrows
       
       // Show confirmation message
       const notification = document.createElement('div');
@@ -1443,7 +1433,7 @@ function setupGameControls() {
           const success = await terrain.loadTerrainFromDatabase(terrainId);
           if (success) {
             updateVolumeDisplay();
-            updateArrowCounts();
+            // updateArrowCounts();
           }
           document.body.removeChild(modal);
           
@@ -1484,65 +1474,6 @@ function setupGameControls() {
   if (assignmentsBtn) {
     assignmentsBtn.addEventListener('click', () => {
       loadAssignments();
-    });
-  }
-
-  // Arrow management controls
-  const clearCutArrowsBtn = document.getElementById('clear-cut-arrows-btn') as HTMLButtonElement;
-  const clearFillArrowsBtn = document.getElementById('clear-fill-arrows-btn') as HTMLButtonElement;
-  const clearAllArrowsBtn = document.getElementById('clear-all-arrows-btn') as HTMLButtonElement;
-  const toggleArrowsBtn = document.getElementById('toggle-arrows-btn') as HTMLButtonElement;
-  const toggleOverlayBtn = document.getElementById('toggle-overlay-btn') as HTMLButtonElement;
-  const toggleFillOverlayBtn = document.getElementById('toggle-fill-overlay-btn') as HTMLButtonElement;
-  let arrowsVisible = true;
-  let overlayVisible = false; // Hidden by default
-  let fillOverlayVisible = false; // Hidden by default
-
-  if (clearCutArrowsBtn) {
-    clearCutArrowsBtn.addEventListener('click', () => {
-      terrain.clearPersistentCutArrows();
-      updateArrowCounts();
-    });
-  }
-
-  if (clearFillArrowsBtn) {
-    clearFillArrowsBtn.addEventListener('click', () => {
-      terrain.clearPersistentFillArrows();
-      updateArrowCounts();
-    });
-  }
-
-  if (clearAllArrowsBtn) {
-    clearAllArrowsBtn.addEventListener('click', () => {
-      terrain.clearAllPersistentArrows();
-      updateArrowCounts();
-    });
-  }
-
-  if (toggleArrowsBtn) {
-    toggleArrowsBtn.addEventListener('click', () => {
-      arrowsVisible = !arrowsVisible;
-      terrain.toggleAllPersistentArrows(arrowsVisible);
-      toggleArrowsBtn.textContent = arrowsVisible ? 'Hide' : 'Show';
-      toggleArrowsBtn.style.background = arrowsVisible ? '#666' : '#4CAF50';
-    });
-  }
-
-  if (toggleOverlayBtn) {
-    toggleOverlayBtn.addEventListener('click', () => {
-      overlayVisible = !overlayVisible;
-      terrain.toggleOriginalTerrainOverlay(overlayVisible);
-      toggleOverlayBtn.textContent = overlayVisible ? 'Hide Original' : 'Show Original';
-      toggleOverlayBtn.style.background = overlayVisible ? '#FF4444' : '#4CAF50';
-    });
-  }
-
-  if (toggleFillOverlayBtn) {
-    toggleFillOverlayBtn.addEventListener('click', () => {
-      fillOverlayVisible = !fillOverlayVisible;
-      terrain.toggleFillVolumeOverlay(fillOverlayVisible);
-      toggleFillOverlayBtn.textContent = fillOverlayVisible ? 'Hide Fill' : 'Show Fill';
-      toggleFillOverlayBtn.style.background = fillOverlayVisible ? '#4444FF' : '#4CAF50';
     });
   }
 
@@ -1587,7 +1518,8 @@ function setupGameControls() {
 function setupUI() {
   // Add UI elements
   document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-    <div class="main-panel ui-responsive enhanced-panel" style="position: fixed; top: 10px; left: 10px; color: white; font-family: Arial; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; min-width: 300px; max-height: 90vh; overflow-y: auto; z-index: 1001; pointer-events: auto;">
+    <div class="main-panel ui-responsive enhanced-panel" id="main-ui-panel" style="position: fixed; top: 10px; left: 10px; color: white; font-family: Arial; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; min-width: 300px; max-height: 90vh; overflow-y: auto; z-index: 1001; pointer-events: auto;">
+      <button id="toggle-menu-btn" style="position: absolute; top: 5px; right: 5px; background: #666; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer;">Hide Menu</button>
       <h2>CutFill - Enhanced Terrain System</h2>
       
               <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
@@ -1648,28 +1580,6 @@ function setupUI() {
         <div class="control-buttons" style="margin: 5px 0;">
           <button id="undo-btn" class="enhanced-button secondary" style="margin: 2px; padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Undo (Ctrl+Z)</button>
           <button id="redo-btn" class="enhanced-button secondary" style="margin: 2px; padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Redo (Ctrl+Shift+Z)</button>
-        </div>
-        <div class="arrow-controls" style="margin: 5px 0; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">
-          <div style="font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #FFF;">🏹 Persistent Arrows</div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-            <div style="font-size: 11px; color: #FF0000;">
-              ⛏️ Cut: <span id="cut-arrow-count">0</span>
-            </div>
-            <div style="font-size: 11px; color: #0000FF;">
-              🏔️ Fill: <span id="fill-arrow-count">0</span>
-            </div>
-            <div style="font-size: 11px; color: #4CAF50;">
-              Total: <span id="total-arrow-count">0</span>
-            </div>
-          </div>
-          <div style="display: flex; gap: 3px; flex-wrap: wrap;">
-            <button id="clear-cut-arrows-btn" style="padding: 2px 6px; background: #FF0000; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Clear Cut</button>
-            <button id="clear-fill-arrows-btn" style="padding: 2px 6px; background: #0000FF; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Clear Fill</button>
-            <button id="clear-all-arrows-btn" style="padding: 2px 6px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Clear All</button>
-            <button id="toggle-arrows-btn" style="padding: 2px 6px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Hide/Show</button>
-            <button id="toggle-overlay-btn" style="padding: 2px 6px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Show Original</button>
-            <button id="toggle-fill-overlay-btn" style="padding: 2px 6px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Show Fill</button>
-          </div>
         </div>
         <div id="tool-status" style="margin: 5px 0; font-size: 14px;">Current Tool: ⛏️ Cut</div>
                  <div id="tool-description" style="margin: 5px 0; font-size: 12px; color: #ccc;">Remove earth (excavation)</div>
@@ -1835,7 +1745,6 @@ function setupUI() {
   updateToolDisplay();
   updateBrushDisplay();
   updateTerrainStats();
-  updateArrowCounts(); // Initialize arrow count display
   updateInteractionMode(false, false); // Initialize with no modifiers
   updateProgressDisplay(); // Initialize progress display
   updateContourStats(); // Initialize contour line stats
@@ -1885,6 +1794,58 @@ function setupUI() {
   }
 
   // Tool buttons
+
+  const toggleMenuBtn = document.getElementById('toggle-menu-btn') as HTMLButtonElement;
+  const mainPanel = document.getElementById('main-ui-panel') as HTMLDivElement;
+  let isMenuVisible = true;
+
+  if (toggleMenuBtn && mainPanel) {
+    toggleMenuBtn.addEventListener('click', () => {
+      isMenuVisible = !isMenuVisible;
+      mainPanel.style.display = isMenuVisible ? 'block' : 'none';
+      toggleMenuBtn.textContent = isMenuVisible ? 'Hide Menu' : 'Show Menu';
+    });
+  }
+
+  // --- Planning controls (Save / Cancel) ---
+  const planControlsDiv = document.createElement('div');
+  planControlsDiv.id = 'plan-controls';
+  planControlsDiv.style.margin = '8px 0';
+  planControlsDiv.style.display = 'none';
+  planControlsDiv.innerHTML = `
+    <button id="save-plan-btn" style="padding:6px 12px; background:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px; margin-right:4px;">✅ Save</button>
+    <button id="cancel-plan-btn" style="padding:6px 12px; background:#F44336; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">✖ Cancel</button>
+  `;
+  // Append to Cut/Fill panel (just after tool-status div)
+  const toolSection = document.querySelector('#tool-status')?.parentElement;
+  toolSection?.appendChild(planControlsDiv);
+
+  const saveBtn = document.getElementById('save-plan-btn') as HTMLButtonElement;
+  const cancelBtn = document.getElementById('cancel-plan-btn') as HTMLButtonElement;
+
+  function refreshPlanButtons(){
+    const hasPlan = terrain.hasPendingChanges();
+    planControlsDiv.style.display = hasPlan ? 'block' : 'none';
+
+    const undoEl = document.getElementById('undo-btn') as HTMLButtonElement;
+    const redoEl = document.getElementById('redo-btn') as HTMLButtonElement;
+
+    if(undoEl){ undoEl.disabled = hasPlan; undoEl.style.opacity = hasPlan ? '0.4':'1'; }
+    if(redoEl){ redoEl.disabled = hasPlan; redoEl.style.opacity = hasPlan ? '0.4':'1'; }
+    const toolBtns = Array.from(document.querySelectorAll('.tool-btn')) as HTMLButtonElement[];
+    toolBtns.forEach(btn => { btn.disabled = hasPlan; (btn as HTMLButtonElement).style.opacity = hasPlan? '0.4':'1'; });
+  }
+
+  saveBtn?.addEventListener('click', ()=>{
+    terrain.applyPendingChanges();
+    refreshPlanButtons();
+  });
+  cancelBtn?.addEventListener('click', ()=>{
+    terrain.discardPendingChanges();
+    refreshPlanButtons();
+  });
+
+  setInterval(refreshPlanButtons, 1000);
 }
 
 // Enhanced real-time volume tracking
@@ -2066,23 +2027,6 @@ function updateToolDisplay() {
       btn.style.transform = 'scale(1)';
     }
   });
-}
-
-// Update arrow count displays
-function updateArrowCounts() {
-  const cutArrowCountElement = document.getElementById('cut-arrow-count');
-  const fillArrowCountElement = document.getElementById('fill-arrow-count');
-  const totalArrowCountElement = document.getElementById('total-arrow-count');
-  
-  if (terrain) {
-    const cutCount = terrain.getPersistentCutArrowCount();
-    const fillCount = terrain.getPersistentFillArrowCount();
-    const totalCount = cutCount + fillCount;
-    
-    if (cutArrowCountElement) cutArrowCountElement.textContent = cutCount.toString();
-    if (fillArrowCountElement) fillArrowCountElement.textContent = fillCount.toString();
-    if (totalArrowCountElement) totalArrowCountElement.textContent = totalCount.toString();
-  }
 }
 
 // Update overlay button states to match terrain overlay visibility

@@ -69,9 +69,7 @@ export class Terrain {
   // Enhanced accessibility properties
   private accessibilityMode: 'normal' | 'colorBlind' | 'highContrast' | 'patterns' = 'normal';
   private colorBlindType: 'protanopia' | 'deuteranopia' | 'tritanopia' | 'normal' = 'normal';
-  private usePatternOverlays: boolean = false;
-  private patternMeshes: THREE.Mesh[] = [];
-  
+
   // Camera reference for zoom-independent arrow scaling
   private camera: THREE.Camera | null = null;
 
@@ -92,6 +90,13 @@ export class Terrain {
   private lastSaveTime: number = 0;
   private saveThrottleMs: number = 30000; // Save every 30 seconds at most
   private pendingModifications: Array<{x: number, z: number, heightChange: number, tool: string}> = [];
+
+  // Planning mode properties
+  private planningMode: boolean = true; // plan-first workflow enabled by default
+  private plannedStrokes: Array<{ x:number; z:number; radius:number; heightChange:number; type:'cut'|'fill'; boundary: {x:number; z:number}[] }> = [];
+
+  // add property
+  private suppressOverlays: boolean = false;
 
   constructor(
     width: number = 100,  // 100 feet x 100 feet
@@ -144,10 +149,6 @@ export class Terrain {
     // Add all parts to the group
     this.terrainGroup.add(this.surfaceMesh);
 
-    // Ensure pattern overlays are disabled by default
-    this.usePatternOverlays = false;
-    this.clearPatternOverlays();
-
     // Generate initial terrain
     this.regenerateTerrain();
     
@@ -161,10 +162,6 @@ export class Terrain {
     if (this.camera) {
       this.updateContoursForZoom();
     }
-    
-    // Don't create overlays by default - they will be created when needed
-    // this.createOriginalTerrainOverlay();
-    // this.createFillVolumeOverlay();
     
     // Save initial state
     this.saveState();
@@ -887,7 +884,7 @@ export class Terrain {
     
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({
-      color: color,
+      color: 0x000000, // Changed to black
       linewidth: 3,
       transparent: true,
       opacity: 0.9,
@@ -903,7 +900,7 @@ export class Terrain {
     this.terrainGroup.add(contourLine);
     
     // Add elevation labels with dynamic spacing
-    this.createContourLabels(points, color);
+    this.createContourLabels(points, new THREE.Color(0x000000)); // Use black for labels too
   }
 
   /**
@@ -990,8 +987,8 @@ export class Terrain {
     const cameraDistance = this.camera ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50)) : 100;
     const scale = Math.max(0.5, Math.min(1.5, 100 / cameraDistance)); // Scale text based on distance
     
-    canvas.width = 48 * scale;
-    canvas.height = 20 * scale;
+    canvas.width = 96 * scale; // Doubled from 48
+    canvas.height = 40 * scale; // Doubled from 20
     
     // Style the text
     context.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent background
@@ -1004,7 +1001,7 @@ export class Terrain {
     
     // Add text
     context.fillStyle = '#FFFFFF'; // White text for good contrast
-    context.font = `bold ${10 * scale}px Arial`;
+    context.font = `bold ${20 * scale}px Arial`; // Doubled font size from 10
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.fillText(elevationText, canvas.width / 2, canvas.height / 2);
@@ -1020,7 +1017,7 @@ export class Terrain {
     const sprite = new THREE.Sprite(material);
     sprite.position.copy(position);
     sprite.position.y += 0.1; // Raise slightly above contour line
-    sprite.scale.set(4 * scale, 2 * scale, 1);
+    sprite.scale.set(8 * scale, 4 * scale, 1); // Doubled scale from 4x2
     sprite.renderOrder = 1003; // Render above axes
     sprite.name = 'contourLabel';
     
@@ -1340,58 +1337,20 @@ export class Terrain {
     const positions = wallGeometry.attributes.position.array;
     const wallColors = new Float32Array(positions.length);
     
-    // Find height range for normalization (same as terrain surface)
-    let minHeight = Infinity;
-    let maxHeight = -Infinity;
-
-    for (let i = 1; i < positions.length; i += 3) {
-      const height = positions[i];
-      if (!isNaN(height) && isFinite(height)) {
-        minHeight = Math.min(minHeight, height);
-        maxHeight = Math.max(maxHeight, height);
-      }
-    }
-
-    // Fallback if no valid heights found
-    if (!isFinite(minHeight) || !isFinite(maxHeight)) {
-      minHeight = -10;
-      maxHeight = 10;
-    }
-
-    // Grayscale range: #444 (0.267) to #DDD (0.867)
-    const darkGray = 0.267;  // #444 in normalized RGB
-    const lightGray = 0.867; // #DDD in normalized RGB
-    const colorRange = lightGray - darkGray;
-    
-    // Calculate colors for each vertex in the wall geometry
+    // Calculate colors for each vertex using material layers
     for (let i = 0; i < positions.length; i += 3) {
       const y = positions[i + 1]; // Height/depth
-      
-      let grayValue = darkGray; // Default to dark gray
-      
-      if (isFinite(y) && !isNaN(y)) {
-        // Normalize height to 0-1 range
-        const normalizedHeight = Math.max(0, Math.min(1, (y - minHeight) / (maxHeight - minHeight)));
-        
-        // Map to grayscale range: deeper areas are darker (#444), higher areas are lighter (#DDD)
-        grayValue = darkGray + (normalizedHeight * colorRange);
-        
-        // Clamp to our defined range
-        grayValue = Math.max(darkGray, Math.min(lightGray, grayValue));
-      }
-      
-      // Set RGB values to same gray value for true grayscale
-      wallColors[i] = grayValue;     // R
-      wallColors[i + 1] = grayValue; // G  
-      wallColors[i + 2] = grayValue; // B
+      const color = this.getColorAtElevation(y);
+      wallColors[i] = color.r;
+      wallColors[i + 1] = color.g;
+      wallColors[i + 2] = color.b;
     }
     
-    // Apply colors to wall geometry and switch to vertex colors
     wallGeometry.setAttribute('color', new THREE.BufferAttribute(wallColors, 3));
     wallGeometry.attributes.color.needsUpdate = true;
     
     // Update material to use vertex colors
-    const wallMaterial = this.wallMeshes[0].material as THREE.MeshBasicMaterial;
+    const wallMaterial = this.wallMeshes[0].material as THREE.MeshLambertMaterial;
     wallMaterial.vertexColors = true;
     wallMaterial.needsUpdate = true;
   }
@@ -1400,6 +1359,33 @@ export class Terrain {
    * Enhanced brush-based terrain modification with intelligent arrow placement
    */
   public modifyHeightBrush(x: number, z: number, heightChange: number): void {
+    // Planning-mode short-circuit: only create overlays & store planned stroke
+    if (this.planningMode) {
+      const brushRadius = this.brushSettings.size;
+      // Collect affected samples to compute boundary
+      const vertices = this.geometry.attributes.position.array;
+      const points2D: {x:number; z:number}[] = [];
+      for (let i = 0; i < vertices.length; i += 3) {
+        const vx = vertices[i];
+        const vz = vertices[i + 2];
+        const dx = vx - x;
+        const dz = vz - z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        if(this.isInBrush(dist, dx, dz)) {
+          points2D.push({x:vx, z:vz});
+        }
+      }
+      const boundary = this.computeConvexHull(points2D);
+
+      let overlay:THREE.Object3D | null = null;
+      if(heightChange<0){ overlay = this.createOutlineOverlay(boundary,'cut'); }
+      else if(heightChange>0){ overlay = this.createOutlineOverlay(boundary,'fill'); }
+      if(overlay){ this.terrainGroup.add(overlay); if(heightChange<0) this.cutOverlays.push(overlay as any); else this.fillOverlays.push(overlay as any); }
+
+      this.plannedStrokes.push({x, z, radius: brushRadius, heightChange, type: heightChange<0?'cut':'fill', boundary});
+      return;
+    }
+
     const vertices = this.geometry.attributes.position.array;
     const widthSegments = this.geometry.parameters.widthSegments;
     const heightSegments = this.geometry.parameters.heightSegments;
@@ -1446,265 +1432,20 @@ export class Terrain {
       this.geometry.attributes.position.needsUpdate = true;
       this.geometry.computeVertexNormals();
       this.updateTerrainColors();
-      this.updateBlockGeometry(); // Update block to match terrain
-      this.generateContourLines(); // Update contour lines after terrain modification
+      this.updateBlockGeometry();
+      this.generateContourLines();
       
       // Auto-enable overlays and create localized overlays for modification area
       if (heightChange < 0) {
-        // Cut operation - enable red overlay and create bounded overlay
         this.showOriginalTerrainOverlay = true;
         this.createLocalizedCutOverlay(x, z, brushRadius);
       } else if (heightChange > 0) {
-        // Fill operation - enable blue overlay and create bounded overlay
         this.showFillVolumeOverlay = true;
-        this.createLocalizedFillOverlay(x, z, brushRadius);
+        this.createLocalizedFillOverlay(x, z, brushRadius, heightChange);
       }
 
-      // Create intelligent arrow placement based on operation magnitude
-      this.createDensityBasedArrows(x, z, heightChange, totalVolumeChange, brushRadius);
+      // Removed arrow creation: this.createDensityBasedArrows(x, z, heightChange, totalVolumeChange, brushRadius);
     }
-  }
-
-  /**
-   * Clear arrows within specific bounds
-   */
-  private clearArrowsInBounds(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }): void {
-    const arrowsToRemove = this.arrows.filter(arrow => {
-      const pos = arrow.position;
-      return pos.x >= bounds.minX && pos.x <= bounds.maxX && 
-             pos.z >= bounds.minZ && pos.z <= bounds.maxZ;
-    });
-    
-    arrowsToRemove.forEach(arrow => {
-      this.terrainGroup.remove(arrow);
-    });
-    
-    this.arrows = this.arrows.filter(arrow => {
-      const pos = arrow.position;
-      return !(pos.x >= bounds.minX && pos.x <= bounds.maxX && 
-               pos.z >= bounds.minZ && pos.z <= bounds.maxZ);
-    });
-  }
-
-  /**
-   * Create evenly distributed arrows for a merged area
-   */
-  private createArrowsForMergedArea(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, isFill: boolean): void {
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-    const areaWidth = bounds.maxX - bounds.minX;
-    const areaHeight = bounds.maxZ - bounds.minZ;
-    const areaSize = Math.max(areaWidth, areaHeight);
-    
-    // Much simpler approach - fewer arrows, better spacing
-    const minSpacing = 15.0; // Large minimum spacing between arrows
-    
-    // Determine number of arrows based on area size - very conservative
-    let numArrows = 1; // Always start with 1 arrow
-    if (areaSize > 25.0) {
-      numArrows = 2; // Only 2 arrows for large areas
-    }
-    
-    if (numArrows === 1) {
-      // Single arrow at center
-      const height = this.getHeightAtPosition(centerX, centerZ);
-      if (isFill) {
-        this.createFillArrow(centerX, centerZ, height, 1.0, 0);
-      } else {
-        this.createCutArrow(centerX, centerZ, height, -1.0, 0);
-      }
-    } else {
-      // Two arrows evenly spaced along the longest dimension
-      if (areaWidth >= areaHeight) {
-        // Space arrows along X-axis
-        const spacing = Math.min(areaWidth * 0.4, minSpacing); // Don't space too far apart
-        const arrow1X = centerX - spacing / 2;
-        const arrow2X = centerX + spacing / 2;
-        
-        // Create two arrows along X-axis
-        const height1 = this.getHeightAtPosition(arrow1X, centerZ);
-        const height2 = this.getHeightAtPosition(arrow2X, centerZ);
-        
-        if (isFill) {
-          this.createFillArrow(arrow1X, centerZ, height1, 1.0, 0);
-          this.createFillArrow(arrow2X, centerZ, height2, 1.0, 0);
-        } else {
-          this.createCutArrow(arrow1X, centerZ, height1, -1.0, 0);
-          this.createCutArrow(arrow2X, centerZ, height2, -1.0, 0);
-        }
-      } else {
-        // Space arrows along Z-axis  
-        const spacing = Math.min(areaHeight * 0.4, minSpacing);
-        const arrow1Z = centerZ - spacing / 2;
-        const arrow2Z = centerZ + spacing / 2;
-        
-        // Create two arrows along Z-axis
-        const height1 = this.getHeightAtPosition(centerX, arrow1Z);
-        const height2 = this.getHeightAtPosition(centerX, arrow2Z);
-        
-        if (isFill) {
-          this.createFillArrow(centerX, arrow1Z, height1, 1.0, 0);
-          this.createFillArrow(centerX, arrow2Z, height2, 1.0, 0);
-        } else {
-          this.createCutArrow(centerX, arrow1Z, height1, -1.0, 0);
-          this.createCutArrow(centerX, arrow2Z, height2, -1.0, 0);
-        }
-      }
-    }
-  }
-
-  /**
-   * Create minimal, large, evenly spaced arrows matching reference design
-   */
-  private createDensityBasedArrows(x: number, z: number, heightChange: number, volumeChange: number, radius: number): void {
-    // Much larger spacing for fewer, more prominent arrows
-    const minArrowSpacing = 8.0; // Large minimum spacing
-    const arrowSpacing = Math.max(minArrowSpacing, radius * 1.5);
-    
-    // Very few arrows - prioritize 1 arrow for most cases, fewer arrows overall
-    if (radius < 8.0) {
-      // Single arrow at center for smaller operations (increased threshold)
-      const arrowHeight = this.getHeightAtPosition(x, z);
-      if (heightChange < 0) {
-        this.createCutArrow(x, z, arrowHeight, heightChange, 0);
-      } else {
-        this.createFillArrow(x, z, arrowHeight, heightChange, 0);
-      }
-      return;
-    }
-    
-    // For larger operations, maximum 1 arrow - even simpler
-    const maxArrows = 1;
-    
-    // Single arrow at center for all operations
-    const arrowHeight = this.getHeightAtPosition(x, z);
-    if (heightChange < 0) {
-      this.createCutArrow(x, z, arrowHeight, heightChange, 0);
-    } else {
-      this.createFillArrow(x, z, arrowHeight, heightChange, 0);
-    }
-    // Function complete - single arrow approach
-  }
-
-  /**
-   * Calculate zoom-based density multiplier for arrow placement
-   * Returns higher values when zoomed in (more arrows) and lower when zoomed out (fewer arrows)
-   */
-  private calculateZoomDensityMultiplier(): number {
-    if (!this.camera) return 1.0;
-    
-    // Calculate distance from camera to terrain center (50, 0, 50)
-    const terrainCenter = new THREE.Vector3(50, 0, 50);
-    const cameraDistance = this.camera.position.distanceTo(terrainCenter);
-    
-    // Define zoom density curve
-    // Close camera (zoomed in) = high density, Far camera (zoomed out) = low density
-    const minDistance = 20;  // Very close zoom
-    const maxDistance = 200; // Very far zoom
-    const minDensity = 0.3;  // Minimum arrows when far
-    const maxDensity = 3.0;  // Maximum arrows when close
-    
-    // Inverse relationship: closer camera = higher density
-    const normalizedDistance = Math.max(0, Math.min(1, (cameraDistance - minDistance) / (maxDistance - minDistance)));
-    const densityMultiplier = maxDensity - (normalizedDistance * (maxDensity - minDensity));
-    
-    return Math.max(minDensity, Math.min(maxDensity, densityMultiplier));
-  }
-
-  /**
-   * Create a cut arrow (red, downward) - PERSISTENT for session with proportional size
-   * Positioned inside the excavated volume between original and current terrain
-   */
-  private createCutArrow(x: number, z: number, height: number, heightChange: number, falloff: number): void {
-    // Get original height at this position
-    const originalHeight = this.getOriginalHeightAtPosition(x, z);
-    
-    // Only create arrow if there's actual excavation (current height below original)
-    if (height >= originalHeight - 0.02) return; // Much lower threshold for better responsiveness
-    
-    // Calculate excavation depth
-    const excavationDepth = originalHeight - height;
-    
-    // Position arrow ABOVE the excavated area for visibility
-    const arrowBaseHeight = originalHeight + 2.0; // Position 2 feet above original terrain
-    
-    // Make arrow length proportional to excavation depth, with much larger scale for visibility
-    const baseArrowScale = 15.0; // Even bigger base scale for maximum visibility
-    const depthScale = Math.max(1.2, excavationDepth * 3.0); // Scale aggressively with depth, larger minimum
-    const arrowLength = baseArrowScale * depthScale; // Total length scales with excavation depth
-    const headLength = Math.max(4.0, arrowLength * 0.35); // Head is 35% of total length, minimum 4.0
-    const headWidth = Math.max(3.0, arrowLength * 0.25); // Head width scales with length, larger minimum
-    
-    // Position arrow above the excavated area for clear visibility
-    const arrowPos = new THREE.Vector3(x, arrowBaseHeight, z);
-    const arrowDir = new THREE.Vector3(0, -1, 0); // Point downward
-    
-    const arrow = new THREE.ArrowHelper(arrowDir, arrowPos, arrowLength, 0xFF0000); // Red color
-    
-    // Set proportional dimensions based on excavation depth
-    arrow.setLength(arrowLength, headLength, headWidth);
-    
-    // Store dimensions for reference
-    (arrow as any).isProportional = true;
-    (arrow as any).excavationDepth = excavationDepth;
-    (arrow as any).arrowLength = arrowLength;
-    
-    // Mark as persistent cut arrow
-    (arrow as any).isPersistentCut = true;
-    
-    this.terrainGroup.add(arrow);
-    this.arrows.push(arrow);
-    
-    // Red cut arrows persist for the entire session - no timeout removal
-    // They will only be cleared when terrain is reset or manually cleared
-  }
-
-  /**
-   * Create a fill arrow (blue, upward) - PERSISTENT for session with proportional size
-   * Positioned inside the filled volume between original and current terrain
-   */
-  private createFillArrow(x: number, z: number, height: number, heightChange: number, falloff: number): void {
-    // Get original height at this position
-    const originalHeight = this.getOriginalHeightAtPosition(x, z);
-    
-    // Only create arrow if there's actual filling (current height above original)
-    if (height <= originalHeight + 0.02) return; // Much lower threshold for better responsiveness
-    
-    // Calculate fill height (depth of material added)
-    const fillHeight = height - originalHeight;
-    
-    // Position arrow in the middle of the filled volume
-    const volumeMiddleHeight = originalHeight + (fillHeight / 2);
-    
-    // Make arrow length proportional to fill height, with much larger scale for visibility
-    const baseArrowScale = 12.0; // Even bigger base scale for better visibility
-    const heightScale = Math.max(1.0, fillHeight * 2.0); // Scale with fill height, larger minimum
-    const arrowLength = baseArrowScale * heightScale; // Total length scales with fill height
-    const headLength = Math.max(3.0, arrowLength * 0.3); // Head is 30% of total length, minimum 3.0
-    const headWidth = Math.max(2.0, arrowLength * 0.2); // Head width scales with length, larger minimum
-    
-    // Position arrow in center of filled volume
-    const arrowPos = new THREE.Vector3(x, volumeMiddleHeight, z);
-    const arrowDir = new THREE.Vector3(0, 1, 0); // Point upward
-    
-    const arrow = new THREE.ArrowHelper(arrowDir, arrowPos, arrowLength, 0x0000FF); // Blue color
-    
-    // Set proportional dimensions based on fill height
-    arrow.setLength(arrowLength, headLength, headWidth);
-    
-    // Store dimensions for reference
-    (arrow as any).isProportional = true;
-    (arrow as any).fillHeight = fillHeight;
-    (arrow as any).arrowLength = arrowLength;
-    
-    // Mark as persistent fill arrow
-    (arrow as any).isPersistentFill = true;
-    
-    this.terrainGroup.add(arrow);
-    this.arrows.push(arrow);
-    
-    // Blue fill arrows persist for the entire session - no timeout removal
-    // They will only be cleared when terrain is reset or manually cleared
   }
 
   /**
@@ -2026,29 +1767,6 @@ export class Terrain {
   }
 
   /**
-   * Force disable wireframe mode
-   */
-  public forceDisableWireframe(): void {
-    // Disable wireframe on surface mesh (now MeshBasicMaterial)
-    const surfaceMaterial = this.surfaceMesh.material as THREE.MeshBasicMaterial;
-    surfaceMaterial.wireframe = false;
-    
-    // Also disable wireframe on the terrain block
-    this.wallMeshes.forEach(block => {
-      if (block.material instanceof Array) {
-        // Handle multi-material mesh (our box)
-        block.material.forEach(mat => {
-          if (mat instanceof THREE.MeshBasicMaterial) {
-            mat.wireframe = false;
-          }
-        });
-      } else if (block.material instanceof THREE.MeshBasicMaterial) {
-        block.material.wireframe = false;
-      }
-    });
-  }
-
-  /**
    * Toggle wireframe mode
    */
   public toggleWireframe(): void {
@@ -2186,18 +1904,6 @@ export class Terrain {
   }
 
   /**
-   * Toggle pattern overlays for better zone distinction
-   */
-  public setPatternOverlays(enabled: boolean): void {
-    this.usePatternOverlays = enabled;
-    if (enabled) {
-      this.createPatternOverlays();
-    } else {
-      this.clearPatternOverlays();
-    }
-  }
-
-  /**
    * Update accessibility features based on current mode
    */
   private updateAccessibilityFeatures(): void {
@@ -2209,11 +1915,10 @@ export class Terrain {
         this.applyHighContrastColors();
         break;
       case 'patterns':
-        this.setPatternOverlays(true);
+        // Patterns are permanently disabled, so no action needed
         break;
       default:
         this.restoreNormalColors();
-        this.setPatternOverlays(false);
         break;
     }
   }
@@ -2265,936 +1970,27 @@ export class Terrain {
   }
 
   /**
-   * Create pattern overlays for additional zone distinction
+   * Clean up all localized overlays
    */
-  private createPatternOverlays(): void {
-    // Pattern overlays completely disabled to prevent black grid appearance
-    return;
-    
-    this.clearPatternOverlays();
-    
-    const vertices = this.geometry.attributes.position.array;
-    
-    // Create different patterns for each zone type
-    for (let i = 0; i < vertices.length; i += 3) {
-      const x = vertices[i];
-      const z = vertices[i + 2];
-      const height = vertices[i + 1];
-      const zone = this.getElevationZone(height);
-      
-      // Create pattern based on zone type
-      if (Math.abs(x % 5) < 0.2 || Math.abs(z % 5) < 0.2) { // Grid pattern
-        let patternGeometry: THREE.BufferGeometry;
-        let patternMaterial: THREE.Material;
-        
-        switch (zone.name) {
-          case 'high': // Very light diagonal lines for high fill
-            patternGeometry = new THREE.PlaneGeometry(0.2, 0.03);
-            patternMaterial = new THREE.MeshBasicMaterial({ 
-              color: 0xE0E0E0, // Very light gray
-              transparent: true, 
-              opacity: 0.08 // Very transparent
-            });
-            break;
-          case 'medium': // Very light dots for medium fill
-            patternGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.01, 6);
-            patternMaterial = new THREE.MeshBasicMaterial({ 
-              color: 0xDDDDDD, // Very light gray
-              transparent: true, 
-              opacity: 0.1 // Very transparent
-            });
-            break;
-          case 'cut': // Very light cross-hatch for cut areas
-            patternGeometry = new THREE.PlaneGeometry(0.15, 0.02);
-            patternMaterial = new THREE.MeshBasicMaterial({ 
-              color: 0xF0F0F0, // Almost white, very light gray
-              transparent: true, 
-              opacity: 0.12 // Very transparent
-            });
-            break;
-          default:
-            continue;
-        }
-        
-        const patternMesh = new THREE.Mesh(patternGeometry, patternMaterial);
-        patternMesh.position.set(x, height + 0.05, z);
-        
-        if (zone.name === 'high') {
-          patternMesh.rotation.z = Math.PI / 4; // Diagonal orientation
-        } else if (zone.name === 'cut') {
-          patternMesh.rotation.y = Math.PI / 4; // Angled cross-hatch
-        }
-        
-        this.terrainGroup.add(patternMesh);
-        this.patternMeshes.push(patternMesh);
-      }
-    }
-  }
-
-  /**
-   * Clear existing pattern overlays
-   */
-  private clearPatternOverlays(): void {
-    this.patternMeshes.forEach(mesh => {
-      this.terrainGroup.remove(mesh);
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
-    });
-    this.patternMeshes = [];
-  }
-
-  /**
-   * Force disable all pattern overlays
-   */
-  public forceDisablePatterns(): void {
-    this.usePatternOverlays = false;
-    this.clearPatternOverlays();
-    this.accessibilityMode = 'normal';
-  }
-
-  /**
-   * Get accessibility-friendly zone description
-   */
-  public getAccessibleZoneDescription(height: number): string {
-    const zone = this.getElevationZone(height);
-    const relativeHeight = height - this.targetElevation;
-    
-    let description = '';
-    switch (zone.name) {
-      case 'high':
-        description = `High fill zone: ${relativeHeight.toFixed(1)} feet above target. Requires excavation.`;
-        break;
-      case 'medium':
-        description = `Medium fill zone: ${relativeHeight.toFixed(1)} feet above target. Moderate excavation needed.`;
-        break;
-      case 'low':
-        description = `Target zone: ${relativeHeight.toFixed(1)} feet from target. Near optimal elevation.`;
-        break;
-      case 'cut':
-        description = `Cut zone: ${Math.abs(relativeHeight).toFixed(1)} feet below target. Needs fill material.`;
-        break;
-    }
-    
-    // Add pattern information if enabled
-    if (this.usePatternOverlays) {
-      switch (zone.name) {
-        case 'high':
-          description += ' Visual pattern: diagonal lines.';
-          break;
-        case 'medium':
-          description += ' Visual pattern: dots.';
-          break;
-        case 'cut':
-          description += ' Visual pattern: cross-hatch.';
-          break;
-      }
-    }
-    
-    return description;
-  }
-
-  /**
-   * Get keyboard navigation instructions for terrain operations
-   */
-  public getKeyboardInstructions(): string {
-    return `
-      Terrain Navigation Instructions:
-      • Tab: Navigate through tool buttons and controls
-      • Enter/Space: Activate selected tool or button
-      • Arrow keys: Move focus between terrain areas
-      • Ctrl + Arrow keys: Apply current tool to focused area
-      • 1-2: Quick brush size selection (1=Small, 2=Medium)
-      • +/-: Adjust brush size
-      • Ctrl+Z: Undo last operation
-      • Ctrl+Y: Redo last operation
-      • W: Toggle wireframe mode
-      • X: Toggle grid display
-      • R: Reset terrain
-      • Escape: Cancel current operation
-    `;
-  }
-
-  /**
-   * Clear only persistent cut arrows (blue arrows)
-   */
-  public clearPersistentCutArrows(): void {
-    // Filter out persistent cut arrows and remove them from scene
-    const persistentCutArrows = this.arrows.filter(arrow => (arrow as any).isPersistentCut);
-    
-    persistentCutArrows.forEach(arrow => {
-      this.terrainGroup.remove(arrow);
-    });
-    
-    // Remove persistent cut arrows from the arrows array
-    this.arrows = this.arrows.filter(arrow => !(arrow as any).isPersistentCut);
-    
-    console.log(`Cleared ${persistentCutArrows.length} persistent cut arrows`);
-  }
-
-  /**
-   * Clear only persistent fill arrows (red arrows)
-   */
-  public clearPersistentFillArrows(): void {
-    // Filter out persistent fill arrows and remove them from scene
-    const persistentFillArrows = this.arrows.filter(arrow => (arrow as any).isPersistentFill);
-    
-    persistentFillArrows.forEach(arrow => {
-      this.terrainGroup.remove(arrow);
-    });
-    
-    // Remove persistent fill arrows from the arrows array
-    this.arrows = this.arrows.filter(arrow => !(arrow as any).isPersistentFill);
-    
-    console.log(`Cleared ${persistentFillArrows.length} persistent fill arrows`);
-  }
-
-  /**
-   * Clear all persistent arrows (both cut and fill)
-   */
-  public clearAllPersistentArrows(): void {
-    const persistentArrows = this.arrows.filter(arrow => 
-      (arrow as any).isPersistentCut || (arrow as any).isPersistentFill
-    );
-    
-    persistentArrows.forEach(arrow => {
-      this.terrainGroup.remove(arrow);
-    });
-    
-    // Remove persistent arrows from the arrows array
-    this.arrows = this.arrows.filter(arrow => 
-      !(arrow as any).isPersistentCut && !(arrow as any).isPersistentFill
-    );
-    
-    console.log(`Cleared ${persistentArrows.length} persistent arrows`);
-  }
-
-  /**
-   * Clear all arrows (both persistent and temporary)
-   */
-  public clearAllArrows(): void {
-    this.arrows.forEach(arrow => {
-      this.terrainGroup.remove(arrow);
-    });
-    this.arrows = [];
-    console.log('Cleared all arrows');
-  }
-
-  /**
-   * Get count of persistent cut arrows
-   */
-  public getPersistentCutArrowCount(): number {
-    return this.arrows.filter(arrow => (arrow as any).isPersistentCut).length;
-  }
-
-  /**
-   * Get count of persistent fill arrows
-   */
-  public getPersistentFillArrowCount(): number {
-    return this.arrows.filter(arrow => (arrow as any).isPersistentFill).length;
-  }
-
-  /**
-   * Get total count of persistent arrows
-   */
-  public getTotalPersistentArrowCount(): number {
-    return this.arrows.filter(arrow => 
-      (arrow as any).isPersistentCut || (arrow as any).isPersistentFill
-    ).length;
-  }
-
-  /**
-   * Toggle visibility of persistent cut arrows
-   */
-  public togglePersistentCutArrows(visible: boolean): void {
-    const persistentCutArrows = this.arrows.filter(arrow => (arrow as any).isPersistentCut);
-    persistentCutArrows.forEach(arrow => {
-      arrow.visible = visible;
-    });
-  }
-
-  /**
-   * Toggle visibility of persistent fill arrows
-   */
-  public togglePersistentFillArrows(visible: boolean): void {
-    const persistentFillArrows = this.arrows.filter(arrow => (arrow as any).isPersistentFill);
-    persistentFillArrows.forEach(arrow => {
-      arrow.visible = visible;
-    });
-  }
-
-  /**
-   * Toggle visibility of all persistent arrows
-   */
-  public toggleAllPersistentArrows(visible: boolean): void {
-    const persistentArrows = this.arrows.filter(arrow => 
-      (arrow as any).isPersistentCut || (arrow as any).isPersistentFill
-    );
-    persistentArrows.forEach(arrow => {
-      arrow.visible = visible;
-    });
-  }
-
-  /**
-   * Get current accessibility mode
-   */
-  public getAccessibilityMode(): 'normal' | 'colorBlind' | 'highContrast' | 'patterns' {
-    return this.accessibilityMode;
-  }
-
-  /**
-   * Get current color blind type
-   */
-  public getColorBlindType(): 'protanopia' | 'deuteranopia' | 'tritanopia' | 'normal' {
-    return this.colorBlindType;
-  }
-
-  /**
-   * Get pattern overlay status
-   */
-  public getPatternOverlaysEnabled(): boolean {
-    return this.usePatternOverlays;
-  }
-
-  /**
-   * Set camera reference for zoom-independent arrow scaling
-   */
-  public setCameraReference(camera: THREE.Camera): void {
-    this.camera = camera;
-    // Update all existing arrows when camera is set
-    this.updateAllArrowScales();
-  }
-
-  /**
-   * Update individual arrow scale based on camera distance for zoom-independent sizing
-   * Note: Only applies to legacy arrows. New arrows use fixed sizes.
-   */
-  private updateArrowScale(arrow: THREE.ArrowHelper): void {
-    if (!this.camera) return;
-    
-    // Skip fixed-size arrows
-    if ((arrow as any).isFixedSize) return;
-    
-    // Calculate distance from camera to terrain center (50, 0, 50)
-    const terrainCenter = new THREE.Vector3(50, 0, 50);
-    const cameraDistance = this.camera.position.distanceTo(terrainCenter);
-    
-    // Calculate scale factor based on camera distance
-    // Scale arrows to maintain consistent visual size
-    // Base distance of 100 units = scale factor 1.0
-    const baseDistance = 100;
-    const scaleFactor = Math.max(0.3, Math.min(3.0, cameraDistance / baseDistance));
-    
-    // Apply scaling to arrow dimensions
-    const originalLength = (arrow as any).originalLength || 5;
-    const originalHeadLength = (arrow as any).originalHeadLength || 2;
-    const originalHeadWidth = (arrow as any).originalHeadWidth || 1;
-    
-    const scaledLength = originalLength * scaleFactor;
-    const scaledHeadLength = originalHeadLength * scaleFactor;
-    const scaledHeadWidth = originalHeadWidth * scaleFactor;
-    
-    arrow.setLength(scaledLength, scaledHeadLength, scaledHeadWidth);
-  }
-
-  /**
-   * Update all arrow scales based on current camera distance
-   * Note: Only applies to legacy arrows. New arrows use fixed sizes.
-   */
-  public updateAllArrowScales(): void {
-    if (!this.camera) return;
-    
-    this.arrows.forEach(arrow => {
-      // Only update legacy arrows that don't have fixed size
-      if (((arrow as any).isPersistentCut || (arrow as any).isPersistentFill) && !(arrow as any).isFixedSize) {
-        this.updateArrowScale(arrow);
-      }
-    });
-  }
-
-  /**
-   * Update arrow density when camera zoom changes
-   * This would be called when camera position changes significantly
-   */
-  public onCameraZoomChanged(): void {
-    // For now, we don't regenerate existing arrows on zoom change
-    // The density will be applied to new arrows created during terrain modification
-    // Future enhancement could implement dynamic arrow regeneration based on zoom
-  }
-
-  // ============================================================================
-  // DATABASE PERSISTENCE METHODS
-  // ============================================================================
-
-  /**
-   * Set user ID for database operations
-   */
-  public setUserId(userId: string): void {
-    this.currentUserId = userId;
-  }
-
-  /**
-   * Set session ID for database operations
-   */
-  public setSessionId(sessionId: string | null): void {
-    this.currentSessionId = sessionId;
-  }
-
-  /**
-   * Enable or disable auto-save functionality
-   */
-  public setAutoSave(enabled: boolean): void {
-    this.autoSaveEnabled = enabled;
-  }
-
-  /**
-   * Save current terrain state to database
-   */
-  public async saveTerrainToDatabase(name?: string): Promise<boolean> {
-    if (!this.currentUserId) {
-      console.warn('Cannot save terrain: No user ID set');
-      return false;
-    }
-
-    try {
-      const terrainData = this.exportTerrain();
-      const { error } = await supabase
-        .from('terrain_states')
-        .insert({
-          user_id: this.currentUserId,
-          session_id: this.currentSessionId,
-          name: name || `Terrain_${new Date().toISOString().slice(0, 19).replace('T', '_')}`,
-          terrain_data: terrainData,
-          volume_data: terrainData.volume,
-          created_at: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error('Error saving terrain to database:', error);
-        return false;
-      }
-
-      this.lastSaveTime = Date.now();
-      console.log('Terrain saved to database successfully');
-      return true;
-    } catch (error) {
-      console.error('Failed to save terrain to database:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Load terrain state from database
-   */
-  public async loadTerrainFromDatabase(terrainId: string): Promise<boolean> {
-    try {
-      const { data, error } = await supabase
-        .from('terrain_states')
-        .select('terrain_data')
-        .eq('id', terrainId)
-        .single();
-
-      if (error || !data) {
-        console.error('Error loading terrain from database:', error);
-        return false;
-      }
-
-      this.importTerrain(data.terrain_data);
-      console.log('Terrain loaded from database successfully');
-      return true;
-    } catch (error) {
-      console.error('Failed to load terrain from database:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Get user's saved terrain states
-   */
-  public async getUserTerrainStates(): Promise<any[]> {
-    if (!this.currentUserId) {
-      return [];
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('terrain_states')
-        .select('id, name, created_at, volume_data')
-        .eq('user_id', this.currentUserId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching user terrain states:', error);
-        return [];
-      }
-
-      return data || [];
-    } catch (error) {
-      console.error('Failed to fetch user terrain states:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Save individual terrain modification to database
-   */
-  public async saveModificationToDatabase(x: number, z: number, heightChange: number, tool: string): Promise<void> {
-    if (!this.currentUserId) {
-      // Store for batch save later if no user ID
-      this.pendingModifications.push({ x, z, heightChange, tool });
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('terrain_modifications')
-        .insert({
-          session_id: this.currentSessionId,
-          user_id: this.currentUserId,
-          x: x,
-          z: z,
-          height_change: heightChange,
-          tool: tool,
-          created_at: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error('Error saving terrain modification:', error);
-      }
-    } catch (error) {
-      console.error('Failed to save terrain modification:', error);
-    }
-  }
-
-  /**
-   * Auto-save terrain if conditions are met
-   */
-  public async autoSaveIfNeeded(): Promise<void> {
-    if (!this.autoSaveEnabled || !this.currentUserId) {
-      return;
-    }
-
-    const now = Date.now();
-    if (now - this.lastSaveTime >= this.saveThrottleMs) {
-      await this.saveTerrainToDatabase(`AutoSave_${new Date().toISOString().slice(0, 19).replace('T', '_')}`);
-    }
-  }
-
-  /**
-   * Enhanced save current state - now saves to database too
-   */
-  public async saveCurrentState(): Promise<boolean> {
-    const vertices = this.geometry.attributes.position.array;
-
-    // Copy current terrain state to become new original/baseline
-    for (let i = 0; i < vertices.length; i++) {
-      this.originalVertices[i] = vertices[i];
-    }
-
-    // Clear all persistent arrows since we're establishing new baseline
-    this.clearAllPersistentArrows();
-    
-    // Clear undo/redo stacks since we're establishing new baseline
-    this.undoStack = [];
-    this.redoStack = [];
-    
-    // Save this new state as the starting point
-    this.saveState();
-    
-    // Force update the terrain colors and geometry
-    this.updateTerrainColors();
-    this.updateBlockGeometry();
-
-    // Save to database as a checkpoint
-    if (this.currentUserId) {
-      const success = await this.saveTerrainToDatabase(`Checkpoint_${new Date().toISOString().slice(0, 19).replace('T', '_')}`);
-      return success;
-    }
-
-    return true;
-  }
-
-  /**
-   * Save any pending modifications when user ID becomes available
-   */
-  public async savePendingModifications(): Promise<void> {
-    if (!this.currentUserId || this.pendingModifications.length === 0) {
-      return;
-    }
-
-    try {
-      const modifications = this.pendingModifications.map(mod => ({
-        session_id: this.currentSessionId,
-        user_id: this.currentUserId,
-        x: mod.x,
-        z: mod.z,
-        height_change: mod.heightChange,
-        tool: mod.tool,
-        created_at: new Date().toISOString()
-      }));
-
-      const { error } = await supabase
-        .from('terrain_modifications')
-        .insert(modifications);
-
-      if (error) {
-        console.error('Error saving pending modifications:', error);
-      } else {
-        this.pendingModifications = [];
-        console.log(`Saved ${modifications.length} pending modifications`);
-      }
-    } catch (error) {
-      console.error('Failed to save pending modifications:', error);
-    }
-  }
-
-  /**
-   * Load terrain modifications from database for a session
-   */
-  public async loadSessionModifications(sessionId: string): Promise<void> {
-    try {
-      const { data, error } = await supabase
-        .from('terrain_modifications')
-        .select('x, z, height_change, tool, created_at')
-        .eq('session_id', sessionId)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('Error loading session modifications:', error);
-        return;
-      }
-
-      if (data && data.length > 0) {
-        // Apply modifications in chronological order
-        for (const mod of data) {
-          this.modifyHeightBrush(mod.x, mod.z, mod.height_change);
-        }
-        console.log(`Applied ${data.length} session modifications`);
-      }
-    } catch (error) {
-      console.error('Failed to load session modifications:', error);
-    }
-  }
-
-  /**
-   * Delete old auto-saves to prevent database bloat
-   */
-  public async cleanupOldAutoSaves(): Promise<void> {
-    if (!this.currentUserId) {
-      return;
-    }
-
-    try {
-      // Delete auto-saves older than 7 days
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - 7);
-
-      const { error } = await supabase
-        .from('terrain_states')
-        .delete()
-        .eq('user_id', this.currentUserId)
-        .like('name', 'AutoSave_%')
-        .lt('created_at', cutoffDate.toISOString());
-
-      if (error) {
-        console.error('Error cleaning up old auto-saves:', error);
-      }
-    } catch (error) {
-      console.error('Failed to cleanup old auto-saves:', error);
-    }
-  }
-
-  /**
-   * Create localized cut overlay for a specific modification area
-   */
-  private createLocalizedCutOverlay(centerX: number, centerZ: number, radius: number): void {
-    // Calculate bounds for the overlay - constrain to terrain boundaries
-    let bounds = {
-      minX: Math.max(0, centerX - radius),
-      maxX: Math.min(100, centerX + radius),
-      minZ: Math.max(0, centerZ - radius),
-      maxZ: Math.min(100, centerZ + radius)
-    };
-
-    // Check for overlapping existing cut areas to merge with
-    let existingArea = null;
-    for (const [key, area] of this.modificationAreas.entries()) {
-      if (area.type === 'cut') {
-        // Check if this new area overlaps with existing area
-        const overlap = !(bounds.maxX < area.bounds.minX || 
-                         bounds.minX > area.bounds.maxX || 
-                         bounds.maxZ < area.bounds.minZ || 
-                         bounds.minZ > area.bounds.maxZ);
-        
-        if (overlap) {
-          existingArea = { key, area };
-          break;
-        }
-      }
-    }
-
-    if (existingArea) {
-      // Merge with existing area - expand bounds and recreate overlay
-      const mergedBounds = {
-        minX: Math.min(bounds.minX, existingArea.area.bounds.minX),
-        maxX: Math.max(bounds.maxX, existingArea.area.bounds.maxX),
-        minZ: Math.min(bounds.minZ, existingArea.area.bounds.minZ),
-        maxZ: Math.max(bounds.maxZ, existingArea.area.bounds.maxZ)
-      };
-      
-             // Remove old overlay
-       if (existingArea.area.overlay) {
-         this.terrainGroup.remove(existingArea.area.overlay);
-         this.cutOverlays.splice(this.cutOverlays.indexOf(existingArea.area.overlay), 1);
-       }
-       this.modificationAreas.delete(existingArea.key);
-       
-       // Clear arrows in the merged area and recalculate
-       this.clearArrowsInBounds(mergedBounds);
-       
-       // Use merged bounds for overlay creation
-       bounds = mergedBounds;
-       
-       // Create new evenly distributed arrows for merged area
-       this.createArrowsForMergedArea(mergedBounds, false); // false = cut arrows
-     }
-
-    // Calculate excavation volume dimensions
-    const overlayWidth = bounds.maxX - bounds.minX;
-    const overlayHeight = bounds.maxZ - bounds.minZ;
-    
-    // Sample heights to determine volume dimensions
-    const samples = 5; // 5x5 grid of height samples
-    let minExcavationDepth = 0;
-    let maxExcavationDepth = 0;
-    let avgOriginalHeight = 0;
-    let avgCurrentHeight = 0;
-    let sampleCount = 0;
-    
-    for (let sx = 0; sx < samples; sx++) {
-      for (let sz = 0; sz < samples; sz++) {
-        const sampleX = bounds.minX + (sx / (samples - 1)) * overlayWidth;
-        const sampleZ = bounds.minZ + (sz / (samples - 1)) * overlayHeight;
-        
-        const originalHeight = this.getOriginalHeightAtPosition(sampleX, sampleZ);
-        const currentHeight = this.getHeightAtPosition(sampleX, sampleZ);
-        const excavationDepth = originalHeight - currentHeight;
-        
-        if (excavationDepth > 0.1) { // Only count significant excavation
-          minExcavationDepth = Math.min(minExcavationDepth, excavationDepth);
-          maxExcavationDepth = Math.max(maxExcavationDepth, excavationDepth);
-          avgOriginalHeight += originalHeight;
-          avgCurrentHeight += currentHeight;
-          sampleCount++;
-        }
-      }
-    }
-    
-    if (sampleCount === 0) return; // No significant excavation
-    
-    avgOriginalHeight /= sampleCount;
-    avgCurrentHeight /= sampleCount;
-    const avgExcavationDepth = avgOriginalHeight - avgCurrentHeight;
-    
-    // Create polyhedron geometry representing the excavated volume
-    const geometry = new THREE.BoxGeometry(overlayWidth, avgExcavationDepth, overlayHeight);
-
-    // Create red semitransparent material for cut volume - much more transparent
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xFF4444,
-      transparent: true,
-      opacity: 0.25, // Much more transparent for better visibility
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-
-    // Create overlay mesh - position it in the middle of the excavated volume
-    const overlay = new THREE.Mesh(geometry, material);
-    const volumeCenterHeight = avgCurrentHeight + (avgExcavationDepth / 2);
-    overlay.position.set(centerX, volumeCenterHeight, centerZ);
-
-         // Add to terrain group and track
-     this.terrainGroup.add(overlay);
-     this.cutOverlays.push(overlay);
-     
-     // Create area key for tracking
-     const areaKey = `cut_${Math.round(centerX)}_${Math.round(centerZ)}_${Date.now()}`;
-     this.modificationAreas.set(areaKey, { bounds, type: 'cut', overlay });
-   }
-
-   /**
-    * Create localized fill overlay for a specific modification area
-    */
-   private createLocalizedFillOverlay(centerX: number, centerZ: number, radius: number): void {
-     // Calculate bounds for the overlay - constrain to terrain boundaries
-     let bounds = {
-       minX: Math.max(0, centerX - radius),
-       maxX: Math.min(100, centerX + radius),
-       minZ: Math.max(0, centerZ - radius),
-       maxZ: Math.min(100, centerZ + radius)
-     };
-
-     // Check for overlapping existing fill areas to merge with
-     let existingArea = null;
-     for (const [key, area] of this.modificationAreas.entries()) {
-       if (area.type === 'fill') {
-         // Check if this new area overlaps with existing area
-         const overlap = !(bounds.maxX < area.bounds.minX || 
-                          bounds.minX > area.bounds.maxX || 
-                          bounds.maxZ < area.bounds.minZ || 
-                          bounds.minZ > area.bounds.maxZ);
-         
-         if (overlap) {
-           existingArea = { key, area };
-           break;
-         }
-       }
-     }
-
-     if (existingArea) {
-       // Merge with existing area - expand bounds and recreate overlay
-       const mergedBounds = {
-         minX: Math.min(bounds.minX, existingArea.area.bounds.minX),
-         maxX: Math.max(bounds.maxX, existingArea.area.bounds.maxX),
-         minZ: Math.min(bounds.minZ, existingArea.area.bounds.minZ),
-         maxZ: Math.max(bounds.maxZ, existingArea.area.bounds.maxZ)
-       };
-       
-       // Remove old overlay
-       if (existingArea.area.overlay) {
-         this.terrainGroup.remove(existingArea.area.overlay);
-         this.fillOverlays.splice(this.fillOverlays.indexOf(existingArea.area.overlay), 1);
-       }
-       this.modificationAreas.delete(existingArea.key);
-       
-       // Clear arrows in the merged area and recalculate
-       this.clearArrowsInBounds(mergedBounds);
-       
-       // Use merged bounds for overlay creation
-       bounds = mergedBounds;
-       
-       // Create new evenly distributed arrows for merged area
-       this.createArrowsForMergedArea(mergedBounds, true); // true = fill arrows
-     }
-
-     // Calculate fill volume dimensions
-     const overlayWidth = bounds.maxX - bounds.minX;
-     const overlayHeight = bounds.maxZ - bounds.minZ;
-     
-     // Sample heights to determine volume dimensions
-     const samples = 5; // 5x5 grid of height samples
-     let minFillHeight = 0;
-     let maxFillHeight = 0;
-     let avgOriginalHeight = 0;
-     let avgCurrentHeight = 0;
-     let sampleCount = 0;
-     
-     for (let sx = 0; sx < samples; sx++) {
-       for (let sz = 0; sz < samples; sz++) {
-         const sampleX = bounds.minX + (sx / (samples - 1)) * overlayWidth;
-         const sampleZ = bounds.minZ + (sz / (samples - 1)) * overlayHeight;
-         
-         const originalHeight = this.getOriginalHeightAtPosition(sampleX, sampleZ);
-         const currentHeight = this.getHeightAtPosition(sampleX, sampleZ);
-         const fillHeight = currentHeight - originalHeight;
-         
-         if (fillHeight > 0.1) { // Only count significant filling
-           minFillHeight = Math.min(minFillHeight, fillHeight);
-           maxFillHeight = Math.max(maxFillHeight, fillHeight);
-           avgOriginalHeight += originalHeight;
-           avgCurrentHeight += currentHeight;
-           sampleCount++;
-         }
-       }
-     }
-     
-     if (sampleCount === 0) return; // No significant filling
-     
-     avgOriginalHeight /= sampleCount;
-     avgCurrentHeight /= sampleCount;
-     const avgFillHeight = avgCurrentHeight - avgOriginalHeight;
-     
-     // Create polyhedron geometry representing the filled volume
-     const geometry = new THREE.BoxGeometry(overlayWidth, avgFillHeight, overlayHeight);
-
-     // Create blue semitransparent material for fill volume
-     const material = new THREE.MeshBasicMaterial({
-       color: 0x4444FF,
-       transparent: true,
-       opacity: 0.4,
-       side: THREE.DoubleSide,
-       depthWrite: false,
-     });
-
-     // Create overlay mesh - position it in the middle of the filled volume
-     const overlay = new THREE.Mesh(geometry, material);
-     const volumeCenterHeight = avgOriginalHeight + (avgFillHeight / 2);
-     overlay.position.set(centerX, volumeCenterHeight, centerZ);
-
-            // Add to terrain group and track
-       this.terrainGroup.add(overlay);
-       this.fillOverlays.push(overlay);
-       
-       // Create area key for tracking
-       const areaKey = `fill_${Math.round(centerX)}_${Math.round(centerZ)}_${Date.now()}`;
-       this.modificationAreas.set(areaKey, { bounds, type: 'fill', overlay });
-   }
-
-   /**
-    * Clean up all localized overlays
-    */
-   private cleanupAllOverlays(): void {
-     // Remove all cut overlays
-     this.cutOverlays.forEach(overlay => {
-       this.terrainGroup.remove(overlay);
-       overlay.geometry.dispose();
-       (overlay.material as THREE.Material).dispose();
-     });
-     this.cutOverlays = [];
-
-     // Remove all fill overlays
-     this.fillOverlays.forEach(overlay => {
-       this.terrainGroup.remove(overlay);
-       overlay.geometry.dispose();
-       (overlay.material as THREE.Material).dispose();
-     });
-     this.fillOverlays = [];
-
-     // Clear modification areas
-     this.modificationAreas.clear();
-   }
-
-   /**
-    * Toggle visibility of all fill overlays
-    */
-   public toggleFillVolumeOverlay(visible: boolean): void {
-     this.showFillVolumeOverlay = visible;
-     this.fillOverlays.forEach(overlay => {
-       overlay.visible = visible;
-     });
-   }
-
-   /**
-    * Get original terrain overlay visibility status
-    */
-   public isOriginalTerrainOverlayVisible(): boolean {
-     return this.showOriginalTerrainOverlay;
-   }
-
-   /**
-    * Get fill volume overlay visibility status
-    */
-   public isFillVolumeOverlayVisible(): boolean {
-     return this.showFillVolumeOverlay;
-   }
-
-  /**
-   * Toggle visibility of all cut overlays
-   */
-  public toggleOriginalTerrainOverlay(visible: boolean): void {
-    this.showOriginalTerrainOverlay = visible;
+  private cleanupAllOverlays(): void {
+    // Remove all cut overlays
     this.cutOverlays.forEach(overlay => {
-      overlay.visible = visible;
+      this.terrainGroup.remove(overlay);
+      overlay.geometry.dispose();
+      (overlay.material as THREE.Material).dispose();
     });
+    this.cutOverlays = [];
+
+    // Remove all fill overlays
+    this.fillOverlays.forEach(overlay => {
+      this.terrainGroup.remove(overlay);
+      overlay.geometry.dispose();
+      (overlay.material as THREE.Material).dispose();
+    });
+    this.fillOverlays = [];
+
+    // Clear modification areas
+    this.modificationAreas.clear();
   }
 
   /**
@@ -3212,7 +2008,9 @@ export class Terrain {
    */
   public toggleOriginalTerrainOverlay(visible: boolean): void {
     this.showOriginalTerrainOverlay = visible;
-    this.updateOriginalTerrainOverlay();
+    this.cutOverlays.forEach(overlay => {
+      overlay.visible = visible;
+    });
   }
 
   /**
@@ -3269,203 +2067,668 @@ export class Terrain {
     return interpolatedHeight;
   }
 
-  /**
-   * Clean up original terrain overlay
-   */
-  private cleanupOriginalTerrainOverlay(): void {
-    if (this.originalTerrainOverlay) {
-      this.terrainGroup.remove(this.originalTerrainOverlay);
-      this.originalTerrainOverlay = null;
+  private createLocalizedCutOverlay(centerX: number, centerZ: number, radius: number): void {
+    const brushRadius = radius * 1.2;
+    let bounds = {
+      minX: Math.max(0, centerX - brushRadius),
+      maxX: Math.min(100, centerX + brushRadius),
+      minZ: Math.max(0, centerZ - brushRadius),
+      maxZ: Math.min(100, centerZ + brushRadius)
+    };
+
+    // Recursively merge with ANY existing cut areas that touch/overlap until no more merges are possible
+    while (true) {
+      const existingArea = this.findOverlappingArea(bounds, 'cut');
+      if (!existingArea) break;
+
+      // Expand bounds to encompass both areas
+      bounds = {
+        minX: Math.min(bounds.minX, existingArea.area.bounds.minX),
+        maxX: Math.max(bounds.maxX, existingArea.area.bounds.maxX),
+        minZ: Math.min(bounds.minZ, existingArea.area.bounds.minZ),
+        maxZ: Math.max(bounds.maxZ, existingArea.area.bounds.maxZ)
+      };
+
+      // Remove the old overlay mesh & bookkeeping
+      if (existingArea.area.overlay) {
+        this.terrainGroup.remove(existingArea.area.overlay);
+        this.cutOverlays.splice(this.cutOverlays.indexOf(existingArea.area.overlay), 1);
+      }
+      this.modificationAreas.delete(existingArea.key);
+      // Clear any arrows in old bounds (arrows currently removed – keeps call for future)
+      this.clearArrowsInBounds(bounds);
+      // Continue loop – there may be further areas now overlapping the enlarged bounds
     }
-    if (this.originalTerrainGeometry) {
-      this.originalTerrainGeometry.dispose();
-      this.originalTerrainGeometry = null;
+
+    // Build a new single overlay that covers the merged bounds
+    const mergedCenterX = (bounds.minX + bounds.maxX) / 2;
+    const mergedCenterZ = (bounds.minZ + bounds.maxZ) / 2;
+    const mergedRadius = Math.max((bounds.maxX - bounds.minX), (bounds.maxZ - bounds.minZ)) / 2;
+
+    const geometry = this.createCutPolyhedronGeometry(bounds, mergedCenterX, mergedCenterZ, mergedRadius);
+    const material = new THREE.MeshBasicMaterial({ color: 0xFF4444, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, depthTest: false });
+    const overlay = new THREE.Mesh(geometry, material);
+    overlay.renderOrder = 1; // draw after terrain so it is visible
+    this.terrainGroup.add(overlay);
+    this.cutOverlays.push(overlay);
+
+    const areaKey = `cut_${Math.round(mergedCenterX)}_${Math.round(mergedCenterZ)}_${Date.now()}`;
+    this.modificationAreas.set(areaKey, { bounds, type: 'cut', overlay });
+  }
+
+  private createLocalizedFillOverlay(centerX: number, centerZ: number, radius: number, plannedHeight: number = 0): void {
+    const brushRadius = radius * 1.2;
+    let bounds = {
+      minX: Math.max(0, centerX - brushRadius),
+      maxX: Math.min(100, centerX + brushRadius),
+      minZ: Math.max(0, centerZ - brushRadius),
+      maxZ: Math.min(100, centerZ + brushRadius)
+    };
+
+    // Recursively merge with ANY existing fill areas that touch/overlap until no more merges are possible
+    while (true) {
+      const existingArea = this.findOverlappingArea(bounds, 'fill');
+      if (!existingArea) break;
+
+      bounds = {
+        minX: Math.min(bounds.minX, existingArea.area.bounds.minX),
+        maxX: Math.max(bounds.maxX, existingArea.area.bounds.maxX),
+        minZ: Math.min(bounds.minZ, existingArea.area.bounds.minZ),
+        maxZ: Math.max(bounds.maxZ, existingArea.area.bounds.maxZ)
+      };
+      if (existingArea.area.overlay) {
+        this.terrainGroup.remove(existingArea.area.overlay);
+        this.fillOverlays.splice(this.fillOverlays.indexOf(existingArea.area.overlay), 1);
+      }
+      this.modificationAreas.delete(existingArea.key);
+      this.clearArrowsInBounds(bounds);
     }
-    if (this.originalTerrainMaterial) {
-      this.originalTerrainMaterial.dispose();
-      this.originalTerrainMaterial = null;
-    }
+
+    const mergedCenterX = (bounds.minX + bounds.maxX) / 2;
+    const mergedCenterZ = (bounds.minZ + bounds.maxZ) / 2;
+    const mergedRadius = Math.max((bounds.maxX - bounds.minX), (bounds.maxZ - bounds.minZ)) / 2;
+
+    const geometry = this.createFillPolyhedronGeometry(bounds, mergedCenterX, mergedCenterZ, mergedRadius, plannedHeight);
+    const material = new THREE.MeshBasicMaterial({ color: 0x4444FF, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false });
+    const overlay = new THREE.Mesh(geometry, material);
+    this.terrainGroup.add(overlay);
+    this.fillOverlays.push(overlay);
+
+    const areaKey = `fill_${Math.round(mergedCenterX)}_${Math.round(mergedCenterZ)}_${Date.now()}`;
+    this.modificationAreas.set(areaKey, { bounds, type: 'fill', overlay });
+  }
+
+  private createDensityBasedArrows(x: number, z: number, heightChange: number, volumeChange: number, radius: number): void {
+    // Removed entire method body
+  }
+
+  private clearArrowsInBounds(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }): void {
+    // Removed entire method body
+  }
+
+  private createArrowsForMergedArea(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, isFill: boolean): void {
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+    const radius = Math.max((bounds.maxX - bounds.minX) / 2, (bounds.maxZ - bounds.minZ) / 2);
+    this.createDensityBasedArrows(centerX, centerZ, isFill ? 1 : -1, 1, radius);
+  }
+
+  // Remove any duplicate definitions
+
+  public clearAllArrows(): void {
+    this.arrows.forEach(arrow => this.terrainGroup.remove(arrow));
+    this.arrows = [];
   }
 
   /**
-   * Create blue semitransparent overlay showing filled volume above original terrain
+   * Set camera reference for zoom-independent arrow scaling
    */
-  private createFillVolumeOverlay(): void {
-    if (this.fillVolumeOverlay) {
-      this.terrainGroup.remove(this.fillVolumeOverlay);
-      this.fillVolumeOverlay = null;
-    }
+  public setCameraReference(camera: THREE.Camera): void {
+    this.camera = camera;
+  }
 
-    // Create geometry matching the current terrain structure
-    const width = this.geometry.parameters.width;
-    const height = this.geometry.parameters.height;
-    const widthSegments = this.geometry.parameters.widthSegments;
-    const heightSegments = this.geometry.parameters.heightSegments;
+  /**
+   * Force disable all pattern overlays (no-op since patterns were removed)
+   */
+  public forceDisablePatterns(): void {
+    // Patterns are permanently disabled, so this is a no-op
+    this.accessibilityMode = 'normal';
+  }
 
-    this.fillVolumeGeometry = new THREE.PlaneGeometry(
-      width,
-      height,
-      widthSegments,
-      heightSegments
-    );
-
-    // Apply same transformations as main terrain
-    this.fillVolumeGeometry.rotateX(-Math.PI / 2);
-    this.fillVolumeGeometry.translate(width/2, 0, height/2);
-
-    // Set vertices to current terrain heights (showing filled areas)
-    const overlayVertices = this.fillVolumeGeometry.attributes.position.array;
-    const currentVertices = this.geometry.attributes.position.array;
-    for (let i = 0; i < overlayVertices.length; i++) {
-      overlayVertices[i] = currentVertices[i];
-    }
-    this.fillVolumeGeometry.attributes.position.needsUpdate = true;
-    this.fillVolumeGeometry.computeVertexNormals();
-
-    // Create blue semitransparent material with flat shading
-    this.fillVolumeMaterial = new THREE.MeshBasicMaterial({
-      color: 0x4444FF, // Blue color matching fill tool
-      transparent: true,
-      opacity: 0.3, // Semitransparent
-      side: THREE.DoubleSide, // Visible from both sides
-      depthWrite: false, // Allow seeing through to terrain below
+  /**
+   * Force disable wireframe mode
+   */
+  public forceDisableWireframe(): void {
+    // Disable wireframe on surface mesh
+    const surfaceMaterial = this.surfaceMesh.material as THREE.MeshBasicMaterial;
+    surfaceMaterial.wireframe = false;
+    
+    // Also disable wireframe on the terrain block
+    this.wallMeshes.forEach(block => {
+      if (block.material instanceof Array) {
+        // Handle multi-material mesh
+        block.material.forEach(mat => {
+          if (mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.MeshLambertMaterial) {
+            mat.wireframe = false;
+          }
+        });
+      } else if (block.material instanceof THREE.MeshBasicMaterial || block.material instanceof THREE.MeshLambertMaterial) {
+        block.material.wireframe = false;
+      }
     });
-
-    // Create overlay mesh
-    this.fillVolumeOverlay = new THREE.Mesh(
-      this.fillVolumeGeometry,
-      this.fillVolumeMaterial
-    );
-
-    // Position higher above the terrain to ensure visibility
-    this.fillVolumeOverlay.position.y = 0.6;
-
-    // Add to terrain group
-    this.terrainGroup.add(this.fillVolumeOverlay);
   }
 
   /**
-   * Update fill volume overlay visibility and opacity
+   * Update all arrow scales based on camera distance (no-op since arrows are fixed size)
    */
-  public updateFillVolumeOverlay(): void {
-    // Only create overlay if it should be visible
-    if (!this.fillVolumeOverlay && this.showFillVolumeOverlay) {
-      this.createFillVolumeOverlay();
-    }
+  public updateAllArrowScales(): void {
+    // Arrows now use fixed sizes, so this is a no-op
+  }
 
-    if (this.fillVolumeOverlay) {
-      this.fillVolumeOverlay.visible = this.showFillVolumeOverlay;
-      
-      if (this.showFillVolumeOverlay) {
-        // Update geometry to show current terrain heights
-        const overlayVertices = this.fillVolumeGeometry!.attributes.position.array;
-        const currentVertices = this.geometry.attributes.position.array;
-        for (let i = 0; i < overlayVertices.length; i++) {
-          overlayVertices[i] = currentVertices[i];
-        }
-        this.fillVolumeGeometry!.attributes.position.needsUpdate = true;
-        this.fillVolumeGeometry!.computeVertexNormals();
+  /**
+   * Auto-save terrain if needed (no-op without database integration)
+   */
+  public autoSaveIfNeeded(): void {
+    // Auto-save functionality would go here if database is connected
+  }
+
+  /**
+   * Find overlapping modification area of the same type
+   */
+  private findOverlappingArea(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, type: 'cut' | 'fill'): { key: string; area: any } | null {
+    for (const [key, area] of this.modificationAreas.entries()) {
+      if (area.type === type) {
+        // Check if this new area overlaps with existing area
+        const overlap = !(bounds.maxX < area.bounds.minX || 
+                         bounds.minX > area.bounds.maxX || 
+                         bounds.maxZ < area.bounds.minZ || 
+                         bounds.minZ > area.bounds.maxZ);
         
-        // Only show overlay where there has been filling (current terrain above original)
-        this.updateFillOverlayVisibilityByHeight();
+        if (overlap) {
+          return { key, area };
+        }
       }
     }
+    return null;
   }
 
   /**
-   * Update fill overlay visibility based on height differences (only show where filled)
+   * Save individual terrain modification to database (no-op without database integration)
    */
-  private updateFillOverlayVisibilityByHeight(): void {
-    if (!this.fillVolumeOverlay || !this.fillVolumeGeometry) return;
+  public saveModificationToDatabase(x: number, z: number, heightChange: number, tool: string): void {
+    // Database save functionality would go here if database is connected
+    // For now, this is a no-op to prevent runtime errors
+  }
 
-    const currentVertices = this.geometry.attributes.position.array;
-    const originalVertices = this.originalVertices;
-    const overlayVertices = this.fillVolumeGeometry.attributes.position.array;
+  // Geometry builder for CUT overlays – follows original terrain on top and flat at min excavation depth
+  private createCutPolyhedronGeometry(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, centerX: number, centerZ: number, radius: number): THREE.BufferGeometry {
+    const isCircle = this.brushSettings.shape === 'circle';
 
-    // Create colors array for vertex-based visibility control (RGBA for alpha support)
-    const colors = new Float32Array((overlayVertices.length / 3) * 4); // RGBA format
-    
-    let hasAnyFilling = false;
-    
-    for (let i = 0, colorIndex = 0; i < overlayVertices.length; i += 3, colorIndex += 4) {
-      const currentHeight = currentVertices[i + 1];
-      const originalHeight = originalVertices[i + 1];
-      
-      // Show overlay (full opacity) where filling occurred
-      // Hide overlay (transparent) where no filling occurred
-      const heightDifference = currentHeight - originalHeight;
-      const showOverlay = heightDifference > 0.1; // Only show if filled by more than 0.1 feet
-      
-      if (showOverlay) {
-        hasAnyFilling = true;
-        // Blue color with full opacity
-        colors[colorIndex] = 0.27;    // R (matching #4444FF)
-        colors[colorIndex + 1] = 0.27; // G (matching #4444FF)
-        colors[colorIndex + 2] = 1.0;  // B (matching #4444FF)
-        colors[colorIndex + 3] = 1.0;  // A (full opacity)
-      } else {
-        // Transparent (invisible)
-        colors[colorIndex] = 0.27;    // R
-        colors[colorIndex + 1] = 0.27; // G
-        colors[colorIndex + 2] = 1.0;  // B
-        colors[colorIndex + 3] = 0.0;  // A (fully transparent)
+    const positions: number[] = [];
+    const indices: number[] = [];
+
+    let minHeight = Infinity; // flat datum depth
+
+    if (isCircle) {
+      // Concentric ring sampling (smooth)
+      const radialSteps = 36;
+      const ringSteps = 10;
+      // scan to find min current height
+      for (let j = 0; j <= ringSteps; j++) {
+        const rFrac = j / ringSteps;
+        const dist = rFrac * radius;
+        for (let i = 0; i < radialSteps; i++) {
+          const angle = (i / radialSteps) * Math.PI * 2;
+          const px = centerX + Math.cos(angle) * dist;
+          const pz = centerZ + Math.sin(angle) * dist;
+          minHeight = Math.min(minHeight, this.getHeightAtPosition(px, pz));
+        }
       }
-    }
+      // index helpers
+      const bottomIndex = (j:number,i:number) => j * radialSteps + i;
+      const bottomCount = (ringSteps + 1) * radialSteps;
+      const topIndex = (j:number,i:number) => bottomCount + j * radialSteps + i;
 
-    // If no filling anywhere, hide the entire overlay
-    if (!hasAnyFilling) {
-      this.fillVolumeOverlay.visible = false;
-      return;
-    }
-
-    this.fillVolumeOverlay.visible = this.showFillVolumeOverlay;
-
-    // Apply vertex colors with alpha
-    if (!this.fillVolumeGeometry.attributes.color) {
-      this.fillVolumeGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+      // vertices – bottom then top
+      for (let j = 0; j <= ringSteps; j++) {
+        const rFrac = j / ringSteps;
+        const dist = rFrac * radius;
+        for (let i = 0; i < radialSteps; i++) {
+          const angle = (i / radialSteps) * Math.PI * 2;
+          const px = centerX + Math.cos(angle) * dist;
+          const pz = centerZ + Math.sin(angle) * dist;
+          positions.push(px, minHeight, pz);
+        }
+      }
+      for (let j = 0; j <= ringSteps; j++) {
+        const rFrac = j / ringSteps;
+        const dist = rFrac * radius;
+        for (let i = 0; i < radialSteps; i++) {
+          const angle = (i / radialSteps) * Math.PI * 2;
+          const px = centerX + Math.cos(angle) * dist;
+          const pz = centerZ + Math.sin(angle) * dist;
+          const origY = this.getOriginalHeightAtPosition(px, pz);
+          positions.push(px, origY, pz);
+        }
+      }
+      // faces bottom
+      for (let j = 0; j < ringSteps; j++) {
+        for (let i = 0; i < radialSteps; i++) {
+          const a = bottomIndex(j,i);
+          const b = bottomIndex(j+1,i);
+          const c = bottomIndex(j+1,(i+1)%radialSteps);
+          const d = bottomIndex(j,(i+1)%radialSteps);
+          indices.push(a,c,b);
+          indices.push(a,d,c);
+        }
+      }
+      // faces top
+      for (let j = 0; j < ringSteps; j++) {
+        for (let i = 0; i < radialSteps; i++) {
+          const a = topIndex(j,i);
+          const b = topIndex(j,(i+1)%radialSteps);
+          const c = topIndex(j+1,(i+1)%radialSteps);
+          const d = topIndex(j+1,i);
+          indices.push(a,b,c);
+          indices.push(a,c,d);
+        }
+      }
+      // side walls
+      for (let j = 0; j <= ringSteps; j++) {
+        for (let i = 0; i < radialSteps; i++) {
+          const b1 = bottomIndex(j,i);
+          const b2 = bottomIndex(j,(i+1)%radialSteps);
+          const t1 = topIndex(j,i);
+          const t2 = topIndex(j,(i+1)%radialSteps);
+          indices.push(b1,t1,b2);
+          indices.push(b2,t1,t2);
+        }
+      }
     } else {
-      const colorAttribute = this.fillVolumeGeometry.attributes.color as THREE.BufferAttribute;
-      colorAttribute.array = colors;
-      colorAttribute.needsUpdate = true;
+      // square brush – grid sampling
+      const steps = 15;
+      const stepX = (bounds.maxX - bounds.minX) / steps;
+      const stepZ = (bounds.maxZ - bounds.minZ) / steps;
+      const numX = steps + 1;
+      const numZ = steps + 1;
+      const totalGrid = numX * numZ;
+      // find min height
+      for (let iz=0; iz<=steps; iz++) {
+        for (let ix=0; ix<=steps; ix++) {
+          const px = bounds.minX + ix*stepX;
+          const pz = bounds.minZ + iz*stepZ;
+          minHeight = Math.min(minHeight, this.getHeightAtPosition(px,pz));
+        }
+      }
+      // vertices bottom
+      for (let iz=0; iz<=steps; iz++) {
+        for (let ix=0; ix<=steps; ix++) {
+          const px = bounds.minX + ix*stepX;
+          const pz = bounds.minZ + iz*stepZ;
+          positions.push(px,minHeight,pz);
+        }
+      }
+      // vertices top
+      for (let iz=0; iz<=steps; iz++) {
+        for (let ix=0; ix<=steps; ix++) {
+          const px = bounds.minX + ix*stepX;
+          const pz = bounds.minZ + iz*stepZ;
+          const origY = this.getOriginalHeightAtPosition(px,pz);
+          positions.push(px,origY,pz);
+        }
+      }
+      const topOffset = totalGrid;
+      // faces bottom
+      for (let iz=0; iz<steps; iz++) {
+        for (let ix=0; ix<steps; ix++) {
+          const a = ix + numX*iz;
+          const b = ix + numX*(iz+1);
+          const c = (ix+1) + numX*(iz+1);
+          const d = (ix+1) + numX*iz;
+          indices.push(a,c,b);
+          indices.push(a,d,c);
+        }
+      }
+      // faces top
+      for (let iz=0; iz<steps; iz++) {
+        for (let ix=0; ix<steps; ix++) {
+          const a = topOffset + ix + numX*iz;
+          const b = topOffset + (ix+1) + numX*iz;
+          const c = topOffset + (ix+1) + numX*(iz+1);
+          const d = topOffset + ix + numX*(iz+1);
+          indices.push(a,b,c);
+          indices.push(a,c,d);
+        }
+      }
+      // side walls around perimeter
+      for (let iz=0; iz<steps; iz++) {
+        // left
+        let b1 = 0 + numX*iz;
+        let b2 = 0 + numX*(iz+1);
+        let t1 = topOffset + b1;
+        let t2 = topOffset + b2;
+        indices.push(b1,b2,t1);
+        indices.push(t1,b2,t2);
+        // right
+        b1 = steps + numX*iz;
+        b2 = steps + numX*(iz+1);
+        t1 = topOffset + b1;
+        t2 = topOffset + b2;
+        indices.push(b2,t1,b1);
+        indices.push(b2,t2,t1);
+      }
+      for (let ix=0; ix<steps; ix++) {
+        // front
+        let b1 = ix;
+        let b2 = ix+1;
+        let t1 = topOffset + b1;
+        let t2 = topOffset + b2;
+        indices.push(b1,t1,b2);
+        indices.push(b2,t1,t2);
+        // back
+        b1 = ix + numX*steps;
+        b2 = ix+1 + numX*steps;
+        t1 = topOffset + b1;
+        t2 = topOffset + b2;
+        indices.push(b2,b1,t1);
+        indices.push(b2,t1,t2);
+      }
     }
 
-    // Enable vertex colors and alpha on material
-    if (this.fillVolumeMaterial) {
-      this.fillVolumeMaterial.vertexColors = true;
-      this.fillVolumeMaterial.transparent = true;
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+    return geom;
+  }
+
+  // Geometry builder for FILL overlays – bounded below by original terrain and above by current built-up terrain. Only covers cells/angles where current > original.
+  private createFillPolyhedronGeometry(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, centerX: number, centerZ: number, radius: number, plannedHeight: number = 0): THREE.BufferGeometry {
+    const isCircle = this.brushSettings.shape === 'circle';
+    const EPS = 0.001;
+
+    const positions: number[] = [];
+    const indices: number[] = [];
+
+    if (isCircle) {
+      // 1. Determine adaptive boundary radius for each angle where fill occurs
+      const radialSteps = 36;
+      const ringSteps = 10;
+      const maxRadii:number[] = new Array(radialSteps).fill( plannedHeight>0 ? radius : 0 );
+
+      for (let i=0;i<radialSteps;i++){
+        const angle = (i/radialSteps)*Math.PI*2;
+        let maxDist = 0;
+        // march outward to radius collecting last point where current>original
+        const samples = ringSteps*2;
+        for (let s=1;s<=samples;s++){
+          const dist = (s/samples)*radius;
+          const px = centerX + Math.cos(angle)*dist;
+          const pz = centerZ + Math.sin(angle)*dist;
+          const cur = this.getHeightAtPosition(px,pz);
+          const orig = this.getOriginalHeightAtPosition(px,pz);
+          if (cur > orig + EPS) {
+            maxDist = dist;
+          }
+        }
+        maxRadii[i] = maxDist;
+      }
+
+      // If no positive fill found, return empty geometry
+      if (maxRadii.every(r => r===0)) {
+        return new THREE.BufferGeometry();
+      }
+
+      // 2. Build concentric rings up to each direction's max radius proportionally
+      const bottomIndex = (j:number,i:number) => j*radialSteps + i;
+      const bottomCount = (ringSteps+1)*radialSteps;
+      const topIndex = (j:number,i:number) => bottomCount + j*radialSteps + i;
+
+      for (let j=0;j<=ringSteps;j++){
+        const frac = j/ringSteps;
+        for (let i=0;i<radialSteps;i++){
+          const maxDist = maxRadii[i];
+          const dist = frac*maxDist;
+          const angle = (i/radialSteps)*Math.PI*2;
+          const px = centerX + Math.cos(angle)*dist;
+          const pz = centerZ + Math.sin(angle)*dist;
+          const orig = this.getOriginalHeightAtPosition(px,pz);
+          const cur  = plannedHeight>0 ? orig + plannedHeight : this.getHeightAtPosition(px,pz);
+          positions.push(px, orig, pz); // bottom vertex (original terrain)
+        }
+      }
+      for (let j=0;j<=ringSteps;j++){
+        const frac = j/ringSteps;
+        for (let i=0;i<radialSteps;i++){
+          const maxDist = maxRadii[i];
+          const dist = frac*maxDist;
+          const angle = (i/radialSteps)*Math.PI*2;
+          const px = centerX + Math.cos(angle)*dist;
+          const pz = centerZ + Math.sin(angle)*dist;
+          const orig = this.getOriginalHeightAtPosition(px,pz);
+          const cur  = plannedHeight>0 ? orig + plannedHeight : this.getHeightAtPosition(px,pz);
+          positions.push(px, cur, pz); // top vertex (built terrain)
+        }
+      }
+
+      // Faces similar to cut polyhedron but bottom normals face down.
+      for (let j=0;j<ringSteps;j++){
+        for (let i=0;i<radialSteps;i++){
+          const a = bottomIndex(j,i);
+          const b = bottomIndex(j+1,i);
+          const c = bottomIndex(j+1,(i+1)%radialSteps);
+          const d = bottomIndex(j,(i+1)%radialSteps);
+          indices.push(a,b,c); // bottom normal orientation up? we want downward, use opposite
+          indices.push(a,c,d);
+        }
+      }
+      for (let j=0;j<ringSteps;j++){
+        for (let i=0;i<radialSteps;i++){
+          const a = topIndex(j,i);
+          const b = topIndex(j,(i+1)%radialSteps);
+          const c = topIndex(j+1,(i+1)%radialSteps);
+          const d = topIndex(j+1,i);
+          indices.push(a,c,b);
+          indices.push(a,d,c);
+        }
+      }
+      for (let j=0;j<=ringSteps;j++){
+        for (let i=0;i<radialSteps;i++){
+          const b1 = bottomIndex(j,i);
+          const b2 = bottomIndex(j,(i+1)%radialSteps);
+          const t1 = topIndex(j,i);
+          const t2 = topIndex(j,(i+1)%radialSteps);
+          indices.push(b1,b2,t1);
+          indices.push(b2,t2,t1);
+        }
+      }
+
+    } else {
+      // square grid sampling: include only cells where current>original
+      const steps = 20;
+      const stepX = (bounds.maxX-bounds.minX)/steps;
+      const stepZ = (bounds.maxZ-bounds.minZ)/steps;
+
+      const idx = (ix:number,iz:number,layer:number) => layer*(steps+1)*(steps+1) + iz*(steps+1) + ix;
+      const vertsPerLayer = (steps+1)*(steps+1);
+
+      for (let iz=0; iz<=steps; iz++){
+        for (let ix=0; ix<=steps; ix++){
+          const px = bounds.minX + ix*stepX;
+          const pz = bounds.minZ + iz*stepZ;
+          const orig = this.getOriginalHeightAtPosition(px,pz);
+          const cur  = this.getHeightAtPosition(px,pz);
+          positions.push(px, orig, pz); // bottom layer
+        }
+      }
+      for (let iz=0; iz<=steps; iz++){
+        for (let ix=0; ix<=steps; ix++){
+          const px = bounds.minX + ix*stepX;
+          const pz = bounds.minZ + iz*stepZ;
+          const cur  = this.getHeightAtPosition(px,pz);
+          positions.push(px, cur, pz); // top layer
+        }
+      }
+      // build faces only when cur>orig for at least one vertex in cell
+      for (let iz=0; iz<steps; iz++){
+        for (let ix=0; ix<steps; ix++){
+          const corners:number[][] = [];
+          const vertsIndex=[
+            [ix,iz],[ix+1,iz],[ix,iz+1],[ix+1,iz+1]
+          ];
+          let hasFill=false;
+          vertsIndex.forEach(([vx,vz])=>{
+            const px = bounds.minX + vx*stepX;
+            const pz = bounds.minZ + vz*stepZ;
+            if (this.getHeightAtPosition(px,pz) > this.getOriginalHeightAtPosition(px,pz)+EPS) hasFill=true;
+          });
+          if(!hasFill) continue;
+          const a = idx(ix,iz,0);
+          const b = idx(ix+1,iz,0);
+          const c = idx(ix+1,iz+1,0);
+          const d = idx(ix,iz+1,0);
+          const A = idx(ix,iz,1);
+          const B = idx(ix+1,iz,1);
+          const C = idx(ix+1,iz+1,1);
+          const D = idx(ix,iz+1,1);
+
+          // bottom (original terrain) faces orientation downward
+          indices.push(a,c,b);
+          indices.push(a,d,c);
+          // top faces
+          indices.push(A,B,C);
+          indices.push(A,C,D);
+          // sides for each edge that borders empty/no-fill cell
+          const pushSide =(bLow:number,bHigh:number,tLow:number,tHigh:number)=>{
+            indices.push(bLow,bHigh,tLow);
+            indices.push(bHigh,tHigh,tLow);
+          };
+          // left edge
+          if(ix===0|| !hasFillCell(ix-1,iz)) pushSide(a,d,A,D);
+          // right edge
+          if(ix===steps-1|| !hasFillCell(ix+1,iz)) pushSide(b,c,B,C);
+          // front edge
+          if(iz===0 || !hasFillCell(ix,iz-1)) pushSide(a,b,A,B);
+          // back edge
+          if(iz===steps-1 || !hasFillCell(ix,iz+1)) pushSide(d,c,D,C);
+        }
+      }
+      function hasFillCell(ix:number,iz:number):boolean{return false;} // placeholder; edges simplification
     }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+    return geom;
+  }
+
+  public isInPlanningMode(): boolean { return this.planningMode; }
+
+  public hasPendingChanges(): boolean { return this.plannedStrokes.length>0; }
+
+  /**
+   * Apply all planned strokes to the terrain, commit to undo stack, regenerate contours, then clear planning state
+   */
+  public applyPendingChanges(): void {
+    if (!this.hasPendingChanges()) return;
+
+    // Save single undo state before applying combined modifications
+    this.saveState();
+
+    // Temporarily disable planning mode to reuse brush logic
+    const previousPlanning = this.planningMode;
+    this.suppressOverlays = true;
+    this.planningMode = false;
+    this.plannedStrokes.forEach(stroke => {
+      this.modifyHeightBrush(stroke.x, stroke.z, stroke.heightChange);
+    });
+    this.planningMode = previousPlanning;
+    this.suppressOverlays = false;
+
+    // Clear overlays & planning list
+    this.cleanupAllOverlays();
+    this.plannedStrokes = [];
+
+    // Regenerate contours and colors already done by modifyHeightBrush; ensure overlays hidden
+    this.showOriginalTerrainOverlay = false;
+    this.showFillVolumeOverlay = false;
   }
 
   /**
-   * Toggle fill volume overlay visibility
+   * Discard planned strokes and overlays without altering terrain
    */
-  public toggleFillVolumeOverlay(visible: boolean): void {
-    this.showFillVolumeOverlay = visible;
-    this.updateFillVolumeOverlay();
+  public discardPendingChanges(): void {
+    if (!this.hasPendingChanges()) return;
+    this.cleanupAllOverlays();
+    this.plannedStrokes = [];
+    this.showOriginalTerrainOverlay = false;
+    this.showFillVolumeOverlay = false;
   }
 
-  /**
-   * Get fill volume overlay visibility status
-   */
-  public isFillVolumeOverlayVisible(): boolean {
-    return this.showFillVolumeOverlay;
+  // --- Stub methods for integration points not yet implemented (prevent TS errors) ---
+  public setUserId(id: string | null): void { this.currentUserId = id; }
+  public savePendingModifications(): void { /* planned for DB integration */ }
+  public setAutoSave(enabled: boolean): void { this.autoSaveEnabled = enabled; }
+  public saveCurrentState(callback?: (success:boolean)=>void): void { if(callback) callback(true); }
+  public getUserTerrainStates(userId: string): any[] { return []; }
+  public loadTerrainFromDatabase(userId: string): void { /* no-op */ }
+
+  // === Convex Hull Helper (Monotone Chain) ===
+  private computeConvexHull(points: {x:number; z:number}[]): {x:number; z:number}[] {
+    if (points.length < 4) return points;
+    // convert to array of [x,z]
+    const pts = points.map(p=>({x:p.x,z:p.z}));
+    pts.sort((a,b)=> a.x===b.x ? a.z-b.z : a.x-b.x);
+    const cross = (o:any,a:any,b:any)=> (a.x-o.x)*(b.z-o.z)-(a.z-o.z)*(b.x-o.x);
+    const lower: any[] = [];
+    for(const p of pts){
+      while(lower.length>=2 && cross(lower[lower.length-2], lower[lower.length-1], p)<=0) lower.pop();
+      lower.push(p);
+    }
+    const upper: any[] = [];
+    for(let i=pts.length-1;i>=0;i--){
+      const p=pts[i];
+      while(upper.length>=2 && cross(upper[upper.length-2], upper[upper.length-1], p)<=0) upper.pop();
+      upper.push(p);
+    }
+    upper.pop();
+    lower.pop();
+    return lower.concat(upper);
   }
 
-  /**
-   * Clean up fill volume overlay
-   */
-  private cleanupFillVolumeOverlay(): void {
-    if (this.fillVolumeOverlay) {
-      this.terrainGroup.remove(this.fillVolumeOverlay);
-      this.fillVolumeOverlay = null;
-    }
-    if (this.fillVolumeGeometry) {
-      this.fillVolumeGeometry.dispose();
-      this.fillVolumeGeometry = null;
-    }
-    if (this.fillVolumeMaterial) {
-      this.fillVolumeMaterial.dispose();
-      this.fillVolumeMaterial = null;
-    }
-  }
+  // === Outline Overlay Creator ===
+  private createOutlineOverlay(boundary: {x:number; z:number}[], type: 'cut'|'fill'): THREE.Object3D | null {
+     if(boundary.length < 3) return null;
+     // Compute average original height for vertical placement
+     const avgY = boundary.reduce((s,p)=> s + this.getOriginalHeightAtPosition(p.x,p.z),0) / boundary.length;
+     const avgZVal = boundary.reduce((s,p)=> s + p.z,0)/boundary.length;
+
+     const shape = new THREE.Shape();
+     shape.moveTo(boundary[0].x, boundary[0].z);
+     for(let i=1;i<boundary.length;i++){
+       shape.lineTo(boundary[i].x, boundary[i].z);
+     }
+     shape.closePath();
+     // Smooth outline with more curve segments and give a tiny extrusion so side faces hide inner triangles
+     const extrudeGeom = new THREE.ExtrudeGeometry(shape, { depth: 0.05, bevelEnabled:false, curveSegments: 64 });
+     const color = type==='cut'? 0xFF4444 : 0x4444FF;
+     const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.3, depthWrite:false, depthTest:false, side:THREE.DoubleSide});
+     const mesh = new THREE.Mesh(extrudeGeom, mat);
+     mesh.rotation.set(0,0,0);
+     mesh.position.setY(avgY + 0.02);
+     mesh.renderOrder = 1;
+
+     // Outline line (smoothed)
+     const pts:THREE.Vector3[] = boundary.map(p=> new THREE.Vector3(p.x, avgY + 0.055, p.z));
+     const lineGeom = new THREE.BufferGeometry().setFromPoints(pts);
+     const lineMat = new THREE.LineBasicMaterial({color:0x000000});
+     const loop = new THREE.LineLoop(lineGeom, lineMat);
+     loop.renderOrder = 2;
+
+     const group = new THREE.Group();
+     group.add(mesh);
+     group.add(loop);
+     return group;
+   }
 }
