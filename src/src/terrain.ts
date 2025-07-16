@@ -64,6 +64,16 @@ export class Terrain {
   // Camera reference for zoom-independent arrow scaling
   private camera: THREE.Camera | null = null;
 
+  // Contour line properties
+  private contourLines: THREE.Line[] = [];
+  private contourLabels: THREE.Sprite[] = [];
+  private contourLinesVisible: boolean = true;
+  private contourInterval: number = 1.0; // Contour line every 1 foot
+  private baseContourInterval: number = 1.0; // Base interval for zoom calculations
+  private dynamicContours: boolean = true; // Enable dynamic contour adjustment
+  private lastCameraDistance: number = 0;
+  private contourUpdateThrottle: ReturnType<typeof setTimeout> | null = null;
+
   // Database persistence properties
   private currentUserId: string | null = null;
   private currentSessionId: string | null = null;
@@ -130,40 +140,61 @@ export class Terrain {
     // Generate initial terrain
     this.regenerateTerrain();
     
-    // Force color update to ensure no black areas
+    // Force color update to ensure new depth-based gradient is applied
     this.updateTerrainColors();
+    
+    // Generate initial contour lines with dynamic adjustment
+    this.generateContourLines();
+    
+    // Set up initial dynamic contour calculation
+    if (this.camera) {
+      this.updateContoursForZoom();
+    }
     
     // Save initial state
     this.saveState();
   }
 
   /**
-   * Initialize realistic material layers
+   * Initialize realistic material layers with consistent depth-based color gradient
+   * 
+   * Depth Ranges:
+   * - 0.0 to 0.25 feet: Green topsoil
+   * - 0.25 to 3.0 feet: Yellow subsoil  
+   * - 3.0 to 10.0 feet: Mud-red-brown clay
+   * - 10.0 to 20.0 feet: Darker brown deep soil
+   * - 20.0+ feet: Gray rock/bedrock
    */
   private initializeMaterialLayers(): void {
     this.materialLayers = [
       {
         name: 'Topsoil',
-        color: new THREE.Color(0x8B5A2B), // Rich dark brown topsoil
-        depth: 5, // 1.5m = ~5 feet
-        hardness: 0.3
+        color: new THREE.Color(0x228B22), // Green topsoil (Forest Green)
+        depth: 0.25, // Top 0.25 feet
+        hardness: 0.2
       },
       {
         name: 'Subsoil', 
-        color: new THREE.Color(0xA0522D), // Sienna brown subsoil
-        depth: 10, // 3.0m = ~10 feet
-        hardness: 0.5
+        color: new THREE.Color(0xFFD700), // Yellow subsoil (Gold)
+        depth: 2.75, // Next 2.75 feet (0.25 to 3.0 total)
+        hardness: 0.4
       },
       {
         name: 'Clay',
-        color: new THREE.Color(0xCD853F), // Sandy brown clay
-        depth: 11, // 3.5m = ~11 feet
-        hardness: 0.7
+        color: new THREE.Color(0x8B4513), // Mud-red-brown clay (Saddle Brown)
+        depth: 7, // Next 7 feet (3.0 to 10.0 total)
+        hardness: 0.6
+      },
+      {
+        name: 'Deep Soil',
+        color: new THREE.Color(0x654321), // Darker brown deeper soil (Dark Brown)
+        depth: 10, // Next 10 feet (10.0 to 20.0 total)
+        hardness: 0.8
       },
       {
         name: 'Rock',
-        color: new THREE.Color(0x696969), // Dim gray rock
-        depth: 7, // 2.0m = ~7 feet
+        color: new THREE.Color(0x808080), // Gray rock/bedrock (Gray)
+        depth: 20, // Next 20+ feet (20.0+ total)
         hardness: 1.0
       }
     ];
@@ -384,6 +415,37 @@ export class Terrain {
   }
 
   /**
+   * Get color at a specific depth using the consistent depth-based gradient
+   */
+  private getColorAtDepth(depth: number): THREE.Color {
+    const material = this.getMaterialAtDepth(depth);
+    return material.color.clone();
+  }
+
+  /**
+   * Get interpolated color for a specific elevation using depth-based gradient
+   * Positive elevations use surface colors, negative use subsurface depth colors
+   */
+  private getColorAtElevation(elevation: number): THREE.Color {
+    if (elevation >= 0) {
+      // Surface elevations - use a surface color that gets lighter at higher elevations
+      const surfaceColor = new THREE.Color(0x8B4513); // Base brown surface color
+      
+      // Make higher elevations lighter (more exposed, sandy)
+      const lightnessFactor = Math.min(elevation / 10, 0.3); // Cap at 30% lighter
+      surfaceColor.r = Math.min(1.0, surfaceColor.r + lightnessFactor);
+      surfaceColor.g = Math.min(1.0, surfaceColor.g + lightnessFactor * 0.8);
+      surfaceColor.b = Math.min(1.0, surfaceColor.b + lightnessFactor * 0.6);
+      
+      return surfaceColor;
+    } else {
+      // Below surface - use depth-based material colors
+      const depth = Math.abs(elevation);
+      return this.getColorAtDepth(depth);
+    }
+  }
+
+  /**
    * Regenerate terrain with a new random pattern
    */
   public regenerateTerrain(): void {
@@ -560,7 +622,607 @@ export class Terrain {
   }
 
   /**
-   * Force all terrain colors to be light (no black areas)
+   * Force update all terrain colors with the new depth-based gradient
+   */
+  public forceUpdateColors(): void {
+    this.updateTerrainColors();
+    this.updateWallColors();
+    this.generateContourLines(); // Update contour lines when colors change
+    
+    // Mark geometry as needing updates
+    this.geometry.attributes.position.needsUpdate = true;
+    if (this.geometry.attributes.color) {
+      this.geometry.attributes.color.needsUpdate = true;
+    }
+    
+    // Update wall geometries
+    this.wallMeshes.forEach(wall => {
+      if (wall.geometry.attributes.color) {
+        wall.geometry.attributes.color.needsUpdate = true;
+      }
+    });
+  }
+
+  /**
+   * Generate contour lines with depth-based color interpolation
+   */
+  public generateContourLines(): void {
+    this.clearContourLines();
+    
+    const vertices = this.geometry.attributes.position.array as Float32Array;
+    const widthSegments = this.geometry.parameters.widthSegments;
+    const heightSegments = this.geometry.parameters.heightSegments;
+    
+    // Find elevation range
+    let minHeight = Infinity;
+    let maxHeight = -Infinity;
+    
+    for (let i = 1; i < vertices.length; i += 3) {
+      const height = vertices[i];
+      if (isFinite(height)) {
+        minHeight = Math.min(minHeight, height);
+        maxHeight = Math.max(maxHeight, height);
+      }
+    }
+    
+    if (!isFinite(minHeight) || !isFinite(maxHeight)) {
+      return; // No valid terrain data
+    }
+    
+    // Generate contour lines at regular intervals
+    const startElevation = Math.floor(minHeight / this.contourInterval) * this.contourInterval;
+    const endElevation = Math.ceil(maxHeight / this.contourInterval) * this.contourInterval;
+    
+    for (let elevation = startElevation; elevation <= endElevation; elevation += this.contourInterval) {
+      this.generateContourLineAtElevation(elevation, vertices, widthSegments, heightSegments);
+    }
+  }
+
+  /**
+   * Generate a single contour line at the specified elevation
+   */
+  private generateContourLineAtElevation(elevation: number, vertices: Float32Array, widthSegments: number, heightSegments: number): void {
+    const contourSegments: { start: THREE.Vector3; end: THREE.Vector3 }[] = [];
+    const contourColor = this.getColorAtElevation(elevation);
+    
+    // March through the terrain grid to find contour segments
+    for (let row = 0; row < heightSegments; row++) {
+      for (let col = 0; col < widthSegments; col++) {
+        // Check each quad for contour intersections
+        const topLeft = this.getVertexPosition(vertices, row, col, widthSegments);
+        const topRight = this.getVertexPosition(vertices, row, col + 1, widthSegments);
+        const bottomLeft = this.getVertexPosition(vertices, row + 1, col, widthSegments);
+        const bottomRight = this.getVertexPosition(vertices, row + 1, col + 1, widthSegments);
+        
+        // Find intersections with the elevation plane on each edge
+        const intersections: THREE.Vector3[] = [];
+        
+        // Check each edge and add intersections
+        this.addContourIntersection(topLeft, topRight, elevation, intersections);
+        this.addContourIntersection(topRight, bottomRight, elevation, intersections);
+        this.addContourIntersection(bottomRight, bottomLeft, elevation, intersections);
+        this.addContourIntersection(bottomLeft, topLeft, elevation, intersections);
+        
+        // Create contour segments from intersections (should be 0, 2, or 4 intersections per quad)
+        if (intersections.length >= 2) {
+          // For each pair of intersections, create a segment
+          for (let i = 0; i < intersections.length; i += 2) {
+            if (i + 1 < intersections.length) {
+              contourSegments.push({
+                start: intersections[i].clone(),
+                end: intersections[i + 1].clone()
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    // Connect segments into continuous contour lines
+    const contourLines = this.connectContourSegments(contourSegments);
+    
+    // Create geometry for each continuous contour line
+    contourLines.forEach(linePoints => {
+      if (linePoints.length >= 2) {
+        this.createContourLineGeometry(linePoints, contourColor);
+      }
+    });
+  }
+
+  /**
+   * Connect individual contour segments into continuous lines
+   */
+  private connectContourSegments(segments: { start: THREE.Vector3; end: THREE.Vector3 }[]): THREE.Vector3[][] {
+    if (segments.length === 0) return [];
+    
+    const contourLines: THREE.Vector3[][] = [];
+    const usedSegments = new Set<number>();
+    const tolerance = 0.1; // Tolerance for connecting segments
+    
+    for (let i = 0; i < segments.length; i++) {
+      if (usedSegments.has(i)) continue;
+      
+      const currentLine: THREE.Vector3[] = [];
+      let currentSegment = segments[i];
+      usedSegments.add(i);
+      
+      // Start the line
+      currentLine.push(currentSegment.start.clone(), currentSegment.end.clone());
+      
+      // Try to extend the line by finding connected segments
+      let extended = true;
+      while (extended) {
+        extended = false;
+        const lineEnd = currentLine[currentLine.length - 1];
+        const lineStart = currentLine[0];
+        
+        // Look for segments that connect to the end of current line
+        for (let j = 0; j < segments.length; j++) {
+          if (usedSegments.has(j)) continue;
+          
+          const segment = segments[j];
+          
+          // Check if segment connects to line end
+          if (lineEnd.distanceTo(segment.start) < tolerance) {
+            currentLine.push(segment.end.clone());
+            usedSegments.add(j);
+            extended = true;
+            break;
+          } else if (lineEnd.distanceTo(segment.end) < tolerance) {
+            currentLine.push(segment.start.clone());
+            usedSegments.add(j);
+            extended = true;
+            break;
+          }
+          // Check if segment connects to line start
+          else if (lineStart.distanceTo(segment.start) < tolerance) {
+            currentLine.unshift(segment.end.clone());
+            usedSegments.add(j);
+            extended = true;
+            break;
+          } else if (lineStart.distanceTo(segment.end) < tolerance) {
+            currentLine.unshift(segment.start.clone());
+            usedSegments.add(j);
+            extended = true;
+            break;
+          }
+        }
+      }
+      
+      // Only add lines with sufficient length
+      if (currentLine.length >= 2) {
+        contourLines.push(currentLine);
+      }
+    }
+    
+    return contourLines;
+  }
+
+  /**
+   * Get vertex position from the terrain vertices array
+   */
+  private getVertexPosition(vertices: Float32Array, row: number, col: number, widthSegments: number): THREE.Vector3 {
+    const index = (row * (widthSegments + 1) + col) * 3;
+    const verticesArray = vertices as Float32Array;
+    return new THREE.Vector3(
+      verticesArray[index],
+      verticesArray[index + 1],
+      verticesArray[index + 2]
+    );
+  }
+
+  /**
+   * Add contour intersection between two points if it exists
+   */
+  private addContourIntersection(p1: THREE.Vector3, p2: THREE.Vector3, elevation: number, intersections: THREE.Vector3[]): void {
+    const h1 = p1.y;
+    const h2 = p2.y;
+    
+    // Check if the elevation crosses this edge
+    if ((h1 <= elevation && h2 >= elevation) || (h1 >= elevation && h2 <= elevation)) {
+      const heightDiff = Math.abs(h1 - h2);
+      
+      // Skip near-horizontal edges or edges where heights are too similar
+      if (heightDiff < 0.005) return;
+      
+      // Handle exact matches to prevent duplicate intersections
+      if (Math.abs(h1 - elevation) < 0.001) {
+        // Point 1 is exactly on the contour
+        const intersection = new THREE.Vector3(
+          p1.x,
+          elevation + 0.02,
+          p1.z
+        );
+        intersections.push(intersection);
+        return;
+      }
+      
+      if (Math.abs(h2 - elevation) < 0.001) {
+        // Point 2 is exactly on the contour
+        const intersection = new THREE.Vector3(
+          p2.x,
+          elevation + 0.02,
+          p2.z
+        );
+        intersections.push(intersection);
+        return;
+      }
+      
+      // Linear interpolation to find intersection point
+      const t = (elevation - h1) / (h2 - h1);
+      
+      // Clamp t to valid range to prevent extrapolation
+      const clampedT = Math.max(0, Math.min(1, t));
+      
+      const intersection = new THREE.Vector3(
+        p1.x + clampedT * (p2.x - p1.x),
+        elevation + 0.02, // Raise slightly above terrain to avoid z-fighting
+        p1.z + clampedT * (p2.z - p1.z)
+      );
+      
+      intersections.push(intersection);
+    }
+  }
+
+  /**
+   * Create the actual line geometry for a contour line
+   */
+  private createContourLineGeometry(points: THREE.Vector3[], color: THREE.Color): void {
+    if (points.length < 2) return;
+    
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({
+      color: color,
+      linewidth: 3,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false // Ensure lines render on top like axes
+    });
+    
+    const contourLine = new THREE.Line(geometry, material);
+    contourLine.name = 'contourLine';
+    contourLine.renderOrder = 999; // High render order like axes, but slightly lower than axes (1000)
+    (contourLine as any).elevation = points[0]?.y || 0; // Store elevation for reference
+    
+    this.contourLines.push(contourLine);
+    this.terrainGroup.add(contourLine);
+    
+    // Add elevation labels with dynamic spacing
+    this.createContourLabels(points, color);
+  }
+
+  /**
+   * Create elevation labels for a contour line with dynamic spacing
+   */
+  private createContourLabels(points: THREE.Vector3[], color: THREE.Color): void {
+    if (points.length < 2) return;
+    
+    const elevation = points[0]?.y || 0;
+    
+    // Calculate dynamic label spacing based on camera distance
+    const cameraDistance = this.camera ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50)) : 100;
+    
+    // Dynamic spacing: closer camera = more labels, farther = fewer labels
+    let labelSpacing: number;
+    if (cameraDistance < 50) {
+      labelSpacing = 15; // Very close - label every 15 feet along line
+    } else if (cameraDistance < 100) {
+      labelSpacing = 25; // Close - label every 25 feet along line
+    } else if (cameraDistance < 200) {
+      labelSpacing = 40; // Medium - label every 40 feet along line
+    } else {
+      labelSpacing = 60; // Far - label every 60 feet along line
+    }
+    
+    // Calculate total line length and label positions
+    let totalLength = 0;
+    const segments: { start: THREE.Vector3; end: THREE.Vector3; length: number }[] = [];
+    
+    for (let i = 0; i < points.length - 1; i += 2) {
+      const start = points[i];
+      const end = points[i + 1];
+      if (start && end) {
+        const segmentLength = start.distanceTo(end);
+        segments.push({ start, end, length: segmentLength });
+        totalLength += segmentLength;
+      }
+    }
+    
+    // Only add labels if the line is long enough
+    if (totalLength < labelSpacing * 0.8) return;
+    
+    // Place labels at regular intervals along the line (max 2 labels per contour)
+    const numLabels = Math.max(1, Math.min(2, Math.floor(totalLength / labelSpacing)));
+    const actualSpacing = totalLength / numLabels;
+    
+    for (let i = 0; i < numLabels; i++) {
+      const targetDistance = (i + 0.5) * actualSpacing; // Offset by half spacing to center labels
+      let currentDistance = 0;
+      
+      // Find the segment containing this label position
+      for (const segment of segments) {
+        if (currentDistance + segment.length >= targetDistance) {
+          // Position within this segment
+          const segmentProgress = (targetDistance - currentDistance) / segment.length;
+          const labelPosition = segment.start.clone().lerp(segment.end, segmentProgress);
+          
+          // Create the elevation label
+          const label = this.createElevationLabel(elevation, labelPosition, color);
+          if (label) {
+            this.contourLabels.push(label);
+            this.terrainGroup.add(label);
+          }
+          break;
+        }
+        currentDistance += segment.length;
+      }
+    }
+  }
+
+  /**
+   * Create a single elevation label sprite
+   */
+  private createElevationLabel(elevation: number, position: THREE.Vector3, lineColor: THREE.Color): THREE.Sprite | null {
+    // Format elevation text
+    const elevationText = elevation >= 0 ? `+${elevation.toFixed(1)}` : elevation.toFixed(1);
+    
+    // Create canvas for text
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    
+    // Dynamic canvas size based on camera distance
+    const cameraDistance = this.camera ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50)) : 100;
+    const scale = Math.max(0.5, Math.min(1.5, 100 / cameraDistance)); // Scale text based on distance
+    
+    canvas.width = 48 * scale;
+    canvas.height = 20 * scale;
+    
+    // Style the text
+    context.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent background
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add border
+    context.strokeStyle = '#' + lineColor.getHexString();
+    context.lineWidth = 1;
+    context.strokeRect(0, 0, canvas.width, canvas.height);
+    
+    // Add text
+    context.fillStyle = '#FFFFFF'; // White text for good contrast
+    context.font = `bold ${10 * scale}px Arial`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(elevationText, canvas.width / 2, canvas.height / 2);
+    
+    // Create sprite
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ 
+      map: texture,
+      depthTest: false, // Always render on top
+      transparent: true
+    });
+    
+    const sprite = new THREE.Sprite(material);
+    sprite.position.copy(position);
+    sprite.position.y += 0.1; // Raise slightly above contour line
+    sprite.scale.set(4 * scale, 2 * scale, 1);
+    sprite.renderOrder = 1003; // Render above axes
+    sprite.name = 'contourLabel';
+    
+    return sprite;
+  }
+
+  /**
+   * Clear all existing contour lines
+   */
+  public clearContourLines(): void {
+    this.contourLines.forEach(line => {
+      this.terrainGroup.remove(line);
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    });
+    this.contourLines = [];
+    
+    // Clear elevation labels
+    this.contourLabels.forEach(label => {
+      this.terrainGroup.remove(label);
+      label.material.dispose();
+    });
+    this.contourLabels = [];
+  }
+
+  /**
+   * Toggle contour line visibility
+   */
+  public toggleContourLines(): boolean {
+    this.contourLinesVisible = !this.contourLinesVisible;
+    this.contourLines.forEach(line => {
+      line.visible = this.contourLinesVisible;
+    });
+    this.contourLabels.forEach(label => {
+      label.visible = this.contourLinesVisible;
+    });
+    return this.contourLinesVisible;
+  }
+
+  /**
+   * Set contour line interval (distance between contour lines)
+   */
+  public setContourInterval(interval: number): void {
+    if (interval > 0 && interval !== this.contourInterval) {
+      this.contourInterval = interval;
+      this.generateContourLines();
+    }
+  }
+
+  /**
+   * Get current contour line settings
+   */
+  public getContourSettings(): { visible: boolean; interval: number; count: number; labelCount: number } {
+    return {
+      visible: this.contourLinesVisible,
+      interval: this.contourInterval,
+      count: this.contourLines.length,
+      labelCount: this.contourLabels.length
+    };
+  }
+
+  /**
+   * Calculate dynamic contour interval based on camera distance
+   */
+  private calculateDynamicContourInterval(): number {
+    if (!this.camera || !this.dynamicContours) {
+      return this.baseContourInterval;
+    }
+
+    // Calculate camera distance from terrain center
+    const terrainCenter = new THREE.Vector3(50, 0, 50); // Center of 100x100 terrain
+    const cameraDistance = this.camera.position.distanceTo(terrainCenter);
+    
+    // Define zoom level ranges and corresponding contour intervals
+    // Closer camera = more detail = smaller intervals
+    // Further camera = less detail = larger intervals
+    let dynamicInterval: number;
+    
+    if (cameraDistance < 30) {
+      // Very close - show maximum detail
+      dynamicInterval = this.baseContourInterval * 0.25; // 4x more lines
+    } else if (cameraDistance < 60) {
+      // Close - show high detail
+      dynamicInterval = this.baseContourInterval * 0.5; // 2x more lines
+    } else if (cameraDistance < 120) {
+      // Medium distance - normal detail
+      dynamicInterval = this.baseContourInterval; // Normal lines
+    } else if (cameraDistance < 200) {
+      // Far - reduce detail
+      dynamicInterval = this.baseContourInterval * 2; // Half the lines
+    } else if (cameraDistance < 300) {
+      // Very far - minimal detail
+      dynamicInterval = this.baseContourInterval * 4; // Quarter of the lines
+    } else {
+      // Extremely far - very minimal detail
+      dynamicInterval = this.baseContourInterval * 8; // Eighth of the lines
+    }
+    
+    // Ensure minimum interval of 0.25 feet and maximum of 10 feet
+    return Math.max(0.25, Math.min(10, dynamicInterval));
+  }
+
+  /**
+   * Update contour lines based on current camera position (with throttling)
+   */
+  public updateContoursForZoom(): void {
+    if (!this.camera || !this.dynamicContours || !this.contourLinesVisible) {
+      return;
+    }
+
+    const terrainCenter = new THREE.Vector3(50, 0, 50);
+    const currentDistance = this.camera.position.distanceTo(terrainCenter);
+    
+    // Only update if camera moved significantly (threshold to prevent excessive updates)
+    const distanceThreshold = Math.max(3, currentDistance * 0.08); // Reduced threshold for more responsive updates
+    
+    if (Math.abs(currentDistance - this.lastCameraDistance) < distanceThreshold) {
+      return; // Camera hasn't moved enough to warrant an update
+    }
+    
+    this.lastCameraDistance = currentDistance;
+    
+    // Throttle updates to prevent excessive regeneration
+    if (this.contourUpdateThrottle) {
+      clearTimeout(this.contourUpdateThrottle);
+    }
+    
+    this.contourUpdateThrottle = setTimeout(() => {
+      const newInterval = this.calculateDynamicContourInterval();
+      
+      // Regenerate contours if interval changed significantly
+      if (Math.abs(newInterval - this.contourInterval) > 0.1) {
+        this.contourInterval = newInterval;
+        this.generateContourLines();
+      } else {
+        // Even if interval didn't change, regenerate labels for new camera position
+        // Clear existing labels
+        this.contourLabels.forEach(label => {
+          this.terrainGroup.remove(label);
+          label.material.dispose();
+        });
+        this.contourLabels = [];
+        
+        // Regenerate labels with current camera-based spacing
+        this.contourLines.forEach(line => {
+          const elevation = (line as any).elevation || 0;
+          const color = this.getColorAtElevation(elevation);
+          
+          // Extract points from line geometry
+          const positions = line.geometry.attributes.position.array;
+          const points: THREE.Vector3[] = [];
+          
+          for (let i = 0; i < positions.length; i += 3) {
+            points.push(new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]));
+          }
+          
+          if (points.length >= 2) {
+            this.createContourLabels(points, color);
+          }
+        });
+      }
+      
+      this.contourUpdateThrottle = null;
+    }, 150); // Reduced throttle time for more responsive updates
+  }
+
+  /**
+   * Enable or disable dynamic contour adjustment
+   */
+  public setDynamicContours(enabled: boolean): void {
+    this.dynamicContours = enabled;
+    if (enabled) {
+      this.updateContoursForZoom();
+    } else {
+      // Reset to base interval when disabled
+      this.contourInterval = this.baseContourInterval;
+      this.generateContourLines();
+    }
+  }
+
+  /**
+   * Set the base contour interval (used for dynamic calculations)
+   */
+  public setBaseContourInterval(interval: number): void {
+    if (interval > 0) {
+      this.baseContourInterval = interval;
+      if (this.dynamicContours) {
+        this.updateContoursForZoom();
+      } else {
+        this.contourInterval = interval;
+        this.generateContourLines();
+      }
+    }
+  }
+
+  /**
+   * Get dynamic contour settings
+   */
+  public getDynamicContourSettings(): { 
+    dynamic: boolean; 
+    baseInterval: number; 
+    currentInterval: number; 
+    cameraDistance: number 
+  } {
+    const terrainCenter = new THREE.Vector3(50, 0, 50);
+    const distance = this.camera ? this.camera.position.distanceTo(terrainCenter) : 0;
+    
+    return {
+      dynamic: this.dynamicContours,
+      baseInterval: this.baseContourInterval,
+      currentInterval: this.contourInterval,
+      cameraDistance: distance
+    };
+  }
+
+  /**
+   * Force all terrain colors to be light (no black areas) - legacy method
    */
   public forceLightColors(): void {
     const vertices = this.geometry.attributes.position.array;
@@ -570,15 +1232,17 @@ export class Terrain {
     for (let i = 0; i < vertices.length; i += 3) {
       const height = vertices[i + 1] || 0;
       
-      // Base light brown color
-      let r = 0.85, g = 0.75, b = 0.65;
+      // Consistent surface color to match main terrain coloring
+      let r = 0.82, g = 0.72, b = 0.58; // Same as main surface color
       
-      // Add slight height variation for visual interest
+      // Very minimal variation for natural look
       if (isFinite(height)) {
-        const heightVariation = Math.sin(height * 0.1) * 0.1 + 0.1;
-        r += heightVariation;
-        g += heightVariation * 0.8;
-        b += heightVariation * 0.6;
+        const x = vertices[i] || 0;
+        const z = vertices[i + 2] || 0;
+        const subtleVariation = this.smoothNoise(x * 0.02, z * 0.02) * 0.03;
+        r += subtleVariation;
+        g += subtleVariation * 0.8;
+        b += subtleVariation * 0.6;
       }
       
       // Ensure colors stay within bounds and never go dark
@@ -636,83 +1300,16 @@ export class Terrain {
       
       if (isFinite(height) && !isNaN(height)) {
         if (height >= 0) {
-          // Surface areas - enhanced natural variation
+          // Surface areas - uniform consistent color for professional appearance
+          r = 0.82; // Consistent light brown
+          g = 0.72; // Consistent medium brown 
+          b = 0.58; // Consistent sandy brown
           
-          // Base material color from height
-          const normalizedHeight = (height - minHeight) / (maxHeight - minHeight);
-          
-          // Elevation-based color variation
-          if (height > 5) {
-            // Higher elevations - drier, sandier
-            r = 0.9 + this.smoothNoise(x * 0.1, z * 0.1) * 0.08;
-            g = 0.8 + this.smoothNoise(x * 0.12, z * 0.08) * 0.1;
-            b = 0.6 + this.smoothNoise(x * 0.08, z * 0.15) * 0.15;
-          } else if (height > 2) {
-            // Medium elevations - mixed soil
-            r = 0.75 + this.smoothNoise(x * 0.08, z * 0.1) * 0.15;
-            g = 0.65 + this.smoothNoise(x * 0.1, z * 0.12) * 0.15;
-            b = 0.45 + this.smoothNoise(x * 0.12, z * 0.08) * 0.2;
-          } else if (height > -2) {
-            // Lower elevations - darker, moister soil
-            r = 0.65 + this.smoothNoise(x * 0.15, z * 0.12) * 0.15;
-            g = 0.55 + this.smoothNoise(x * 0.12, z * 0.15) * 0.15;
-            b = 0.35 + this.smoothNoise(x * 0.1, z * 0.1) * 0.2;
-          }
-          
-          // Calculate slope for additional variation
-          let slope = 0;
-          if (row > 0 && row < heightSegments && col > 0 && col < widthSegments) {
-            const leftIndex = (row * (widthSegments + 1) + (col - 1)) * 3;
-            const rightIndex = (row * (widthSegments + 1) + (col + 1)) * 3;
-            const topIndex = ((row - 1) * (widthSegments + 1) + col) * 3;
-            const bottomIndex = ((row + 1) * (widthSegments + 1) + col) * 3;
-            
-            if (leftIndex + 1 < vertices.length && rightIndex + 1 < vertices.length && 
-                topIndex + 1 >= 0 && bottomIndex + 1 < vertices.length) {
-              const dx = vertices[rightIndex + 1] - vertices[leftIndex + 1];
-              const dz = vertices[bottomIndex + 1] - vertices[topIndex + 1];
-              slope = Math.sqrt(dx * dx + dz * dz) / 4; // Normalize slope
-            }
-          }
-          
-          // Slope-based variation - steeper slopes get rockier/sandier
-          if (slope > 0.5) {
-            r += slope * 0.1; // More sandy on slopes
-            g += slope * 0.05;
-            b -= slope * 0.1; // Less organic matter
-          }
-          
-          // Add moisture variation in low areas
-          if (height < 1) {
-            const moistureNoise = this.smoothNoise(x * 0.05, z * 0.05);
-            if (moistureNoise > 0.3) {
-              // Moist areas - darker, richer soil
-              r *= 0.8;
-              g *= 0.9;
-              b *= 0.7;
-            }
-          }
-          
-          // Add organic variation (patches of different soil types)
-          const organicVariation = this.smoothNoise(x * 0.03, z * 0.04) * 0.1;
-          if (organicVariation > 0.05) {
-            // Richer organic areas
-            r *= 0.9;
-            g += 0.05;
-            b *= 0.8;
-          }
-          
-          // Add mineral deposits for visual interest
-          const mineralNoise = this.smoothNoise(x * 0.2, z * 0.25);
-          if (mineralNoise > 0.7) {
-            // Iron-rich areas - more reddish
-            r += 0.1;
-            g *= 0.95;
-          } else if (mineralNoise < -0.7) {
-            // Clay deposits - more yellowish
-            g += 0.05;
-            b += 0.1;
-          }
+          // Very subtle variation only (much reduced)
+          const subtleVariation = this.smoothNoise(x * 0.02, z * 0.02) * 0.03; // Minimal noise
+          r += subtleVariation;
+          g += subtleVariation * 0.8;
+          b += subtleVariation * 0.6;
           
         } else {
           // Below surface - show subsurface materials with enhanced variation
@@ -808,36 +1405,28 @@ export class Terrain {
         }
         
       } else {
-        // Below surface - create TRUE horizontal geological layers
-        // Let's start with solid color bands to debug the coordinate system
-        
+        // Below surface - use consistent depth-based color gradient
         // For horizontal layers, color should ONLY depend on Y (elevation/depth)
         // and be the same for all X,Z positions at the same Y level
         
-        if (y >= 0) {
-          // Surface level - should not happen in walls but just in case
-          r = 0.8; g = 0.7; b = 0.5; // Sandy surface
-        } else if (y >= -5) {
-          // Topsoil layer (0 to -5 feet) - Dark brown - SOLID COLOR
-          r = 0.35; g = 0.25; b = 0.15;
-        } else if (y >= -15) {
-          // Subsoil layer (-5 to -15 feet) - Medium brown - SOLID COLOR  
-          r = 0.55; g = 0.35; b = 0.20;
-        } else if (y >= -26) {
-          // Clay layer (-15 to -26 feet) - Light brown/tan - SOLID COLOR
-          r = 0.70; g = 0.50; b = 0.30;
-        } else {
-          // Rock layer (below -26 feet) - Gray - SOLID COLOR
-          r = 0.45; g = 0.45; b = 0.45;
-        }
+        const excavationDepth = Math.abs(y); // Depth below surface
+        const layerColor = this.getColorAtDepth(excavationDepth);
         
-        // DEBUG: Add a subtle horizontal stripe every 5 feet to verify orientation
-        const stripeTest = Math.floor(Math.abs(y) / 2) % 2; // Every 2 feet, alternate
-        if (stripeTest === 0) {
-          r *= 1.1; // Slightly brighter every other 2-foot band
-          g *= 1.1;
-          b *= 1.1;
-        }
+        r = layerColor.r;
+        g = layerColor.g;
+        b = layerColor.b;
+        
+        // Add subtle variation for visual interest while maintaining layer consistency
+        const variation = this.smoothNoise(x * 0.02, z * 0.02) * 0.05; // Very subtle noise
+        r += variation;
+        g += variation * 0.8;
+        b += variation * 0.6;
+        
+        // Add subtle horizontal stratification within layers for geological realism
+        const strataVariation = Math.sin(excavationDepth * 2) * 0.03; // Subtle banding within layers
+        r += strataVariation;
+        g += strataVariation * 0.9;
+        b += strataVariation * 0.7;
       }
       
       // Ensure natural earth colors
@@ -907,6 +1496,7 @@ export class Terrain {
       this.geometry.computeVertexNormals();
       this.updateTerrainColors();
       this.updateBlockGeometry(); // Update block to match terrain
+      this.generateContourLines(); // Update contour lines after terrain modification
 
       // Create intelligent arrow placement based on operation magnitude
       this.createDensityBasedArrows(x, z, heightChange, totalVolumeChange, brushRadius);

@@ -1,6 +1,6 @@
 # CutFill: 3D Cut-and-Fill Earthworks Educational Game
 
-![CutFill Game Interface](docs/images/initial-ui.png)
+![CutFill Game Interface](docs/images/progress-ui.png)
 
 **A 3D interactive educational game teaching cut-and-fill earthworks principles through engaging gameplay and real-time multiplayer collaboration.**
 

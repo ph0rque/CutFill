@@ -118,8 +118,8 @@ terrain.getSurfaceMesh().material = new THREE.MeshBasicMaterial({
   side: THREE.DoubleSide
 });
 
-// Force update colors to ensure they're applied
-terrain.updateTerrainColors();
+// Force update colors with new depth-based gradient
+terrain.forceUpdateColors();
 
 scene.add(terrain.getMesh());
 
@@ -146,7 +146,7 @@ scene.add(hemi);
 // or simply raise the ambient intensity:
 ambientLight.intensity = 1.0;
 
-// Add scale reference grid and markers
+// Add scale reference markers (no grid)
 const scaleReferences = addScaleReferences(scene);
 
 // Position camera for Y-up system centered on terrain (terrain center is now 50,50)
@@ -161,24 +161,7 @@ camera.updateProjectionMatrix();
   (terrain.getSurfaceMesh().material as THREE.MeshLambertMaterial).wireframe = false;
 
 // Function to add scale references to the scene
-function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; markers: THREE.Group } {
-  // Create professional grid helper with enhanced styling
-  const gridHelper = new THREE.GridHelper(100, 20, 0xAAAAAA, 0x888888); // Much lighter gray colors
-  gridHelper.position.set(50, 0.05, 50); // Center on terrain (terrain spans 0-100, center at 50,50)
-  gridHelper.name = 'scaleGrid'; // Name for toggle functionality
-  
-  // Enhance grid material for professional appearance
-  const gridMaterial = gridHelper.material as THREE.LineBasicMaterial;
-  if (gridMaterial) {
-    gridMaterial.linewidth = 1; // Thinner lines
-    gridMaterial.opacity = 0.4; // More transparent
-    gridMaterial.transparent = true;
-  }
-  
-  scene.add(gridHelper);
-
-  // Fine grid removed - was causing black grid pattern
-
+function addScaleReferences(scene: THREE.Scene): { markers: THREE.Group } {
   // Add scale markers with axis lines in corner
   const markerGroup = new THREE.Group();
   
@@ -187,23 +170,49 @@ function addScaleReferences(scene: THREE.Scene): { grid: THREE.GridHelper; marke
   
   scene.add(markerGroup);
   
-  return { grid: gridHelper, markers: markerGroup };
+  return { markers: markerGroup };
 }
 
-// Grid visibility toggle
-let gridVisible = true;
-function toggleGrid() {
-  const grid = scene.getObjectByName('scaleGrid');
-  if (grid) {
-    grid.visible = !grid.visible;
-    gridVisible = grid.visible;
-    
-    // Update HUD indicator if it exists
-    const gridIndicator = document.getElementById('grid-indicator');
-    if (gridIndicator) {
-      gridIndicator.textContent = `📏 Grid: ${gridVisible ? 'ON' : 'OFF'}`;
-    }
+// Grid removed - contour lines provide better elevation reference
+
+// Contour lines visibility toggle
+function toggleContourLines() {
+  const contoursVisible = terrain.toggleContourLines();
+  
+  // Update stats immediately
+  updateContourStats();
+  
+  // Update HUD indicator if it exists
+  const contourIndicator = document.getElementById('contour-indicator');
+  if (contourIndicator) {
+    contourIndicator.textContent = `📈 Contours: ${contoursVisible ? 'ON' : 'OFF'}`;
   }
+  
+  // Show brief notification with dynamic status
+  const dynamicSettings = terrain.getDynamicContourSettings();
+  const modeText = dynamicSettings.dynamic ? 'Dynamic' : 'Static';
+  
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: ${contoursVisible ? '#4CAF50' : '#666'};
+    color: white;
+    padding: 10px 15px;
+    border-radius: 4px;
+    z-index: 1001;
+    font-size: 14px;
+    animation: slideInOut 2s ease-in-out;
+  `;
+  notification.innerHTML = `📈 Contour Lines ${contoursVisible ? 'Enabled' : 'Disabled'}<br><small>${modeText} Mode</small>`;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.parentNode.removeChild(notification);
+    }
+  }, 2500);
 }
 
 // Function to update axis position based on camera rotation
@@ -239,6 +248,113 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
     segmentSpacing = 25; // 25ft segments when zoomed out
   }
   
+  // Helper function to create segmented axis lines with dynamic occlusion
+  function createSegmentedAxisLine(startPoint: THREE.Vector3, endPoint: THREE.Vector3, color: number, name: string): void {
+    if (!terrain || !camera) return;
+    
+    try {
+      const raycaster = new THREE.Raycaster();
+      raycaster.camera = camera;
+      
+      const numSegments = 20; // Number of segments to check
+      const segments: { start: THREE.Vector3, end: THREE.Vector3, occluded: boolean }[] = [];
+      
+      // Check each segment for occlusion
+      for (let i = 0; i < numSegments; i++) {
+        const t1 = i / numSegments;
+        const t2 = (i + 1) / numSegments;
+        
+        const segmentStart = startPoint.clone().lerp(endPoint, t1);
+        const segmentEnd = startPoint.clone().lerp(endPoint, t2);
+        const segmentMiddle = segmentStart.clone().lerp(segmentEnd, 0.5);
+        
+        // Check if this segment is occluded
+        raycaster.set(segmentMiddle, new THREE.Vector3(0, -1, 0));
+        const surfaceMesh = terrain.getSurfaceMesh();
+        let isOccluded = false;
+        
+        if (surfaceMesh && surfaceMesh.geometry && surfaceMesh.material) {
+          const intersections = raycaster.intersectObject(surfaceMesh, false);
+          if (intersections.length > 0) {
+            const intersectionHeight = intersections[0].point.y;
+            isOccluded = intersectionHeight > axisY - 0.1;
+          }
+        }
+        
+        segments.push({ start: segmentStart, end: segmentEnd, occluded: isOccluded });
+      }
+      
+      // Group consecutive segments with same occlusion state
+      const lineGroups: { points: THREE.Vector3[], occluded: boolean }[] = [];
+      let currentGroup: { points: THREE.Vector3[], occluded: boolean } | null = null;
+      
+      segments.forEach((segment, index) => {
+        if (!currentGroup || currentGroup.occluded !== segment.occluded) {
+          // Start new group
+          if (currentGroup) {
+            lineGroups.push(currentGroup);
+          }
+          currentGroup = { points: [segment.start.clone()], occluded: segment.occluded };
+        }
+        
+        // Add end point to current group
+        currentGroup.points.push(segment.end.clone());
+      });
+      
+      if (currentGroup) {
+        lineGroups.push(currentGroup);
+      }
+      
+      // Create line objects for each group
+      lineGroups.forEach(group => {
+        if (group.points.length < 2) return;
+        
+        const geometry = new THREE.BufferGeometry().setFromPoints(group.points);
+        let material: THREE.Material;
+        
+        if (group.occluded) {
+          // Dashed line for occluded segments
+          material = new THREE.LineDashedMaterial({
+            color: color,
+            linewidth: 3,
+            depthTest: false,
+            dashSize: 3,
+            gapSize: 2
+          });
+        } else {
+          // Solid line for visible segments
+          material = new THREE.LineBasicMaterial({
+            color: color,
+            linewidth: 3,
+            depthTest: false
+          });
+        }
+        
+        const line = new THREE.Line(geometry, material);
+        if (group.occluded) {
+          line.computeLineDistances(); // Required for dashed lines
+        }
+        line.renderOrder = 1000;
+        line.name = name;
+        markerGroup.add(line);
+      });
+      
+    } catch (error) {
+      console.warn(`Segmented axis creation failed for ${name}:`, error);
+      // Fallback: create simple solid line
+      const geometry = new THREE.BufferGeometry().setFromPoints([startPoint, endPoint]);
+      const material = new THREE.LineBasicMaterial({
+        color: color,
+        linewidth: 3,
+        depthTest: false
+      });
+      const line = new THREE.Line(geometry, material);
+      line.renderOrder = 1000;
+      line.name = name;
+      markerGroup.add(line);
+    }
+  }
+
   // Helper function to create text markers
   function createTextMarker(text: string, x: number, y: number, z: number = 0.5, color: string = '#000000', small: boolean = false): THREE.Sprite {
     const canvas = document.createElement('canvas');
@@ -268,24 +384,22 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
     context.fillText(text, canvas.width / 2, canvas.height / 2 + (small ? 4 : 6));
     
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture });
+    const material = new THREE.SpriteMaterial({ 
+      map: texture,
+      depthTest: false // Always render on top
+    });
     const sprite = new THREE.Sprite(material);
     sprite.position.set(x, y, z);
     sprite.scale.set(small ? 5 : 8, small ? 2.5 : 4, 1);
+    sprite.renderOrder = 1002; // High render order to appear on top
     
     return sprite;
   }
   
-  // Create X-axis line (red) - full length across terrain (0 to 100)
-  const xAxisStart = 0;
-  const xAxisEnd = 100;
-  const xAxisGeometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(xAxisStart, axisY, cornerZ),
-    new THREE.Vector3(xAxisEnd, axisY, cornerZ)
-  ]);
-  const xAxisMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
-  const xAxisLine = new THREE.Line(xAxisGeometry, xAxisMaterial);
-  markerGroup.add(xAxisLine);
+  // Create X-axis line (red) - full length across terrain (0 to 100) with dynamic segmentation
+  const xAxisStartPoint = new THREE.Vector3(0, axisY, cornerZ);
+  const xAxisEndPoint = new THREE.Vector3(100, axisY, cornerZ);
+  createSegmentedAxisLine(xAxisStartPoint, xAxisEndPoint, 0xff0000, 'xAxis');
   
   // Calculate dynamic intervals for X-axis
   const totalXSegments = Math.floor(100 / segmentSpacing);
@@ -305,8 +419,13 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
         new THREE.Vector3(x, axisY, cornerZ),
         new THREE.Vector3(x, axisY + tickHeight, cornerZ)
       ]);
-      const tickMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 1 });
+      const tickMaterial = new THREE.LineBasicMaterial({ 
+        color: 0xff0000, 
+        linewidth: 1,
+        depthTest: false // Always render on top
+      });
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
+      tickLine.renderOrder = 1001; // High render order to appear on top
       markerGroup.add(tickLine);
       
       // Add number label every other displayed segment (skip 0ft and 100ft)
@@ -323,16 +442,10 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
     segmentCount++;
   }
   
-  // Create Z-axis line (green) - full length across terrain (0 to 100)
-  const zAxisStart = 0;
-  const zAxisEnd = 100;
-  const zAxisGeometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(cornerX, axisY, zAxisStart),
-    new THREE.Vector3(cornerX, axisY, zAxisEnd)
-  ]);
-  const zAxisMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
-  const zAxisLine = new THREE.Line(zAxisGeometry, zAxisMaterial);
-  markerGroup.add(zAxisLine);
+  // Create Z-axis line (green) - full length across terrain (0 to 100) with dynamic segmentation
+  const zAxisStartPoint = new THREE.Vector3(cornerX, axisY, 0);
+  const zAxisEndPoint = new THREE.Vector3(cornerX, axisY, 100);
+  createSegmentedAxisLine(zAxisStartPoint, zAxisEndPoint, 0x00ff00, 'zAxis');
   
   // Calculate dynamic intervals for Z-axis (same as X-axis)
   const zLabelInterval = xLabelInterval;
@@ -350,8 +463,13 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
         new THREE.Vector3(cornerX, axisY, z),
         new THREE.Vector3(cornerX, axisY + tickHeight, z)
       ]);
-      const tickMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 1 });
+      const tickMaterial = new THREE.LineBasicMaterial({ 
+        color: 0x00ff00, 
+        linewidth: 1,
+        depthTest: false // Always render on top
+      });
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
+      tickLine.renderOrder = 1001; // High render order to appear on top
       markerGroup.add(tickLine);
       
       // Add number label every other displayed segment (skip 0ft and 100ft)
@@ -373,45 +491,20 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
     new THREE.Vector3(cornerX, axisY, cornerZ),
     new THREE.Vector3(cornerX, axisY + zAxisLength, cornerZ)
   ]);
-  const yAxisMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 3 });
+  const yAxisMaterial = new THREE.LineBasicMaterial({ 
+    color: 0x0000ff, 
+    linewidth: 3,
+    depthTest: false // Always render on top
+  });
   const yAxisLine = new THREE.Line(yAxisGeometry, yAxisMaterial);
+  yAxisLine.renderOrder = 1000; // High render order to appear on top
   markerGroup.add(yAxisLine);
   
-  // Calculate dynamic intervals for Y-axis
-  const totalYSegments = Math.floor(zAxisLength / 5); // Y-axis has 5ft segments
-  const yLabelInterval = Math.max(1, Math.ceil(totalYSegments / targetLabels));
-  const ySegmentInterval = Math.max(1, Math.ceil(totalYSegments / (targetLabels * 2))); // Up to 2x labels worth of segments
-  
-  // Add Y-axis segment markings and labels (every 5 feet for vertical)
-  segmentCount = 0;
-  displayedSegmentCount = 0;
-  for (let y = 5; y <= zAxisLength; y += 5) {
-    // Only show segment if it passes the culling interval
-    if (segmentCount % ySegmentInterval === 0) {
-      const tickLength = 1;
-      const tickGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(cornerX, axisY + y, cornerZ),
-        new THREE.Vector3(cornerX + tickLength, axisY + y, cornerZ)
-      ]);
-      const tickMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 1 });
-      const tickLine = new THREE.Line(tickGeometry, tickMaterial);
-      markerGroup.add(tickLine);
-      
-      // Add number label every other displayed segment (skip 20ft)
-      if (displayedSegmentCount % 2 === 0) {
-        if (y !== 20) { // Skip 20ft (final label)
-          const labelOffset = cornerX > 0 ? -3 : 3;
-          markerGroup.add(createTextMarker(`${y}ft`, cornerX + labelOffset, axisY + y, cornerZ, '#0000ff', false)); // false = larger labels
-        }
-      }
-      displayedSegmentCount++;
-    }
-    segmentCount++;
-  }
+  // Y-axis tick marks and labels removed - contour lines provide elevation information
 
   // Add main axis endpoint labels (simple axis names)
-  markerGroup.add(createTextMarker('X', xAxisEnd + (xAxisEnd > 0 ? 6 : -6), axisY + 2, cornerZ, '#ff0000'));
-  markerGroup.add(createTextMarker('Z', cornerX, axisY + 2, zAxisEnd + (zAxisEnd > 0 ? 6 : -6), '#00ff00'));
+  markerGroup.add(createTextMarker('X', 100 + 6, axisY + 2, cornerZ, '#ff0000'));
+  markerGroup.add(createTextMarker('Z', cornerX, axisY + 2, 100 + 6, '#00ff00'));
   markerGroup.add(createTextMarker('Y', cornerX - 4, axisY + zAxisLength + 3, cornerZ, '#0000ff'));
 }
 
@@ -434,14 +527,22 @@ function animate() {
       updateAxisPosition(scaleReferences.markers, camera);
     }
     
-    // Update arrow scales based on camera distance for zoom-independent sizing
-    terrain.updateAllArrowScales();
+      // Update arrow scales based on camera distance for zoom-independent sizing
+  terrain.updateAllArrowScales();
+  
+      // Update dynamic contour lines based on camera zoom level
+    terrain.updateContoursForZoom();
+    
+    // Update contour stats display (throttled)
+    if (Date.now() % 30 === 0) { // Update every ~30 frames (about twice per second at 60fps)
+      updateContourStats();
+    }
     
     // Auto-save terrain if needed (throttled to prevent excessive saves)
     terrain.autoSaveIfNeeded();
-    
-    // Update operation preview animation
-    updateOperationPreview();
+  
+  // Update operation preview animation
+  updateOperationPreview();
     
     renderer.render(scene, camera);
   } catch (error) {
@@ -1079,14 +1180,17 @@ function setupGameControls() {
         updateBrushDisplay();
         break;
       case 'x':
-        if (event.ctrlKey) return; // Don't interfere with Ctrl+X
+        // Grid removed - 'X' key now available for other functions
+        break;
+      case 'n':
+        if (event.ctrlKey) return; // Don't interfere with Ctrl+N
         event.preventDefault();
-        toggleGrid();
+        toggleContourLines();
         break;
       case 'b':
         if (event.ctrlKey) return; // Don't interfere with Ctrl+B
         event.preventDefault();
-        terrain.forceLightColors();
+        terrain.forceUpdateColors();
         break;
       case 'escape':
         event.preventDefault();
@@ -1140,6 +1244,34 @@ function setupGameControls() {
       const elevation = parseFloat(targetElevationSlider.value);
       terrain.setTargetElevation(elevation);
       targetElevationValue.textContent = `${elevation.toFixed(1)} ft`;
+    });
+  }
+
+  // Contour line controls
+  const toggleContoursBtn = document.getElementById('toggle-contours-btn') as HTMLButtonElement;
+  const contourIntervalSlider = document.getElementById('contour-interval') as HTMLInputElement;
+  const contourIntervalValue = document.getElementById('contour-interval-value');
+  const dynamicContoursCheckbox = document.getElementById('dynamic-contours-checkbox') as HTMLInputElement;
+
+  if (toggleContoursBtn) {
+    toggleContoursBtn.addEventListener('click', () => {
+      toggleContourLines();
+    });
+  }
+
+  if (contourIntervalSlider && contourIntervalValue) {
+    contourIntervalSlider.addEventListener('input', () => {
+      const interval = parseFloat(contourIntervalSlider.value);
+      terrain.setBaseContourInterval(interval);
+      contourIntervalValue.textContent = `${interval.toFixed(1)} ft`;
+      updateContourStats();
+    });
+  }
+
+  if (dynamicContoursCheckbox) {
+    dynamicContoursCheckbox.addEventListener('change', () => {
+      terrain.setDynamicContours(dynamicContoursCheckbox.checked);
+      updateContourStats();
     });
   }
 
@@ -1586,6 +1718,29 @@ function setupUI() {
         </div>
       </div>
       
+      <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+        <strong>Contour Lines:</strong><br>
+        <div style="margin: 5px 0;">
+          <button id="toggle-contours-btn" style="padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">📈 Hide/Show Contours (N)</button>
+        </div>
+        <div style="margin: 5px 0;">
+          <label style="display: flex; align-items: center;">
+            <input type="checkbox" id="dynamic-contours-checkbox" checked style="margin-right: 5px;">
+            <span style="font-size: 12px;">🔄 Dynamic (zoom-based)</span>
+          </label>
+        </div>
+        <div style="margin: 5px 0;">
+          <label>Base Interval: <input type="range" id="contour-interval" min="0.5" max="5" step="0.5" value="1" style="width: 100px;"></label>
+          <span id="contour-interval-value">1.0 ft</span>
+        </div>
+        <div style="margin: 5px 0; font-size: 12px; color: #ccc;">
+          <div id="contour-stats">Contours: 0 lines | Current: 1.0 ft | Zoom: 100</div>
+        </div>
+        <div style="margin: 5px 0; font-size: 11px; color: #aaa;">
+          Dynamic contours adjust detail based on zoom level. Closer view = more lines, further view = fewer lines.
+        </div>
+      </div>
+      
               <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
           <strong>Controls (Touch & Mouse):</strong>
           <ul style="margin: 5px 0; padding-left: 20px; font-size: 14px;">
@@ -1595,7 +1750,7 @@ function setupUI() {
             <li>Ctrl + drag: Apply current tool</li>
             <li>Q: Cut Tool | E: Fill Tool</li>
             <li>1-4: Brush sizes | C: Circle brush | V: Square brush | F: Cycle falloff</li>
-            <li>R: Reset terrain | G: Generate new terrain | W: Wireframe | X: Toggle grid</li>
+            <li>R: Reset terrain | G: Generate new terrain | W: Wireframe | N: Toggle contours</li>
             <li>Ctrl+S: Save current state | Ctrl+Z: Undo | Ctrl+Shift+Z: Redo</li>
             <li>A: Assignments | J: Join session | L: Logout</li>
           </ul>
@@ -1656,6 +1811,7 @@ function setupUI() {
   updateArrowCounts(); // Initialize arrow count display
   updateInteractionMode(false, false); // Initialize with no modifiers
   updateProgressDisplay(); // Initialize progress display
+  updateContourStats(); // Initialize contour line stats
   
   // Initialize UI polish system
   uiPolishSystem.initialize();
@@ -1931,6 +2087,26 @@ function updateTerrainStats() {
       Vertices: ${stats.vertexCount}<br>
       Triangles: ${stats.triangleCount}
     `;
+  }
+}
+
+// Update contour line stats
+function updateContourStats() {
+  const contourSettings = terrain.getContourSettings();
+  const dynamicSettings = terrain.getDynamicContourSettings();
+  const statsDiv = document.getElementById('contour-stats');
+  
+  if (statsDiv) {
+    const zoomLevel = Math.round((500 - dynamicSettings.cameraDistance) / 4); // Convert distance to zoom percentage
+    const currentInterval = dynamicSettings.currentInterval.toFixed(2);
+    const lineCount = contourSettings.count;
+    const labelCount = contourSettings.labelCount;
+    
+    if (dynamicSettings.dynamic) {
+      statsDiv.innerHTML = `Contours: ${lineCount} lines, ${labelCount} labels | Current: ${currentInterval} ft | Zoom: ${Math.max(0, zoomLevel)}%`;
+    } else {
+      statsDiv.innerHTML = `Contours: ${lineCount} lines, ${labelCount} labels | Fixed: ${currentInterval} ft | Static mode`;
+    }
   }
 }
 
