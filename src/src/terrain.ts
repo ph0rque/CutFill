@@ -472,6 +472,9 @@ export class Terrain {
     // Generate terrain based on selected pattern
     this.generateTerrainPattern(vertices as Float32Array, width, height, selectedPattern);
 
+    // Update original vertices to match the new terrain for accurate volume calculations
+    this.originalVertices = new Float32Array(vertices);
+
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.computeVertexNormals();
     this.updateTerrainColors();
@@ -1432,10 +1435,33 @@ export class Terrain {
         
         const actualChange = heightChange * this.brushSettings.strength * falloff * materialResistance;
         
-        // Limit excavation to maximum depth
-        const newHeight = vertices[i + 1] + actualChange;
-        const maxExcavationDepth = -this.blockDepth * 0.9; // Don't dig through the bottom
-        vertices[i + 1] = Math.max(maxExcavationDepth, newHeight);
+        // Apply 5-foot depth/height limits from original terrain
+        const originalHeight = this.originalVertices[i + 1];
+        const existingHeight = vertices[i + 1];
+        const newHeight = existingHeight + actualChange;
+        
+        // Calculate change from original terrain
+        const changeFromOriginal = newHeight - originalHeight;
+        
+        // Apply 5-foot limits for cut and fill operations
+        const maxCutDepth = -5.0; // 5 feet below original
+        const maxFillHeight = 5.0; // 5 feet above original
+        
+        let limitedNewHeight = newHeight;
+        
+        if (changeFromOriginal < maxCutDepth) {
+          // Limit cut to 5 feet below original
+          limitedNewHeight = originalHeight + maxCutDepth;
+        } else if (changeFromOriginal > maxFillHeight) {
+          // Limit fill to 5 feet above original
+          limitedNewHeight = originalHeight + maxFillHeight;
+        }
+        
+        // Also ensure we don't dig through the terrain block bottom
+        const maxExcavationDepth = -this.blockDepth * 0.9;
+        limitedNewHeight = Math.max(maxExcavationDepth, limitedNewHeight);
+        
+        vertices[i + 1] = limitedNewHeight;
         
         totalVolumeChange += Math.abs(actualChange);
         modified = true;
@@ -1537,6 +1563,35 @@ export class Terrain {
    */
   public modifyHeight(x: number, z: number, heightChange: number): void {
     this.modifyHeightBrush(x, z, heightChange);
+  }
+
+  /**
+   * Check depth/height limits at a position for visual feedback
+   */
+  public getDepthLimitsAtPosition(x: number, z: number): {
+    currentDepth: number;
+    remainingCutDepth: number;
+    remainingFillHeight: number;
+    atCutLimit: boolean;
+    atFillLimit: boolean;
+  } {
+    const currentHeight = this.getHeightAtPosition(x, z);
+    const originalHeight = this.getOriginalHeightAtPosition(x, z);
+    const changeFromOriginal = currentHeight - originalHeight;
+    
+    const maxCutDepth = -5.0;
+    const maxFillHeight = 5.0;
+    
+    const remainingCutDepth = Math.max(0, changeFromOriginal - maxCutDepth);
+    const remainingFillHeight = Math.max(0, maxFillHeight - changeFromOriginal);
+    
+    return {
+      currentDepth: changeFromOriginal,
+      remainingCutDepth,
+      remainingFillHeight,
+      atCutLimit: changeFromOriginal <= maxCutDepth + 0.1, // Small tolerance
+      atFillLimit: changeFromOriginal >= maxFillHeight - 0.1
+    };
   }
 
   /**

@@ -1,8 +1,23 @@
 # Active Context
 
-## Current Focus (January 15, 2025)
+## Current Focus
 
-### NEW FEATURE: Complete Cut/Fill Visualization System with Flat Shaded Grayscale Terrain
+### LATEST IMPROVEMENTS: Terrain Generation & Scale Reference System
+
+#### Volume Calculation Fix for Terrain Generation
+- **Fixed Terrain Regeneration**: `regenerateTerrain()` now properly resets `originalVertices` array
+- **Accurate Volume Display**: New terrain correctly shows 0.00 yd³ cut and fill (was showing incorrect previous values)
+- **Generation Notification**: Press 'G' shows "🌍 New terrain generated!" confirmation
+- **Immediate Volume Update**: Volume display immediately resets to 0.00/0.00 when new terrain is generated
+- **Realistic Terrain Patterns**: 5 different patterns (flat, gentle_slope, valley, hill, rolling) with natural mathematical curves
+
+#### Clean Scale Reference System
+- **Minimal Coordinate Markers**: Yellow markers at 50-foot intervals with coordinate labels (X',Z')
+- **Clean Visual Design**: Removed grid lines and dimensional arrows per user preference
+- **Coordinate System**: Clear markers at terrain perimeter showing distance in feet
+- **No Visual Clutter**: Simple, unobtrusive scale reference without busy visual elements
+
+### STABLE FEATURES: Complete Cut/Fill Visualization System
 - **Cut Visualization**: Red semitransparent overlay (50% opacity) showing original terrain ONLY in excavated areas
 - **Fill Visualization**: Blue semitransparent overlay showing filled volume ONLY in areas with added material
 - **Auto-Enabled on Modifications**: Overlays are hidden on fresh terrain but automatically enabled when cut/fill operations occur
@@ -42,8 +57,58 @@
 - **Progress Integration**: Tracks cubic yards moved for achievements and progress
 - **Smart Thresholds**: Balance status uses yd³-appropriate thresholds (<0.1 yd³ balanced)
 
+### Previous Enhancement: Dynamic Volume Updates After Save Operations
+- **Forced Volume Updates**: Volume display immediately updates after each Save/Enter operation with cumulative totals
+- **Visual Confirmation**: Green notification "📊 Volume totals updated!" appears after each save to confirm update
+- **Real-time Accumulation**: Cut and fill volumes now properly accumulate with each executed plan
+- **Immediate Feedback**: Users see updated volumes instantly after committing planned operations
+- **Dual Implementation**: Works consistently for both Save button clicks and Enter key presses
+
+### Previous Fix: Volume Calculation Initialization 
+- **Zero Initialization**: Volume display now properly shows 0.00 yd³ for cut and fill on fresh page load
+- **Precision Handling**: Added 0.001 yd³ threshold to eliminate floating point precision noise
+- **Forced Update**: Initial volume display update called during game initialization
+- **Negative Value Protection**: Math.max(0, value) ensures cut/fill volumes never show negative
+- **Clean Fresh State**: Unmodified terrain now correctly displays 0.00 cut, 0.00 fill, 0.00 net
+
+### Previous UI Enhancement: Processing Indicator for Plan Execution
+- **Visual Feedback**: Added animated spinner with "Processing terrain changes..." message during plan execution
+- **Dual Implementation**: Shows for both Save button clicks and Enter key presses
+- **Professional Appearance**: Centered modal with green spinner, dark background, and smooth animations
+- **Responsive Timing**: Uses setTimeout to ensure UI updates before terrain processing begins
+- **Auto-Cleanup**: Indicator automatically disappears when processing is complete
+
+### Previous UI Fix: Enhanced Tooltip Hiding During Modification Mode (Improved)
+- **Immediate Ctrl Detection**: Added keydown event listener to hide tooltips instantly when Ctrl is pressed
+- **Dual Detection System**: Both mousemove and keydown events check for Ctrl key
+- **Complete Label Hiding**: Labels disappear both when cut/fill tools are selected AND when Ctrl is pressed
+- **Clean Modification Experience**: No label interference during Ctrl+drag operations
+- **Cross-Platform Support**: Works with both Ctrl (PC) and Cmd (Mac) keys
+- **Instant Response**: Tooltips hide immediately when Ctrl is pressed, not just on mouse movement
+
+### Previous Enhancement: Return/Enter Hotkey for Plan Execution
+- **Return Key Hotkey**: Added Enter/Return key to save and execute planned cut/fill operations
+- **Seamless Workflow**: Users can plan operations with Ctrl+drag, then press Enter to commit changes
+- **UI Integration**: Hotkey info added to keyboard controls help section
+- **Smart Execution**: Only executes when there are pending planned operations
+- **UI Updates**: Automatically refreshes planning buttons and volume display after execution
+
+### Previous Feature: 5-Foot Depth/Height Limits for Cut/Fill Operations
+- **Cut Limits**: Cut operations are limited to maximum 5 feet below original terrain height
+- **Fill Limits**: Fill operations are limited to maximum 5 feet above original terrain height  
+- **No Overlap Beyond Limits**: Prevents overlapping operations that would exceed these depth/height limits
+- **Smart Visual Feedback**: Tooltips show remaining cut/fill capacity and warn when limits are reached
+- **Real-time Limit Checking**: Uses `getDepthLimitsAtPosition()` to check current depth relative to original terrain
+- **Implementation**: Enhanced `modifyHeightBrush()` with limit checking against `originalVertices` array
+
+### Previous UI Enhancement: Hidden Labels During Cut/Fill Operations
+- **Smart Label Hiding**: Terrain tooltips are now hidden when cut or fill tools are engaged (selected)
+- **Cleaner Interface**: No more overlapping tooltips during cut/fill operations for better focus
+- **Preserved Functionality**: Labels still appear normally when other tools are selected or when not using cut/fill tools
+- **Implementation**: Added tool engagement detection in mousemove handler to hide terrain-tooltip element
+
 ### Next Priorities
-1. **User Testing**: Verify all tools work correctly with recent bug fixes
+1. **User Testing**: Verify all tools work correctly with recent bug fixes including new label hiding
 2. **Performance**: Monitor frame rates with persistent arrow accumulation
 3. **Advanced Features**: Consider slope analysis or material cost calculations
 

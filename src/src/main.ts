@@ -165,6 +165,9 @@ function addScaleReferences(scene: THREE.Scene): { markers: THREE.Group } {
   // Add scale markers with axis lines in corner
   const markerGroup = new THREE.Group();
   
+  // Add a permanent grid system to show scale
+  addPermanentScaleGrid(scene, markerGroup);
+  
   // These will be dynamically positioned based on camera angle
   updateAxisPosition(markerGroup, camera);
   
@@ -172,6 +175,44 @@ function addScaleReferences(scene: THREE.Scene): { markers: THREE.Group } {
   
   return { markers: markerGroup };
 }
+
+// Function to add permanent scale grid and dimension markers
+function addPermanentScaleGrid(scene: THREE.Scene, markerGroup: THREE.Group): void {
+  const terrainSize = 100; // 100ft x 100ft terrain
+  
+  // Create distance markers at key points for scale reference
+  for (let x = 0; x <= terrainSize; x += 50) {
+    for (let z = 0; z <= terrainSize; z += 50) {
+      if (x === 0 || x === terrainSize || z === 0 || z === terrainSize) {
+        // Create a small marker cube
+        const markerGeometry = new THREE.BoxGeometry(1, 0.5, 1);
+        const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+        marker.position.set(x, 0.5, z);
+        scene.add(marker);
+        
+        // Add distance text (simplified - using CSS2D would be better but keeping it simple)
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d')!;
+        canvas.width = 128;
+        canvas.height = 64;
+        context.fillStyle = 'white';
+        context.font = '16px Arial';
+        context.textAlign = 'center';
+        context.fillText(`${x}',${z}'`, 64, 32);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.position.set(x, 2, z);
+        sprite.scale.set(8, 4, 1);
+        scene.add(sprite);
+      }
+    }
+  }
+}
+
+
 
 // Grid removed - contour lines provide better elevation reference
 
@@ -772,6 +813,89 @@ async function loadUserProgress(userId: string) {
   }
 }
 
+// Helper function to generate depth limit information for tooltips
+function getDepthLimitInfo(toolName: string, depthLimits: any): string {
+  const currentChange = depthLimits.currentDepth;
+  const isAtLimit = (toolName === 'cut' && depthLimits.atCutLimit) || 
+                    (toolName === 'fill' && depthLimits.atFillLimit);
+  
+  if (isAtLimit) {
+    return toolName === 'cut' ? 
+      '🚨 5ft Cut Limit Reached!' : 
+      '🚨 5ft Fill Limit Reached!';
+  }
+  
+  if (toolName === 'cut') {
+    const remaining = depthLimits.remainingCutDepth;
+    return remaining > 0 ? 
+      `⛏️ ${remaining.toFixed(1)}ft more cut available` : 
+      `⛏️ Can cut ${Math.abs(currentChange - (-5)).toFixed(1)}ft here`;
+  } else {
+    const remaining = depthLimits.remainingFillHeight;
+    return remaining > 0 ? 
+      `🏔️ ${remaining.toFixed(1)}ft more fill available` : 
+      `🏔️ Can fill ${(5 - currentChange).toFixed(1)}ft here`;
+  }
+}
+
+// Processing indicator functions for terrain operations
+function showProcessingIndicator(){
+  let indicator = document.getElementById('processing-indicator');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.id = 'processing-indicator';
+    indicator.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 20px 30px;
+      border-radius: 8px;
+      z-index: 2000;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    `;
+    indicator.innerHTML = `
+      <div style="
+        width: 20px;
+        height: 20px;
+        border: 2px solid #4CAF50;
+        border-top: 2px solid transparent;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      "></div>
+      <span>Processing terrain changes...</span>
+    `;
+    document.body.appendChild(indicator);
+    
+    // Add CSS animation if not already present
+    if (!document.getElementById('spinner-style')) {
+      const style = document.createElement('style');
+      style.id = 'spinner-style';
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }
+  indicator.style.display = 'flex';
+}
+
+function hideProcessingIndicator(){
+  const indicator = document.getElementById('processing-indicator');
+  if (indicator) {
+    indicator.style.display = 'none';
+  }
+}
+
 // Function to setup game controls
 function setupGameControls() {
   // Initialize gesture controls
@@ -824,7 +948,12 @@ function setupGameControls() {
 
   renderer.domElement.addEventListener('mousemove', event => {
     // Enhanced hover tooltips for terrain information AND operation preview
-    if (!isMouseDown && !isModifying) {
+    // Hide tooltips when cut or fill tools are engaged (selected) OR when Ctrl is held (modification mode)
+    const currentToolName = toolManager.getCurrentToolName();
+    const isCutOrFillToolEngaged = currentToolName === 'cut' || currentToolName === 'fill';
+    const isCtrlHeld = event.ctrlKey || event.metaKey;
+    
+    if (!isMouseDown && !isModifying && !isCutOrFillToolEngaged && !isCtrlHeld) {
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
@@ -884,6 +1013,9 @@ function setupGameControls() {
         const previewVolume = calculatePreviewVolume(point);
         const volumeEstimate = toolSettings.name === 'cut' ? previewVolume.cutPreview : previewVolume.fillPreview;
         
+        // Get depth limits at this position
+        const depthLimits = terrain.getDepthLimitsAtPosition(point.x, point.z);
+        
         tooltip.innerHTML = `
           <div style="color: ${zoneColor}; font-weight: bold; margin-bottom: 4px;">🎯 ${zoneType}</div>
           <div><strong>Elevation:</strong> ${height.toFixed(2)} ft</div>
@@ -902,7 +1034,7 @@ function setupGameControls() {
               📊 Estimated Volume: ${volumeEstimate.toFixed(2)} yd³
             </div>
             <div style="font-size: 9px; color: #aaa; margin-top: 2px;">
-              ${toolSettings.name === 'cut' ? '🔵 Blue volume shows material to be removed' : '🔴 Red volume shows material to be added'}
+              ${getDepthLimitInfo(toolSettings.name, depthLimits)}
             </div>
           </div>
           <div style="margin-top: 4px; font-size: 11px; color: #ccc;">
@@ -918,6 +1050,11 @@ function setupGameControls() {
         if (tooltip) tooltip.style.display = 'none';
         hideOperationPreview();
       }
+    } else {
+      // Hide tooltip and preview when cut/fill tools are engaged, during interaction, or when Ctrl is held
+      const tooltip = document.getElementById('terrain-tooltip');
+      if (tooltip) tooltip.style.display = 'none';
+      hideOperationPreview();
     }
 
     if (isMouseDown) {
@@ -1009,6 +1146,17 @@ function setupGameControls() {
   document.addEventListener('keyup', event => {
     if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
     updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
+    }
+  });
+
+  // Add keydown event listener to immediately hide tooltips when Ctrl is pressed
+  document.addEventListener('keydown', event => {
+    if (event.ctrlKey || event.metaKey) {
+      const tooltip = document.getElementById('terrain-tooltip');
+      if (tooltip) {
+        tooltip.style.display = 'none';
+      }
+      hideOperationPreview();
     }
   });
 
@@ -1127,7 +1275,32 @@ function setupGameControls() {
         break;
       case 'g':
         terrain.regenerateTerrain();
-        updateVolumeDisplay();
+        updateVolumeDisplay(true); // Force immediate volume update to show 0.00 for new terrain
+        
+        // Show brief notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #4CAF50;
+          color: white;
+          padding: 10px 15px;
+          border-radius: 4px;
+          z-index: 1001;
+          font-size: 14px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          animation: slideInOut 2s ease-in-out;
+        `;
+        notification.innerHTML = '🌍 New terrain generated!';
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+          if (document.body.contains(notification)) {
+            document.body.removeChild(notification);
+          }
+        }, 2000);
+        
         if (multiplayerManager.isInSession()) {
           multiplayerManager.sendTerrainReset();
         }
@@ -1189,6 +1362,53 @@ function setupGameControls() {
         event.preventDefault();
         hideOperationPreview();
         hideKeyboardInstructions();
+        break;
+      case 'enter':
+        event.preventDefault();
+        // Save and execute planned cut/fill operations
+        if (terrain.hasPendingChanges()) {
+          showProcessingIndicator();
+          // Use setTimeout to allow UI to update before processing
+          setTimeout(() => {
+            terrain.applyPendingChanges();
+            // Update the planning UI buttons
+            const refreshPlanButtons = () => {
+              const planControlsDiv = document.getElementById('plan-controls') as HTMLDivElement;
+              if (planControlsDiv) {
+                planControlsDiv.style.display = terrain.hasPendingChanges() ? 'block' : 'none';
+              }
+            };
+            refreshPlanButtons();
+            // Force immediate volume update to show new cumulative totals
+            updateVolumeDisplay(true);
+            
+            // Show brief notification that volumes have been updated
+            const volumeNotification = document.createElement('div');
+            volumeNotification.style.cssText = `
+              position: fixed;
+              bottom: 20px;
+              right: 20px;
+              background: #4CAF50;
+              color: white;
+              padding: 10px 15px;
+              border-radius: 4px;
+              z-index: 1001;
+              font-size: 14px;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+              animation: slideInOut 2s ease-in-out;
+            `;
+            volumeNotification.innerHTML = '📊 Volume totals updated!';
+            document.body.appendChild(volumeNotification);
+            
+            setTimeout(() => {
+              if (document.body.contains(volumeNotification)) {
+                document.body.removeChild(volumeNotification);
+              }
+            }, 2000);
+            
+            hideProcessingIndicator();
+          }, 10);
+        }
         break;
     }
   });
@@ -1688,7 +1908,7 @@ function setupUI() {
             <li>Q: Cut Tool | E: Fill Tool</li>
             <li>1-4: Brush sizes | C: Circle brush | V: Square brush | F: Cycle falloff</li>
             <li>R: Reset terrain | G: Generate new terrain | W: Wireframe | N: Toggle contours</li>
-            <li>Ctrl+S: Save current state | Ctrl+Z: Undo | Ctrl+Shift+Z: Redo</li>
+            <li>Ctrl+S: Save current state | Ctrl+Z: Undo | Ctrl+Shift+Z: Redo | Enter: Apply planned cuts/fills</li>
             <li>A: Assignments | J: Join session | L: Logout</li>
           </ul>
         </div>
@@ -1836,9 +2056,43 @@ function setupUI() {
     toolBtns.forEach(btn => { btn.disabled = hasPlan; (btn as HTMLButtonElement).style.opacity = hasPlan? '0.4':'1'; });
   }
 
+
+
   saveBtn?.addEventListener('click', ()=>{
-    terrain.applyPendingChanges();
-    refreshPlanButtons();
+    showProcessingIndicator();
+    // Use setTimeout to allow UI to update before processing
+    setTimeout(() => {
+      terrain.applyPendingChanges();
+      refreshPlanButtons();
+      // Force immediate volume update to show new cumulative totals
+      updateVolumeDisplay(true);
+      
+      // Show brief notification that volumes have been updated
+      const volumeNotification = document.createElement('div');
+      volumeNotification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #4CAF50;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 4px;
+        z-index: 1001;
+        font-size: 14px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        animation: slideInOut 2s ease-in-out;
+      `;
+      volumeNotification.innerHTML = '📊 Volume totals updated!';
+      document.body.appendChild(volumeNotification);
+      
+      setTimeout(() => {
+        if (document.body.contains(volumeNotification)) {
+          document.body.removeChild(volumeNotification);
+        }
+      }, 2000);
+      
+      hideProcessingIndicator();
+    }, 10);
   });
   cancelBtn?.addEventListener('click', ()=>{
     terrain.discardPendingChanges();
@@ -1846,6 +2100,9 @@ function setupUI() {
   });
 
   setInterval(refreshPlanButtons, 1000);
+  
+  // Initialize volume display to show 0,0,0 on fresh load
+  updateVolumeDisplay(true); // Force immediate update
 }
 
 // Enhanced real-time volume tracking
@@ -1874,10 +2131,17 @@ function performVolumeUpdate() {
   if (!info) return;
 
   // Convert volumes from cubic feet to cubic yards (1 yd³ = 27 ft³)
+  const cutYards = volumes.cut / 27;
+  const fillYards = volumes.fill / 27;
+  const netYards = volumes.net / 27;
+  
+  // Apply precision threshold to eliminate floating point noise
+  const PRECISION_THRESHOLD = 0.001; // 0.001 cubic yards threshold
+  
   const volumesYards = {
-    cut: volumes.cut / 27,
-    fill: volumes.fill / 27,
-    net: volumes.net / 27
+    cut: Math.abs(cutYards) < PRECISION_THRESHOLD ? 0 : Math.max(0, cutYards),
+    fill: Math.abs(fillYards) < PRECISION_THRESHOLD ? 0 : Math.max(0, fillYards),
+    net: Math.abs(netYards) < PRECISION_THRESHOLD ? 0 : netYards
   };
 
   // Calculate change rates in cubic yards
