@@ -158,7 +158,7 @@ camera.far = 2000; // Increase far clipping plane
 camera.updateProjectionMatrix();
 
 // Terrain is now visible - turn off wireframe
-  (terrain.getSurfaceMesh().material as THREE.MeshLambertMaterial).wireframe = false;
+        (terrain.getSurfaceMesh().material as THREE.MeshBasicMaterial).wireframe = false;
 
 // Function to add scale references to the scene
 function addScaleReferences(scene: THREE.Scene): { markers: THREE.Group } {
@@ -971,6 +971,9 @@ function setupGameControls() {
             
             updateVolumeDisplay();
             
+            // Update overlay button states based on terrain state
+            updateOverlayButtonStates();
+            
             // Start real-time volume updates during modification
             startRealTimeVolumeUpdates();
             
@@ -1489,7 +1492,11 @@ function setupGameControls() {
   const clearFillArrowsBtn = document.getElementById('clear-fill-arrows-btn') as HTMLButtonElement;
   const clearAllArrowsBtn = document.getElementById('clear-all-arrows-btn') as HTMLButtonElement;
   const toggleArrowsBtn = document.getElementById('toggle-arrows-btn') as HTMLButtonElement;
+  const toggleOverlayBtn = document.getElementById('toggle-overlay-btn') as HTMLButtonElement;
+  const toggleFillOverlayBtn = document.getElementById('toggle-fill-overlay-btn') as HTMLButtonElement;
   let arrowsVisible = true;
+  let overlayVisible = false; // Hidden by default
+  let fillOverlayVisible = false; // Hidden by default
 
   if (clearCutArrowsBtn) {
     clearCutArrowsBtn.addEventListener('click', () => {
@@ -1518,6 +1525,24 @@ function setupGameControls() {
       terrain.toggleAllPersistentArrows(arrowsVisible);
       toggleArrowsBtn.textContent = arrowsVisible ? 'Hide' : 'Show';
       toggleArrowsBtn.style.background = arrowsVisible ? '#666' : '#4CAF50';
+    });
+  }
+
+  if (toggleOverlayBtn) {
+    toggleOverlayBtn.addEventListener('click', () => {
+      overlayVisible = !overlayVisible;
+      terrain.toggleOriginalTerrainOverlay(overlayVisible);
+      toggleOverlayBtn.textContent = overlayVisible ? 'Hide Original' : 'Show Original';
+      toggleOverlayBtn.style.background = overlayVisible ? '#FF4444' : '#4CAF50';
+    });
+  }
+
+  if (toggleFillOverlayBtn) {
+    toggleFillOverlayBtn.addEventListener('click', () => {
+      fillOverlayVisible = !fillOverlayVisible;
+      terrain.toggleFillVolumeOverlay(fillOverlayVisible);
+      toggleFillOverlayBtn.textContent = fillOverlayVisible ? 'Hide Fill' : 'Show Fill';
+      toggleFillOverlayBtn.style.background = fillOverlayVisible ? '#4444FF' : '#4CAF50';
     });
   }
 
@@ -1642,6 +1667,8 @@ function setupUI() {
             <button id="clear-fill-arrows-btn" style="padding: 2px 6px; background: #0000FF; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Clear Fill</button>
             <button id="clear-all-arrows-btn" style="padding: 2px 6px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Clear All</button>
             <button id="toggle-arrows-btn" style="padding: 2px 6px; background: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Hide/Show</button>
+            <button id="toggle-overlay-btn" style="padding: 2px 6px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Show Original</button>
+            <button id="toggle-fill-overlay-btn" style="padding: 2px 6px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">Show Fill</button>
           </div>
         </div>
         <div id="tool-status" style="margin: 5px 0; font-size: 14px;">Current Tool: ⛏️ Cut</div>
@@ -2055,6 +2082,24 @@ function updateArrowCounts() {
     if (cutArrowCountElement) cutArrowCountElement.textContent = cutCount.toString();
     if (fillArrowCountElement) fillArrowCountElement.textContent = fillCount.toString();
     if (totalArrowCountElement) totalArrowCountElement.textContent = totalCount.toString();
+  }
+}
+
+// Update overlay button states to match terrain overlay visibility
+function updateOverlayButtonStates() {
+  const toggleOverlayBtn = document.getElementById('toggle-overlay-btn') as HTMLButtonElement;
+  const toggleFillOverlayBtn = document.getElementById('toggle-fill-overlay-btn') as HTMLButtonElement;
+  
+  if (terrain && toggleOverlayBtn && toggleFillOverlayBtn) {
+    // Update original overlay button
+    const originalVisible = terrain.isOriginalTerrainOverlayVisible();
+    toggleOverlayBtn.textContent = originalVisible ? 'Hide Original' : 'Show Original';
+    toggleOverlayBtn.style.background = originalVisible ? '#FF4444' : '#4CAF50';
+    
+    // Update fill overlay button  
+    const fillVisible = terrain.isFillVolumeOverlayVisible();
+    toggleFillOverlayBtn.textContent = fillVisible ? 'Hide Fill' : 'Show Fill';
+    toggleFillOverlayBtn.style.background = fillVisible ? '#4444FF' : '#4CAF50';
   }
 }
 
@@ -2656,7 +2701,7 @@ function showOperationPreview(point: THREE.Vector3): void {
   
   // Create preview material with tool-specific properties
   const toolColor = new THREE.Color(toolSettings.color);
-  const previewMaterial = new THREE.MeshLambertMaterial({
+  const previewMaterial = new THREE.MeshBasicMaterial({
     color: toolColor,
     transparent: true,
     opacity: 0.35,
@@ -2718,7 +2763,7 @@ function hideOperationPreview(): void {
 function updateOperationPreview(): void {
   if (isPreviewMode && previewMesh) {
     const time = Date.now() * 0.002;
-    const material = previewMesh.material as THREE.MeshLambertMaterial;
+    const material = previewMesh.material as THREE.MeshBasicMaterial;
     material.opacity = 0.25 + 0.15 * Math.sin(time);
     
     // Update wireframe opacity if it exists
