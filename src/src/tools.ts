@@ -104,7 +104,7 @@ export class FillTool extends TerrainTool {
       displayName: 'Fill',
       description: 'Add earth (fill operation)',
       icon: '🏔️',
-      color: '#44AA44',
+      color: '#2196F3',
       defaultStrength: 0.8,
       defaultSize: 3,
       maxSize: 8,

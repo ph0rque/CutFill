@@ -1029,16 +1029,26 @@ export class Terrain {
    */
   public clearContourLines(): void {
     this.contourLines.forEach(line => {
-      this.terrainGroup.remove(line);
-      line.geometry.dispose();
-      (line.material as THREE.Material).dispose();
+      if (line) {
+        this.terrainGroup.remove(line);
+        if (line.geometry) {
+          line.geometry.dispose();
+        }
+        if (line.material && typeof (line.material as THREE.Material).dispose === 'function') {
+          (line.material as THREE.Material).dispose();
+        }
+      }
     });
     this.contourLines = [];
     
     // Clear elevation labels
     this.contourLabels.forEach(label => {
-      this.terrainGroup.remove(label);
-      label.material.dispose();
+      if (label) {
+        this.terrainGroup.remove(label);
+        if (label.material && typeof label.material.dispose === 'function') {
+          label.material.dispose();
+        }
+      }
     });
     this.contourLabels = [];
   }
@@ -1156,8 +1166,12 @@ export class Terrain {
         // Even if interval didn't change, regenerate labels for new camera position
         // Clear existing labels
         this.contourLabels.forEach(label => {
-          this.terrainGroup.remove(label);
-          label.material.dispose();
+          if (label) {
+            this.terrainGroup.remove(label);
+            if (label.material && typeof label.material.dispose === 'function') {
+              label.material.dispose();
+            }
+          }
         });
         this.contourLabels = [];
         
@@ -1975,17 +1989,29 @@ export class Terrain {
   private cleanupAllOverlays(): void {
     // Remove all cut overlays
     this.cutOverlays.forEach(overlay => {
-      this.terrainGroup.remove(overlay);
-      overlay.geometry.dispose();
-      (overlay.material as THREE.Material).dispose();
+      if (overlay) {
+        this.terrainGroup.remove(overlay);
+        if (overlay.geometry) {
+          overlay.geometry.dispose();
+        }
+        if (overlay.material && typeof (overlay.material as THREE.Material).dispose === 'function') {
+          (overlay.material as THREE.Material).dispose();
+        }
+      }
     });
     this.cutOverlays = [];
 
     // Remove all fill overlays
     this.fillOverlays.forEach(overlay => {
-      this.terrainGroup.remove(overlay);
-      overlay.geometry.dispose();
-      (overlay.material as THREE.Material).dispose();
+      if (overlay) {
+        this.terrainGroup.remove(overlay);
+        if (overlay.geometry) {
+          overlay.geometry.dispose();
+        }
+        if (overlay.material && typeof (overlay.material as THREE.Material).dispose === 'function') {
+          (overlay.material as THREE.Material).dispose();
+        }
+      }
     });
     this.fillOverlays = [];
 
@@ -2700,35 +2726,133 @@ export class Terrain {
   // === Outline Overlay Creator ===
   private createOutlineOverlay(boundary: {x:number; z:number}[], type: 'cut'|'fill'): THREE.Object3D | null {
      if(boundary.length < 3) return null;
-     // Compute average original height for vertical placement
-     const avgY = boundary.reduce((s,p)=> s + this.getOriginalHeightAtPosition(p.x,p.z),0) / boundary.length;
-     const avgZVal = boundary.reduce((s,p)=> s + p.z,0)/boundary.length;
-
-     const shape = new THREE.Shape();
-     shape.moveTo(boundary[0].x, boundary[0].z);
-     for(let i=1;i<boundary.length;i++){
-       shape.lineTo(boundary[i].x, boundary[i].z);
-     }
-     shape.closePath();
-     // Smooth outline with more curve segments and give a tiny extrusion so side faces hide inner triangles
-     const extrudeGeom = new THREE.ExtrudeGeometry(shape, { depth: 0.05, bevelEnabled:false, curveSegments: 64 });
-     const color = type==='cut'? 0xFF4444 : 0x4444FF;
-     const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.3, depthWrite:false, depthTest:false, side:THREE.DoubleSide});
-     const mesh = new THREE.Mesh(extrudeGeom, mat);
-     mesh.rotation.set(0,0,0);
-     mesh.position.setY(avgY + 0.02);
-     mesh.renderOrder = 1;
-
-     // Outline line (smoothed)
-     const pts:THREE.Vector3[] = boundary.map(p=> new THREE.Vector3(p.x, avgY + 0.055, p.z));
-     const lineGeom = new THREE.BufferGeometry().setFromPoints(pts);
-     const lineMat = new THREE.LineBasicMaterial({color:0x000000});
-     const loop = new THREE.LineLoop(lineGeom, lineMat);
-     loop.renderOrder = 2;
-
+     
      const group = new THREE.Group();
+     const color = type==='cut'? 0xFF4444 : 0x4444FF;
+     
+     // Create smooth curved boundary with interpolation
+     const smoothBoundary = this.createSmoothBoundary(boundary, 32); // Increase resolution for smoother curves
+     
+     // Create terrain-following geometry using higher resolution triangulation
+     const vertices: number[] = [];
+     const indices: number[] = [];
+     
+     // Create center point at average position and height
+     const centerX = boundary.reduce((s,p)=> s + p.x, 0) / boundary.length;
+     const centerZ = boundary.reduce((s,p)=> s + p.z, 0) / boundary.length;
+     const centerY = this.getHeightAtPosition(centerX, centerZ) + 0.05;
+     vertices.push(centerX, centerY, centerZ);
+     
+     // Add smooth boundary vertices at terrain height
+     for (let i = 0; i < smoothBoundary.length; i++) {
+       const p = smoothBoundary[i];
+       const terrainY = this.getHeightAtPosition(p.x, p.z) + 0.05;
+       vertices.push(p.x, terrainY, p.z);
+     }
+     
+     // Create triangular faces from center to boundary segments
+     for (let i = 0; i < smoothBoundary.length; i++) {
+       const next = (i + 1) % smoothBoundary.length;
+       indices.push(0, i + 1, next + 1);
+     }
+     
+     // Create the mesh geometry
+     const geometry = new THREE.BufferGeometry();
+     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+     geometry.setIndex(indices);
+     geometry.computeVertexNormals();
+     
+     const mat = new THREE.MeshBasicMaterial({
+       color, 
+       transparent: true, 
+       opacity: 0.4, 
+       depthWrite: false, 
+       depthTest: false, 
+       side: THREE.DoubleSide
+     });
+     const mesh = new THREE.Mesh(geometry, mat);
+     mesh.renderOrder = 1;
      group.add(mesh);
+
+     // Create smooth outline line following terrain surface
+     const outlinePts: THREE.Vector3[] = smoothBoundary.map(p => {
+       const terrainY = this.getHeightAtPosition(p.x, p.z) + 0.08;
+       return new THREE.Vector3(p.x, terrainY, p.z);
+     });
+     // Close the loop
+     outlinePts.push(outlinePts[0].clone());
+     
+     const lineGeom = new THREE.BufferGeometry().setFromPoints(outlinePts);
+     const lineMat = new THREE.LineBasicMaterial({color: 0x000000, linewidth: 2});
+     const loop = new THREE.Line(lineGeom, lineMat);
+     loop.renderOrder = 2;
      group.add(loop);
+
      return group;
+   }
+
+   /**
+    * Create a smooth curved boundary by interpolating between boundary points
+    */
+   private createSmoothBoundary(boundary: {x:number; z:number}[], resolution: number): {x:number; z:number}[] {
+     if (boundary.length < 3) return boundary;
+     
+     const smoothPoints: {x:number; z:number}[] = [];
+     
+     for (let i = 0; i < boundary.length; i++) {
+       const current = boundary[i];
+       const next = boundary[(i + 1) % boundary.length];
+       const prev = boundary[(i - 1 + boundary.length) % boundary.length];
+       
+       // Add the current point
+       smoothPoints.push(current);
+       
+       // Calculate number of interpolation points based on distance
+       const segmentLength = Math.sqrt(
+         Math.pow(next.x - current.x, 2) + Math.pow(next.z - current.z, 2)
+       );
+       const numInterpolations = Math.max(1, Math.floor(segmentLength / 2)); // One point every 2 feet
+       
+       // Create smooth curve between current and next point using catmull-rom spline
+       for (let j = 1; j <= numInterpolations; j++) {
+         const t = j / (numInterpolations + 1);
+         
+         // Catmull-Rom spline interpolation for smoother curves
+         const interpolated = this.catmullRomInterpolation(
+           prev, current, next, 
+           boundary[(i + 2) % boundary.length], 
+           t
+         );
+         
+         smoothPoints.push(interpolated);
+       }
+     }
+     
+     return smoothPoints;
+   }
+
+   /**
+    * Catmull-Rom spline interpolation for smooth curves
+    */
+   private catmullRomInterpolation(
+     p0: {x:number; z:number}, 
+     p1: {x:number; z:number}, 
+     p2: {x:number; z:number}, 
+     p3: {x:number; z:number}, 
+     t: number
+   ): {x:number; z:number} {
+     const t2 = t * t;
+     const t3 = t2 * t;
+     
+     // Catmull-Rom coefficients
+     const c0 = -0.5 * t3 + t2 - 0.5 * t;
+     const c1 = 1.5 * t3 - 2.5 * t2 + 1;
+     const c2 = -1.5 * t3 + 2 * t2 + 0.5 * t;
+     const c3 = 0.5 * t3 - 0.5 * t2;
+     
+     return {
+       x: c0 * p0.x + c1 * p1.x + c2 * p2.x + c3 * p3.x,
+       z: c0 * p0.z + c1 * p1.z + c2 * p2.z + c3 * p3.z
+     };
    }
 }

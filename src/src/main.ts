@@ -1575,7 +1575,7 @@ function setupUI() {
          <strong>Cut & Fill Operations:</strong><br>
         <div class="tool-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 5px 0;">
           <button class="tool-btn" data-tool="cut" style="padding: 8px; background: #FF4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">⛏️ Cut</button>
-          <button class="tool-btn" data-tool="fill" style="padding: 8px; background: #44AA44; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🏔️ Fill</button>
+          <button class="tool-btn" data-tool="fill" style="padding: 8px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🏔️ Fill</button>
         </div>
         <div class="control-buttons" style="margin: 5px 0;">
           <button id="undo-btn" class="enhanced-button secondary" style="margin: 2px; padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Undo (Ctrl+Z)</button>
@@ -2691,12 +2691,20 @@ function hideOperationPreview(): void {
     const wireframeMesh = (previewMesh as any).wireframeMesh;
     if (wireframeMesh) {
       scene.remove(wireframeMesh);
-      wireframeMesh.geometry.dispose();
-      wireframeMesh.material.dispose();
+      if (wireframeMesh.geometry) {
+        wireframeMesh.geometry.dispose();
+      }
+      if (wireframeMesh.material && typeof wireframeMesh.material.dispose === 'function') {
+        wireframeMesh.material.dispose();
+      }
     }
     
-    previewMesh.geometry.dispose();
-    (previewMesh.material as THREE.Material).dispose();
+    if (previewMesh.geometry) {
+      previewMesh.geometry.dispose();
+    }
+    if (previewMesh.material && typeof (previewMesh.material as THREE.Material).dispose === 'function') {
+      (previewMesh.material as THREE.Material).dispose();
+    }
     previewMesh = null;
   }
   isPreviewMode = false;
