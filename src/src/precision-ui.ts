@@ -16,7 +16,7 @@ export class PrecisionUI {
     this.container.id = 'precision-tools-ui';
     this.container.style.cssText = `
       position: fixed;
-      top: 10px;
+      top: 60px;
       left: 10px;
       background: rgba(0,0,0,0.9);
       color: white;

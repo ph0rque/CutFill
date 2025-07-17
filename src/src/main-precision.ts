@@ -3,12 +3,14 @@ import * as THREE from 'three';
 import { Terrain } from './terrain';
 import { PrecisionToolManager } from './precision-tools';
 import { PrecisionUI } from './precision-ui';
+import { ViewControls } from './view-controls';
 
 // Global variables
 let isGameReady = false;
 let terrain: Terrain;
 let precisionToolManager: PrecisionToolManager;
 let precisionUI: PrecisionUI;
+let viewControls: ViewControls;
 let scaleReferences: { markers: THREE.Group };
 
 // Camera control variables
@@ -93,12 +95,16 @@ function initializeGame(): void {
     scaleReferences = addScaleReferences(scene);
     
     // Create precision tools
-    precisionToolManager = new PrecisionToolManager(terrain, scene);
+    precisionToolManager = new PrecisionToolManager(terrain, scene, camera);
     precisionUI = new PrecisionUI(precisionToolManager);
+    
+    // Create view controls
+    viewControls = new ViewControls(camera, scene);
     
     // Make precisionUI and scaleReferences globally available for UI callbacks
     (window as any).precisionUI = precisionUI;
     (window as any).scaleReferences = scaleReferences;
+    (window as any).viewControls = viewControls;
     
     // Initialize labels button when available and ensure proper label visibility sync
     setTimeout(() => {
@@ -436,16 +442,40 @@ function setupControls(): void {
   // Mouse wheel for zoom
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
-    const delta = event.deltaY * 0.001;
-    const direction = camera.position.clone().normalize();
-    camera.position.add(direction.multiplyScalar(delta * 10)); // Increase zoom sensitivity
     
-    // Clamp camera distance
-    const distance = camera.position.length();
-    if (distance < 10) {
-      camera.position.normalize().multiplyScalar(10);
-    } else if (distance > 300) {
-      camera.position.normalize().multiplyScalar(300);
+    // Check if we're in top-down drawing mode
+    const state = precisionToolManager.getWorkflowState();
+    const isTopDownMode = state.stage === 'drawing' && state.isDrawing;
+    
+    if (isTopDownMode) {
+      // Top-down mode: zoom by adjusting camera height while staying centered
+      const delta = event.deltaY * 0.5; // Adjust sensitivity for top-down zoom
+      camera.position.y += delta;
+      
+      // Clamp camera height for top-down view (closer for detail, higher for overview)
+      camera.position.y = Math.max(50, Math.min(400, camera.position.y));
+      
+      // Ensure camera stays centered on terrain and looking straight down
+      camera.position.x = 50;
+      camera.position.z = 50;
+      camera.lookAt(50, 0, 50);
+      
+      // Show zoom level feedback
+      precisionToolManager.showZoomFeedback();
+      
+    } else {
+      // Normal 3D mode: zoom along view direction
+      const delta = event.deltaY * 0.001;
+      const direction = camera.position.clone().normalize();
+      camera.position.add(direction.multiplyScalar(delta * 10)); // Increase zoom sensitivity
+      
+      // Clamp camera distance for normal mode
+      const distance = camera.position.length();
+      if (distance < 10) {
+        camera.position.normalize().multiplyScalar(10);
+      } else if (distance > 300) {
+        camera.position.normalize().multiplyScalar(300);
+      }
     }
   });
   
@@ -460,6 +490,26 @@ function setupControls(): void {
           precisionUI.finishDrawing();
         } else if (precisionToolManager.getWorkflowState().stage === 'preview') {
           precisionUI.executeOperation();
+        }
+        break;
+      case '+':
+      case '=': // Handle both + and = key (same key without shift)
+        if (precisionToolManager.isInTopDownMode()) {
+          event.preventDefault();
+          precisionToolManager.handleTopDownZoom('in');
+        }
+        break;
+      case '-':
+      case '_': // Handle both - and _ key  
+        if (precisionToolManager.isInTopDownMode()) {
+          event.preventDefault();
+          precisionToolManager.handleTopDownZoom('out');
+        }
+        break;
+      case 'v':
+        // Toggle between top-down and normal view
+        if (precisionToolManager.isInTopDownMode()) {
+          precisionToolManager.exitTopDownMode();
         }
         break;
       case 'r':

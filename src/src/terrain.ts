@@ -42,7 +42,7 @@ export class Terrain {
   private wallMeshes: THREE.Mesh[] = [];
   // bottomMesh is now part of the box geometry
   private materialLayers: MaterialLayer[] = [];
-  private blockDepth: number = 33; // 10m = ~33 feet depth
+  private blockDepth: number = 25; // ~25 feet depth (with 20 feet practical limit)
   private crossSectionGeometries: THREE.BufferGeometry[] = [];
   private arrows: THREE.ArrowHelper[] = [];
 
@@ -72,6 +72,10 @@ export class Terrain {
 
   // Camera reference for zoom-independent arrow scaling
   private camera: THREE.Camera | null = null;
+
+  // Performance optimization flags
+  private performanceMode: boolean = false;
+  private skipExpensiveOperations: boolean = false;
 
   // Contour line properties
   private contourLines: THREE.Line[] = [];
@@ -144,8 +148,8 @@ export class Terrain {
     this.surfaceMesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh = this.surfaceMesh; // Keep backward compatibility
 
-    // Create 3D terrain block structure
-    this.create3DTerrainBlock(width, height);
+    // Create optimized 3D terrain block structure
+    this.create3DTerrainBlockOptimized(width, height);
 
     // Add all parts to the group
     this.terrainGroup.add(this.surfaceMesh);
@@ -158,6 +162,9 @@ export class Terrain {
     
     // Generate initial contour lines with dynamic adjustment
     this.generateContourLines();
+    
+    // Ensure contour labels are initially visible
+    this.contourLabelsVisible = true;
     
     // Set up initial dynamic contour calculation
     if (this.camera) {
@@ -270,72 +277,71 @@ export class Terrain {
   }
 
   /**
-   * Create the 3D terrain block with sides and bottom
+   * Create an optimized 3D terrain block with dramatically reduced complexity
    */
-  private create3DTerrainBlock(width: number, height: number): void {
-    // Create custom geometry where the block top follows the terrain contours
+  private create3DTerrainBlockOptimized(width: number, height: number): void {
+    // PERFORMANCE OPTIMIZATION: Use much lower resolution for 3D block
+    // Surface remains high-res (32x32), but block uses only 8x8 for massive performance gain
+    const blockWidthSegments = 8;  // Reduced from 32 to 8 
+    const blockHeightSegments = 8; // Reduced from 32 to 8
+    const verticalLayers = 4;      // Reduced from 33 to 4 layers (every 8 feet instead of 1 foot)
+
+    // Create low-resolution geometry for the 3D block
     const blockGeometry = new THREE.BufferGeometry();
     
-    // Get terrain vertices to define the top shape
-    const terrainVertices = this.geometry.attributes.position.array;
-    const widthSegments = this.geometry.parameters.widthSegments;
-    const heightSegments = this.geometry.parameters.heightSegments;
-    
-    // Number of vertical layers for horizontal stratification (one every foot for detail)
-    const verticalLayers = 33; // Matches 33 feet depth, one layer per foot
-    
-    // Total vertices: (verticalLayers + 1) levels * (widthSegments + 1) * (heightSegments + 1)
-    const levelVertexCount = (widthSegments + 1) * (heightSegments + 1);
+    // Sample terrain heights at lower resolution for block
+    const levelVertexCount = (blockWidthSegments + 1) * (blockHeightSegments + 1);
     const totalVertices = (verticalLayers + 1) * levelVertexCount;
     const positions = new Float32Array(totalVertices * 3);
     const indices = [];
     
-    // Create vertices for each vertical level with proper terrain surface clipping
+    // Create vertices for each vertical level
     for (let layer = 0; layer <= verticalLayers; layer++) {
-      // Layer 0 = terrain surface level, Layer verticalLayers = bottom
-      const layerDepth = - (this.blockDepth * (layer / verticalLayers));
+      const layerDepth = -(this.blockDepth * (layer / verticalLayers));
       
-      for (let row = 0; row <= heightSegments; row++) {
-        for (let col = 0; col <= widthSegments; col++) {
-          const terrainIndex = (row * (widthSegments + 1) + col) * 3;
-          const vertexIndex = (layer * levelVertexCount + row * (widthSegments + 1) + col) * 3;
+      for (let row = 0; row <= blockHeightSegments; row++) {
+        for (let col = 0; col <= blockWidthSegments; col++) {
+          const vertexIndex = (layer * levelVertexCount + row * (blockWidthSegments + 1) + col) * 3;
           
-          positions[vertexIndex] = terrainVertices[terrainIndex];     // x
-          positions[vertexIndex + 2] = terrainVertices[terrainIndex + 2]; // z
+          // Sample terrain height at this low-res position
+          const worldX = (col / blockWidthSegments) * width;
+          const worldZ = (row / blockHeightSegments) * height;
+          const terrainHeight = this.getHeightAtPosition(worldX, worldZ);
           
-          const terrainHeight = terrainVertices[terrainIndex + 1];
+          positions[vertexIndex] = worldX;     // x
+          positions[vertexIndex + 2] = worldZ; // z
           
           if (layer === 0) {
-            // Top layer: Use terrain height minus tiny offset to avoid z-fighting
+            // Top layer: follows terrain surface
             positions[vertexIndex + 1] = terrainHeight - 0.005;
           } else {
-            // Lower layers: Go straight down from the bottom of terrain
-            // Use the terrain height as reference, then go down by layerDepth
-            const actualDepth = terrainHeight + layerDepth;
-            positions[vertexIndex + 1] = actualDepth;
+            // FIXED: Lower layers should be completely flat at fixed depths
+            // Use a consistent base elevation (0) for all bottom layers
+            const baseElevation = 0; // Flat reference level
+            positions[vertexIndex + 1] = baseElevation + layerDepth;
           }
         }
       }
     }
     
-    // Create outer perimeter walls only
+    // Create simplified wall faces (only outer perimeter)
     for (let layer = 0; layer < verticalLayers; layer++) {
       const topOffset = layer * levelVertexCount;
       const bottomOffset = (layer + 1) * levelVertexCount;
       
-      // Front edge (positive Z) - only the outermost edge
-      for (let col = 0; col < widthSegments; col++) {
-        const topLeft = topOffset + (heightSegments * (widthSegments + 1) + col);
+      // Front edge
+      for (let col = 0; col < blockWidthSegments; col++) {
+        const topLeft = topOffset + (blockHeightSegments * (blockWidthSegments + 1) + col);
         const topRight = topLeft + 1;
-        const bottomLeft = bottomOffset + (heightSegments * (widthSegments + 1) + col);
+        const bottomLeft = bottomOffset + (blockHeightSegments * (blockWidthSegments + 1) + col);
         const bottomRight = bottomLeft + 1;
         
         indices.push(topLeft, bottomLeft, topRight);
         indices.push(topRight, bottomLeft, bottomRight);
       }
       
-      // Back edge (negative Z) - only the outermost edge
-      for (let col = 0; col < widthSegments; col++) {
+      // Back edge
+      for (let col = 0; col < blockWidthSegments; col++) {
         const topLeft = topOffset + col;
         const topRight = topLeft + 1;
         const bottomLeft = bottomOffset + col;
@@ -345,36 +351,35 @@ export class Terrain {
         indices.push(bottomRight, bottomLeft, topRight);
       }
       
-      // Left edge (negative X) - only the outermost edge
-      for (let row = 0; row < heightSegments; row++) {
-        const topTop = topOffset + (row * (widthSegments + 1));
-        const topBottom = topTop + (widthSegments + 1);
-        const bottomTop = bottomOffset + (row * (widthSegments + 1));
-        const bottomBottom = bottomTop + (widthSegments + 1);
+      // Left and right edges
+      for (let row = 0; row < blockHeightSegments; row++) {
+        // Left edge
+        const leftTopTop = topOffset + (row * (blockWidthSegments + 1));
+        const leftTopBottom = leftTopTop + (blockWidthSegments + 1);
+        const leftBottomTop = bottomOffset + (row * (blockWidthSegments + 1));
+        const leftBottomBottom = leftBottomTop + (blockWidthSegments + 1);
         
-        indices.push(topTop, bottomTop, topBottom);
-        indices.push(topBottom, bottomTop, bottomBottom);
-      }
-      
-      // Right edge (positive X) - only the outermost edge
-      for (let row = 0; row < heightSegments; row++) {
-        const topTop = topOffset + (row * (widthSegments + 1) + widthSegments);
-        const topBottom = topTop + (widthSegments + 1);
-        const bottomTop = bottomOffset + (row * (widthSegments + 1) + widthSegments);
-        const bottomBottom = bottomTop + (widthSegments + 1);
+        indices.push(leftTopTop, leftBottomTop, leftTopBottom);
+        indices.push(leftTopBottom, leftBottomTop, leftBottomBottom);
         
-        indices.push(topBottom, bottomTop, topTop);
-        indices.push(bottomBottom, bottomTop, topBottom);
+        // Right edge
+        const rightTopTop = topOffset + (row * (blockWidthSegments + 1) + blockWidthSegments);
+        const rightTopBottom = rightTopTop + (blockWidthSegments + 1);
+        const rightBottomTop = bottomOffset + (row * (blockWidthSegments + 1) + blockWidthSegments);
+        const rightBottomBottom = rightBottomTop + (blockWidthSegments + 1);
+        
+        indices.push(rightTopBottom, rightBottomTop, rightTopTop);
+        indices.push(rightBottomBottom, rightBottomTop, rightTopBottom);
       }
     }
     
-    // Create bottom face at deepest layer
+    // Create bottom face
     const bottomLevelOffset = verticalLayers * levelVertexCount;
-    for (let row = 0; row < heightSegments; row++) {
-      for (let col = 0; col < widthSegments; col++) {
-        const topLeft = bottomLevelOffset + (row * (widthSegments + 1) + col);
+    for (let row = 0; row < blockHeightSegments; row++) {
+      for (let col = 0; col < blockWidthSegments; col++) {
+        const topLeft = bottomLevelOffset + (row * (blockWidthSegments + 1) + col);
         const topRight = topLeft + 1;
-        const bottomLeft = topLeft + (widthSegments + 1);
+        const bottomLeft = topLeft + (blockWidthSegments + 1);
         const bottomRight = bottomLeft + 1;
         
         indices.push(bottomLeft, topRight, topLeft);
@@ -384,23 +389,49 @@ export class Terrain {
     
     blockGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     blockGeometry.setIndex(indices);
+    
+    // Use faster normal calculation
     blockGeometry.computeVertexNormals();
     
-    // Create earth material for the block with vertex colors enabled
+    // Simplified material without vertex colors for better performance
     const earthMaterial = new THREE.MeshLambertMaterial({
-      color: 0x8B5A2B, // Rich earth brown (will be overridden by vertex colors)
-      side: THREE.DoubleSide,
-      vertexColors: true // Enable vertex colors for geological variation
+      color: 0x8B5A2B,
+      side: THREE.DoubleSide
     });
     
-    // Create the terrain block that follows the surface contours
     const terrainBlock = new THREE.Mesh(blockGeometry, earthMaterial);
     
     this.wallMeshes = [terrainBlock];
     this.terrainGroup.add(terrainBlock);
-    
-    // Surface mesh positioning remains the same
     this.surfaceMesh.position.y = 0;
+    
+    console.log(`🚀 Optimized 3D terrain: ${totalVertices} vertices (vs ${(32+1)*(32+1)*(33+1)} in old version)`);
+  }
+
+  /**
+   * Enable/disable performance mode for real-time operations
+   */
+  public setPerformanceMode(enabled: boolean): void {
+    this.performanceMode = enabled;
+    this.skipExpensiveOperations = enabled;
+    
+    // When disabling performance mode, force a complete update
+    if (!enabled) {
+      this.forceCompleteUpdate();
+    }
+    
+    console.log(`🚀 Performance mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
+  }
+
+  /**
+   * Force a complete terrain update with all visual effects
+   */
+  public forceCompleteUpdate(): void {
+    console.log('🔄 Forcing complete terrain update...');
+    this.updateTerrainColors();
+    this.updateBlockGeometry();
+    this.generateContourLines();
+    console.log('✅ Complete terrain update finished');
   }
 
   /**
@@ -1516,22 +1547,22 @@ export class Terrain {
         // Calculate change from original terrain
         const changeFromOriginal = newHeight - originalHeight;
         
-        // Apply 5-foot limits for cut and fill operations
-        const maxCutDepth = -5.0; // 5 feet below original
-        const maxFillHeight = 5.0; // 5 feet above original
+        // Apply 20-foot limits for cut and fill operations
+        const maxCutDepth = -20.0; // 20 feet below original
+        const maxFillHeight = 20.0; // 20 feet above original
         
         let limitedNewHeight = newHeight;
         
         if (changeFromOriginal < maxCutDepth) {
-          // Limit cut to 5 feet below original
+          // Limit cut to 20 feet below original
           limitedNewHeight = originalHeight + maxCutDepth;
         } else if (changeFromOriginal > maxFillHeight) {
-          // Limit fill to 5 feet above original
+          // Limit fill to 20 feet above original
           limitedNewHeight = originalHeight + maxFillHeight;
         }
         
         // Also ensure we don't dig through the terrain block bottom
-        const maxExcavationDepth = -this.blockDepth * 0.9;
+        const maxExcavationDepth = -this.blockDepth * 0.9; // About 22.5 feet with 25-foot block
         limitedNewHeight = Math.max(maxExcavationDepth, limitedNewHeight);
         
         vertices[i + 1] = limitedNewHeight;
@@ -1544,17 +1575,21 @@ export class Terrain {
     if (modified) {
       this.geometry.attributes.position.needsUpdate = true;
       this.geometry.computeVertexNormals();
-      this.updateTerrainColors();
-      this.updateBlockGeometry();
-      this.generateContourLines();
       
-      // Auto-enable overlays and create localized overlays for modification area
-      if (heightChange < 0) {
-        this.showOriginalTerrainOverlay = true;
-        this.createLocalizedCutOverlay(x, z, brushRadius);
-      } else if (heightChange > 0) {
-        this.showFillVolumeOverlay = true;
-        this.createLocalizedFillOverlay(x, z, brushRadius, heightChange);
+      // Skip expensive operations in performance mode for real-time responsiveness
+      if (!this.skipExpensiveOperations) {
+        this.updateTerrainColors();
+        this.updateBlockGeometry();
+        this.generateContourLines();
+        
+        // Auto-enable overlays and create localized overlays for modification area
+        if (heightChange < 0) {
+          this.showOriginalTerrainOverlay = true;
+          this.createLocalizedCutOverlay(x, z, brushRadius);
+        } else if (heightChange > 0) {
+          this.showFillVolumeOverlay = true;
+          this.createLocalizedFillOverlay(x, z, brushRadius, heightChange);
+        }
       }
 
       // Removed arrow creation: this.createDensityBasedArrows(x, z, heightChange, totalVolumeChange, brushRadius);
@@ -1668,12 +1703,12 @@ export class Terrain {
       this.geometry.attributes.position.needsUpdate = true;
       this.geometry.computeVertexNormals();
       
-      // Update terrain colors and contours
-      this.updateTerrainColors();
-      this.generateContourLines();
-      
-      // Update 3D block geometry to match terrain changes
-      this.updateBlockGeometry();
+      // Update terrain colors and contours (skip expensive operations in performance mode)
+      if (!this.skipExpensiveOperations) {
+        this.updateTerrainColors();
+        this.generateContourLines();
+        this.updateBlockGeometry();
+      }
     }
   }
 
@@ -2025,26 +2060,55 @@ export class Terrain {
   }
 
   /**
-   * Update the 3D block geometry to match current terrain heights
+   * Update the optimized 3D block geometry to match current terrain heights
    */
   private updateBlockGeometry(): void {
     if (this.wallMeshes.length === 0) return;
     
-    const terrainVertices = this.geometry.attributes.position.array;
     const blockGeometry = this.wallMeshes[0].geometry as THREE.BufferGeometry;
     const positions = blockGeometry.attributes.position.array as Float32Array;
-    const topVertexCount = terrainVertices.length / 3;
     
-    // Update top vertices to match terrain heights
-    for (let i = 0; i < terrainVertices.length; i += 3) {
-      const vertexIndex = i / 3;
-      positions[vertexIndex * 3] = terrainVertices[i];     // x
-      positions[vertexIndex * 3 + 1] = terrainVertices[i + 1]; // y (height)
-      positions[vertexIndex * 3 + 2] = terrainVertices[i + 2]; // z
+    // PERFORMANCE OPTIMIZATION: Update only the top layer vertices at low resolution
+    // Block uses 8x8 grid instead of full 32x32 terrain resolution
+    const blockWidthSegments = 8;
+    const blockHeightSegments = 8;
+    const verticalLayers = 4;
+    const levelVertexCount = (blockWidthSegments + 1) * (blockHeightSegments + 1);
+    
+    // Update only the top layer (layer 0) vertices
+    for (let row = 0; row <= blockHeightSegments; row++) {
+      for (let col = 0; col <= blockWidthSegments; col++) {
+        const vertexIndex = (row * (blockWidthSegments + 1) + col) * 3;
+        
+        // Sample terrain height at this low-res position
+        const worldX = (col / blockWidthSegments) * 100; // terrain width
+        const worldZ = (row / blockHeightSegments) * 100; // terrain height
+        const terrainHeight = this.getHeightAtPosition(worldX, worldZ);
+        
+        // Update all layers for this column
+        for (let layer = 0; layer <= verticalLayers; layer++) {
+          const layerVertexIndex = (layer * levelVertexCount + row * (blockWidthSegments + 1) + col) * 3;
+          const layerDepth = -(this.blockDepth * (layer / verticalLayers));
+          
+          positions[layerVertexIndex] = worldX;     // x
+          positions[layerVertexIndex + 2] = worldZ; // z
+          
+          if (layer === 0) {
+            // Top layer: follows terrain surface
+            positions[layerVertexIndex + 1] = terrainHeight - 0.005;
+          } else {
+            // FIXED: Lower layers stay at fixed depth - completely flat bottom
+            // Use the same flat base elevation as initial creation
+            const baseElevation = 0; // Flat reference level  
+            positions[layerVertexIndex + 1] = baseElevation + layerDepth;
+          }
+        }
+      }
     }
     
     blockGeometry.attributes.position.needsUpdate = true;
-    blockGeometry.computeVertexNormals();
+    // Skip expensive normal recalculation for better performance during real-time updates
+    // blockGeometry.computeVertexNormals();
   }
 
   // Add hover tooltip logic (simplified, assume raycaster in main handles hover)
@@ -2153,7 +2217,7 @@ export class Terrain {
   /**
    * Clean up all localized overlays
    */
-  private cleanupAllOverlays(): void {
+  public cleanupAllOverlays(): void {
     // Remove all cut overlays
     this.cutOverlays.forEach(overlay => {
       if (overlay) {
@@ -2216,7 +2280,7 @@ export class Terrain {
   /**
    * Get height at position from original terrain before any modifications
    */
-  private getOriginalHeightAtPosition(x: number, z: number): number {
+  public getOriginalHeightAtPosition(x: number, z: number): number {
     const vertices = this.originalVertices;
     const widthSegments = this.geometry.parameters.widthSegments;
     const heightSegments = this.geometry.parameters.heightSegments;
@@ -2351,6 +2415,190 @@ export class Terrain {
     this.modificationAreas.set(areaKey, { bounds, type: 'fill', overlay });
   }
 
+  /**
+   * Create fill overlay for polyline operations
+   */
+  public createPolylineFillOverlay(points: {x: number, z: number}[], thickness: number): void {
+    if (points.length < 2) return;
+    
+    // Calculate bounding box for the polyline
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const halfThickness = thickness / 2;
+    
+    for (const point of points) {
+      minX = Math.min(minX, point.x - halfThickness);
+      maxX = Math.max(maxX, point.x + halfThickness);
+      minZ = Math.min(minZ, point.z - halfThickness);
+      maxZ = Math.max(maxZ, point.z + halfThickness);
+    }
+    
+    // Ensure bounds are within terrain limits
+    const bounds = {
+      minX: Math.max(0, minX),
+      maxX: Math.min(100, maxX),
+      minZ: Math.max(0, minZ),
+      maxZ: Math.min(100, maxZ)
+    };
+    
+    // Create geometry for the polyline fill area
+    const geometry = this.createPolylineFillGeometry(points, thickness);
+    const material = new THREE.MeshBasicMaterial({ 
+      color: 0x4444FF, 
+      transparent: true, 
+      opacity: 0.3, 
+      side: THREE.DoubleSide, 
+      depthWrite: false 
+    });
+    const overlay = new THREE.Mesh(geometry, material);
+    this.terrainGroup.add(overlay);
+    this.fillOverlays.push(overlay);
+    
+    // Track this overlay
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+    const areaKey = `polyline_fill_${Math.round(centerX)}_${Math.round(centerZ)}_${Date.now()}`;
+    this.modificationAreas.set(areaKey, { bounds, type: 'fill', overlay });
+    
+    // Auto-enable fill overlay display
+    this.showFillVolumeOverlay = true;
+  }
+
+  /**
+   * Create fill overlay for polygon operations
+   */
+  public createPolygonFillOverlay(vertices: {x: number, z: number}[]): void {
+    if (vertices.length < 3) return;
+    
+    // Calculate bounding box
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const vertex of vertices) {
+      minX = Math.min(minX, vertex.x);
+      maxX = Math.max(maxX, vertex.x);
+      minZ = Math.min(minZ, vertex.z);
+      maxZ = Math.max(maxZ, vertex.z);
+    }
+    
+    const bounds = {
+      minX: Math.max(0, minX),
+      maxX: Math.min(100, maxX),
+      minZ: Math.max(0, minZ),
+      maxZ: Math.min(100, maxZ)
+    };
+    
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+    const radius = Math.max((bounds.maxX - bounds.minX), (bounds.maxZ - bounds.minZ)) / 2;
+    
+    // Create geometry using existing polygon fill logic
+    const geometry = this.createFillPolyhedronGeometry(bounds, centerX, centerZ, radius, 0);
+    const material = new THREE.MeshBasicMaterial({ 
+      color: 0x4444FF, 
+      transparent: true, 
+      opacity: 0.3, 
+      side: THREE.DoubleSide, 
+      depthWrite: false 
+    });
+    const overlay = new THREE.Mesh(geometry, material);
+    this.terrainGroup.add(overlay);
+    this.fillOverlays.push(overlay);
+    
+    const areaKey = `polygon_fill_${Math.round(centerX)}_${Math.round(centerZ)}_${Date.now()}`;
+    this.modificationAreas.set(areaKey, { bounds, type: 'fill', overlay });
+    
+    // Auto-enable fill overlay display
+    this.showFillVolumeOverlay = true;
+  }
+
+  /**
+   * Create geometry for polyline fill overlay
+   */
+  private createPolylineFillGeometry(points: {x: number, z: number}[], thickness: number): THREE.BufferGeometry {
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const halfThickness = thickness / 2;
+    const EPS = 0.001;
+    
+    let vertexIndex = 0;
+    
+    for (let i = 0; i < points.length - 1; i++) {
+      const start = points[i];
+      const end = points[i + 1];
+      
+      // Calculate direction and perpendicular vectors
+      const dx = end.x - start.x;
+      const dz = end.z - start.z;
+      const length = Math.sqrt(dx * dx + dz * dz);
+      const normalizedX = dx / length;
+      const normalizedZ = dz / length;
+      
+      // Perpendicular vector for thickness
+      const perpX = -normalizedZ;
+      const perpZ = normalizedX;
+      
+      // Sample points along the segment
+      const steps = Math.max(10, Math.floor(length * 2));
+      
+      for (let step = 0; step <= steps; step++) {
+        const t = step / steps;
+        const centerX = start.x + normalizedX * t * length;
+        const centerZ = start.z + normalizedZ * t * length;
+        
+        // Create vertices for left and right edges of thickness
+        const leftX = centerX + perpX * halfThickness;
+        const leftZ = centerZ + perpZ * halfThickness;
+        const rightX = centerX - perpX * halfThickness;
+        const rightZ = centerZ - perpZ * halfThickness;
+        
+        // Get surface heights and check if there's actually fill at this location
+        const leftOrigY = this.getOriginalHeightAtPosition(leftX, leftZ);
+        const leftCurrY = this.getHeightAtPosition(leftX, leftZ);
+        const rightOrigY = this.getOriginalHeightAtPosition(rightX, rightZ);
+        const rightCurrY = this.getHeightAtPosition(rightX, rightZ);
+        
+        // Only create overlay where there's actual fill (current > original)
+        if (leftCurrY > leftOrigY + EPS || rightCurrY > rightOrigY + EPS) {
+          // Bottom vertices (original surface)
+          positions.push(leftX, leftOrigY, leftZ);
+          positions.push(rightX, rightOrigY, rightZ);
+          // Top vertices (current surface) 
+          positions.push(leftX, leftCurrY, leftZ);
+          positions.push(rightX, rightCurrY, rightZ);
+          
+          // Create faces if not the first step
+          if (step > 0 && vertexIndex >= 4) {
+            const prevBase = vertexIndex - 4;
+            const currBase = vertexIndex;
+            
+            // Bottom face (original surface)
+            indices.push(prevBase, currBase, prevBase + 1);
+            indices.push(currBase, currBase + 1, prevBase + 1);
+            
+            // Top face (current surface)
+            indices.push(prevBase + 2, prevBase + 3, currBase + 2);
+            indices.push(currBase + 2, prevBase + 3, currBase + 3);
+            
+            // Left side face
+            indices.push(prevBase, prevBase + 2, currBase);
+            indices.push(currBase, prevBase + 2, currBase + 2);
+            
+            // Right side face
+            indices.push(prevBase + 1, currBase + 1, prevBase + 3);
+            indices.push(currBase + 1, currBase + 3, prevBase + 3);
+          }
+          
+          vertexIndex += 4;
+        }
+      }
+    }
+    
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    
+    return geometry;
+  }
+
   private createDensityBasedArrows(x: number, z: number, heightChange: number, volumeChange: number, radius: number): void {
     // Removed entire method body
   }
@@ -2453,7 +2701,7 @@ export class Terrain {
     // For now, this is a no-op to prevent runtime errors
   }
 
-  // Geometry builder for CUT overlays – follows original terrain on top and flat at min excavation depth
+  // OPTIMIZED Geometry builder for CUT overlays – simplified for better performance
   private createCutPolyhedronGeometry(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, centerX: number, centerZ: number, radius: number): THREE.BufferGeometry {
     const isCircle = this.brushSettings.shape === 'circle';
 
@@ -2463,9 +2711,9 @@ export class Terrain {
     let minHeight = Infinity; // flat datum depth
 
     if (isCircle) {
-      // Concentric ring sampling (smooth)
-      const radialSteps = 36;
-      const ringSteps = 10;
+      // PERFORMANCE: Reduced complexity for real-time performance
+      const radialSteps = 12;  // Reduced from 36 to 12
+      const ringSteps = 4;     // Reduced from 10 to 4
       // scan to find min current height
       for (let j = 0; j <= ringSteps; j++) {
         const rFrac = j / ringSteps;
@@ -2538,8 +2786,8 @@ export class Terrain {
         }
       }
     } else {
-      // square brush – grid sampling
-      const steps = 15;
+      // square brush – OPTIMIZED grid sampling  
+      const steps = 6;  // Reduced from 15 to 6 for better performance
       const stepX = (bounds.maxX - bounds.minX) / steps;
       const stepZ = (bounds.maxZ - bounds.minZ) / steps;
       const numX = steps + 1;
@@ -2635,7 +2883,7 @@ export class Terrain {
     return geom;
   }
 
-  // Geometry builder for FILL overlays – bounded below by original terrain and above by current built-up terrain. Only covers cells/angles where current > original.
+  // OPTIMIZED Geometry builder for FILL overlays – simplified for better performance
   private createFillPolyhedronGeometry(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, centerX: number, centerZ: number, radius: number, plannedHeight: number = 0): THREE.BufferGeometry {
     const isCircle = this.brushSettings.shape === 'circle';
     const EPS = 0.001;
@@ -2644,9 +2892,9 @@ export class Terrain {
     const indices: number[] = [];
 
     if (isCircle) {
-      // 1. Determine adaptive boundary radius for each angle where fill occurs
-      const radialSteps = 36;
-      const ringSteps = 10;
+      // PERFORMANCE: Reduced complexity for real-time performance  
+      const radialSteps = 12;  // Reduced from 36 to 12
+      const ringSteps = 4;     // Reduced from 10 to 4
       const maxRadii:number[] = new Array(radialSteps).fill( plannedHeight>0 ? radius : 0 );
 
       for (let i=0;i<radialSteps;i++){
@@ -2737,8 +2985,8 @@ export class Terrain {
       }
 
     } else {
-      // square grid sampling: include only cells where current>original
-      const steps = 20;
+      // square grid sampling: OPTIMIZED for performance
+      const steps = 8;  // Reduced from 20 to 8 for better performance
       const stepX = (bounds.maxX-bounds.minX)/steps;
       const stepZ = (bounds.maxZ-bounds.minZ)/steps;
 
@@ -3022,4 +3270,41 @@ export class Terrain {
        z: c0 * p0.z + c1 * p1.z + c2 * p2.z + c3 * p3.z
      };
    }
+
+  /**
+   * Clear all fill overlays (blue areas) from the terrain
+   */
+  public clearFillOverlays(): void {
+    console.log('Clearing fill overlays after operation execution');
+    
+    // Remove all fill overlays from the scene
+    this.fillOverlays.forEach(overlay => {
+      if (overlay) {
+        this.terrainGroup.remove(overlay);
+        if (overlay.geometry) {
+          overlay.geometry.dispose();
+        }
+        if (overlay.material && typeof (overlay.material as THREE.Material).dispose === 'function') {
+          (overlay.material as THREE.Material).dispose();
+        }
+      }
+    });
+    
+    // Clear the fill overlays array
+    this.fillOverlays = [];
+    
+    // Remove fill modification areas from tracking
+    const fillAreaKeys = Array.from(this.modificationAreas.keys()).filter(key => 
+      key.includes('fill_') || key.includes('polyline_fill_') || key.includes('polygon_fill_')
+    );
+    
+    fillAreaKeys.forEach(key => {
+      this.modificationAreas.delete(key);
+    });
+    
+    // Disable fill overlay display
+    this.showFillVolumeOverlay = false;
+    
+    console.log('Fill overlays cleared successfully');
+  }
 }

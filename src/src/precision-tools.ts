@@ -53,10 +53,16 @@ export class PrecisionToolManager {
   private workflowState: WorkflowState;
   private drawingHelpers: THREE.Object3D[] = [];
   private scene: THREE.Scene;
+  private camera: THREE.PerspectiveCamera;
+  private originalCameraState: {
+    position: THREE.Vector3;
+    fov: number;
+  } | null = null;
   
-  constructor(terrain: Terrain, scene: THREE.Scene) {
+  constructor(terrain: Terrain, scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
     this.terrain = terrain;
     this.scene = scene;
+    this.camera = camera;
     this.workflowState = {
       stage: 'direction',
       isDrawing: false
@@ -92,7 +98,127 @@ export class PrecisionToolManager {
       ? { type: 'polygon', vertices: [], closed: false }
       : { type: 'polyline', points: [], thickness: 5 }; // Default 5ft thickness
     this.workflowState.isDrawing = true;
+    
+    // Automatically switch to top-down view for drawing
+    this.switchToTopDownView();
+    
     this.updateUI();
+  }
+
+  /**
+   * Switch camera to top-down orthographic-style view for drawing
+   */
+  private switchToTopDownView(): void {
+    // Save current camera state if not already saved
+    if (!this.originalCameraState) {
+      this.originalCameraState = {
+        position: this.camera.position.clone(),
+        fov: this.camera.fov
+      };
+    }
+
+    // Set camera to top-down view centered on terrain
+    // Terrain is 100ft x 100ft from (0,0) to (100,100), so center is at (50, 0, 50)
+    this.camera.position.set(50, 200, 50); // High above center of terrain for better overview
+    this.camera.lookAt(50, 0, 50); // Look down at center of terrain
+    
+    // Reduce FOV significantly to minimize perspective distortion (more orthographic-like)
+    this.camera.fov = 20; // Very narrow FOV for minimal perspective distortion
+    this.camera.updateProjectionMatrix();
+    
+    console.log('📐 Switched to top-down view for precise area drawing');
+    
+    // Show user notification about camera change
+    this.showCameraChangeNotification();
+  }
+
+  /**
+   * Restore camera to original state
+   */
+  public restoreOriginalView(): void {
+    if (this.originalCameraState) {
+      this.camera.position.copy(this.originalCameraState.position);
+      this.camera.fov = this.originalCameraState.fov;
+      this.camera.updateProjectionMatrix();
+      this.originalCameraState = null;
+      console.log('🔄 Restored original camera view');
+      
+      // Show restoration notification
+      this.showCameraRestoreNotification();
+    }
+  }
+
+  /**
+   * Show notification when camera is restored
+   */
+  private showCameraRestoreNotification(): void {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(76, 175, 80, 0.95);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      z-index: 1001;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      animation: slideDown 0.3s ease-out;
+    `;
+    
+    notification.innerHTML = `
+      🔄 <strong>Camera View Restored</strong><br>
+      <span style="font-size: 12px;">Back to normal 3D perspective</span>
+    `;
+    
+    // Add animation styles if not already present
+    if (!document.querySelector('style[data-camera-animations]')) {
+      const style = document.createElement('style');
+      style.setAttribute('data-camera-animations', 'true');
+      style.textContent = `
+        @keyframes slideDown {
+          from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+          to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 2 seconds (shorter than the top-down notification)
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 2000);
+  }
+
+  /**
+   * Reset workflow and restore camera view
+   */
+  public resetWorkflow(): void {
+    // Clear drawing state
+    this.workflowState = {
+      stage: 'direction',
+      isDrawing: false
+    };
+    
+    // Clear any preview operation
+    this.clearPreview();
+    
+    // Clear drawing helpers
+    this.clearDrawingHelpers();
+    
+    // Restore camera view
+    this.restoreOriginalView();
+    
+    // Update UI
+    this.updateUI();
+    
+    console.log('Workflow reset, camera restored');
   }
 
   // Drawing methods
@@ -626,7 +752,7 @@ export class PrecisionToolManager {
             
             // Right side face
             indices.push(prevBase + 1, currBase + 1, prevBase + 3);
-            indices.push(currBase + 1, currBase + 3, prevBase + 3);
+            indices.push(currBase + 1, prevBase + 3, prevBase + 3);
           } else {
             // Top face (surface)
             indices.push(prevBase, prevBase + 1, currBase);
@@ -996,7 +1122,47 @@ export class PrecisionToolManager {
           }
           
           // Calculate height change needed
-          const heightChange = adjustedTargetElevation - currentHeight;
+          let heightChange = adjustedTargetElevation - currentHeight;
+          
+          // Apply depth limits to prevent excessive cuts/fills
+          const originalHeight = this.terrain.getOriginalHeightAtPosition(x, z);
+          const proposedNewHeight = currentHeight + heightChange;
+          const changeFromOriginal = proposedNewHeight - originalHeight;
+          
+          // DEPTH LIMITS: First ensure we don't exceed the user-specified magnitude
+          const userSpecifiedLimit = Math.abs(signedMagnitude); // The exact depth/height user requested
+          const maxAllowedChange = signedMagnitude < 0 ? -userSpecifiedLimit : userSpecifiedLimit;
+          
+          // Secondary limits: Prevent cuts deeper than 20 feet or fills higher than 20 feet
+          const maxCutDepth = -20.0;  // 20 feet below original terrain
+          const maxFillHeight = 20.0; // 20 feet above original terrain
+          const terrainBlockBottom = -25.0; // Don't cut through the terrain block bottom
+          
+          let limitedNewHeight = proposedNewHeight;
+          
+          // First, apply user-specified limits (most restrictive for polygons)
+          if (signedMagnitude < 0) { // Cut operation
+            const maxAllowedCutHeight = originalHeight + maxAllowedChange;
+            limitedNewHeight = Math.max(maxAllowedCutHeight, limitedNewHeight);
+          } else { // Fill operation  
+            const maxAllowedFillHeight = originalHeight + maxAllowedChange;
+            limitedNewHeight = Math.min(maxAllowedFillHeight, limitedNewHeight);
+          }
+          
+          // Then apply safety limits (secondary)
+          if (changeFromOriginal < maxCutDepth) {
+            // Limit cut to 20 feet below original
+            limitedNewHeight = Math.max(limitedNewHeight, originalHeight + maxCutDepth);
+          } else if (changeFromOriginal > maxFillHeight) {
+            // Limit fill to 20 feet above original
+            limitedNewHeight = Math.min(limitedNewHeight, originalHeight + maxFillHeight);
+          }
+          
+          // Finally, ensure we don't cut through the terrain block bottom
+          limitedNewHeight = Math.max(terrainBlockBottom, limitedNewHeight);
+          
+          // Recalculate the actual height change after applying limits
+          heightChange = limitedNewHeight - currentHeight;
           
           // Only apply if the change is significant (avoid tiny adjustments)
           if (Math.abs(heightChange) > 0.1) {
@@ -1008,7 +1174,14 @@ export class PrecisionToolManager {
       if (modifiedPoints > maxPoints) break;
     }
     
-    console.log('Modified', modifiedPoints, 'terrain points with', crossSection.wallType, 'cross-section from deepest point');
+    console.log('Modified', modifiedPoints, 'terrain points for polygon with', crossSection.wallType, 'cross-section');
+    
+    // Create overlays for fill operations
+    if (signedMagnitude > 0) {
+      // For fill operations, create visual overlay to show what was filled
+      this.terrain.createPolygonFillOverlay(polygon.vertices);
+      console.log('Created fill overlay for polygon operation');
+    }
   }
 
   private async applyPolylineOperation(polyline: PolylineArea, signedMagnitude: number, crossSection: CrossSectionConfig): Promise<void> {
@@ -1023,24 +1196,6 @@ export class PrecisionToolManager {
     if (polyline.points.length < 2) {
       console.warn('Not enough points for polyline operation');
       return;
-    }
-    
-    // Use appropriate reference elevation based on cross-section type
-    let referenceElevation: number;
-    if (crossSection.wallType === 'straight') {
-      // For straight walls, use base elevation from polyline points
-      referenceElevation = this.calculateBaseElevation(polyline.points, signedMagnitude < 0 ? 'cut' : 'fill');
-      console.log('Polyline using base elevation for straight walls:', referenceElevation);
-    } else if (crossSection.deepestPoint) {
-      // For curved/angled walls, use deepest point elevation
-      referenceElevation = this.terrain.getHeightAtPosition(crossSection.deepestPoint.x, crossSection.deepestPoint.z);
-      console.log('Polyline using deepest point elevation as reference:', referenceElevation, 'at position:', crossSection.deepestPoint);
-    } else {
-      // Fallback: use elevation at center of first line segment
-      const midX = (polyline.points[0].x + polyline.points[1].x) / 2;
-      const midZ = (polyline.points[0].z + polyline.points[1].z) / 2;
-      referenceElevation = this.terrain.getHeightAtPosition(midX, midZ);
-      console.log('Polyline using line center elevation as reference:', referenceElevation);
     }
     
     const halfThickness = polyline.thickness / 2;
@@ -1079,6 +1234,10 @@ export class PrecisionToolManager {
           // Calculate current terrain height at this specific position
           const currentHeight = this.terrain.getHeightAtPosition(x, z);
           
+          // For surface-following operations, use ORIGINAL terrain height as reference to prevent stacking
+          const originalTerrainHeight = this.terrain.getOriginalHeightAtPosition(x, z);
+          const localReferenceElevation = originalTerrainHeight;
+          
           // Calculate distance from deepest point for cross-section effects
           let distanceFromReference: number;
           if (crossSection.deepestPoint) {
@@ -1092,11 +1251,11 @@ export class PrecisionToolManager {
           }
           
           // Calculate adjusted magnitude based on cross-section type and distance
-          let adjustedTargetElevation = referenceElevation + signedMagnitude;
+          let adjustedTargetElevation = localReferenceElevation + signedMagnitude;
           
           if (crossSection.wallType === 'straight') {
-            // Straight walls: full depth/height throughout thickness
-            adjustedTargetElevation = referenceElevation + signedMagnitude;
+            // Straight walls: full depth/height throughout thickness, relative to local surface
+            adjustedTargetElevation = localReferenceElevation + signedMagnitude;
           } else if (crossSection.wallType === 'curved') {
             // Curved cross-section: cosine curve from deepest point
             let normalizedDistance: number;
@@ -1110,7 +1269,7 @@ export class PrecisionToolManager {
             
             const curveFactor = Math.cos(normalizedDistance * Math.PI / 2);
             const adjustedMagnitude = signedMagnitude * curveFactor;
-            adjustedTargetElevation = referenceElevation + adjustedMagnitude;
+            adjustedTargetElevation = localReferenceElevation + adjustedMagnitude;
           } else if (crossSection.wallType === 'angled') {
             // Angled cross-section: 45-degree linear slopes from deepest point
             const maxSlopeDistance = Math.abs(signedMagnitude) * 2; // Make more aggressive like polygon
@@ -1119,17 +1278,70 @@ export class PrecisionToolManager {
               // Within slope range: linear scaling from deepest point
               const slopeFactor = (maxSlopeDistance - distanceFromReference) / maxSlopeDistance;
               const adjustedMagnitude = signedMagnitude * slopeFactor;
-              adjustedTargetElevation = referenceElevation + adjustedMagnitude;
+              adjustedTargetElevation = localReferenceElevation + adjustedMagnitude;
             } else {
               // Beyond slope range: gradual transition (not abrupt cutoff)
               const transitionFactor = Math.max(0, 1 - (distanceFromReference - maxSlopeDistance) / (maxSlopeDistance * 0.5));
               const adjustedMagnitude = signedMagnitude * transitionFactor * 0.1;
-              adjustedTargetElevation = referenceElevation + adjustedMagnitude;
+              adjustedTargetElevation = localReferenceElevation + adjustedMagnitude;
             }
           }
           
           // Calculate height change needed
-          const heightChange = adjustedTargetElevation - currentHeight;
+          let heightChange = adjustedTargetElevation - currentHeight;
+          
+          // Apply depth limits to prevent excessive cuts/fills
+          const originalHeight = this.terrain.getOriginalHeightAtPosition(x, z);
+          const proposedNewHeight = currentHeight + heightChange;
+          const changeFromOriginal = proposedNewHeight - originalHeight;
+          
+          // DEPTH LIMITS: First ensure we don't exceed the user-specified magnitude
+          const userSpecifiedLimit = Math.abs(signedMagnitude); // The exact depth/height user requested
+          const maxAllowedChange = signedMagnitude < 0 ? -userSpecifiedLimit : userSpecifiedLimit;
+          
+          // Secondary limits: Prevent cuts deeper than 20 feet or fills higher than 20 feet
+          const maxCutDepth = -20.0;  // 20 feet below original terrain
+          const maxFillHeight = 20.0; // 20 feet above original terrain
+          const terrainBlockBottom = -25.0; // Don't cut through the terrain block bottom
+          
+          let limitedNewHeight = proposedNewHeight;
+          
+          // First, apply user-specified limits (most restrictive for polylines)
+          if (signedMagnitude < 0) { // Cut operation
+            const maxAllowedCutHeight = originalHeight + maxAllowedChange;
+            limitedNewHeight = Math.max(maxAllowedCutHeight, limitedNewHeight);
+          } else { // Fill operation  
+            const maxAllowedFillHeight = originalHeight + maxAllowedChange;
+            limitedNewHeight = Math.min(maxAllowedFillHeight, limitedNewHeight);
+          }
+          
+          // Then apply safety limits (secondary)
+          if (changeFromOriginal < maxCutDepth) {
+            // Limit cut to 20 feet below original
+            limitedNewHeight = Math.max(limitedNewHeight, originalHeight + maxCutDepth);
+          } else if (changeFromOriginal > maxFillHeight) {
+            // Limit fill to 20 feet above original
+            limitedNewHeight = Math.min(limitedNewHeight, originalHeight + maxFillHeight);
+          }
+          
+          // Finally, ensure we don't cut through the terrain block bottom
+          limitedNewHeight = Math.max(terrainBlockBottom, limitedNewHeight);
+          
+          // Debug excessive cuts for first few points in polylines
+          if (modifiedPoints < 3 && signedMagnitude < 0) {
+            const originalCalculatedCut = proposedNewHeight - originalHeight;
+            const actualAppliedCut = limitedNewHeight - originalHeight;
+            console.log('Polyline cut depth debug:', {
+              userSpecified: `${Math.abs(signedMagnitude)} feet`,
+              originalCalculated: `${Math.abs(originalCalculatedCut).toFixed(1)} feet`,
+              actualApplied: `${Math.abs(actualAppliedCut).toFixed(1)} feet`,
+              limited: originalCalculatedCut !== actualAppliedCut,
+              crossSectionType: crossSection.wallType
+            });
+          }
+          
+          // Recalculate the actual height change after applying limits
+          heightChange = limitedNewHeight - currentHeight;
           
           // Only apply if the change is significant (avoid tiny adjustments)
           if (Math.abs(heightChange) > 0.1) {
@@ -1140,7 +1352,14 @@ export class PrecisionToolManager {
       }
     }
     
-    console.log('Modified', modifiedPoints, 'terrain points along polyline with', crossSection.wallType, 'cross-section from deepest point');
+    console.log('Modified', modifiedPoints, 'terrain points along polyline with', crossSection.wallType, 'cross-section following surface');
+    
+    // Create overlays for fill operations
+    if (signedMagnitude > 0) {
+      // For fill operations, create visual overlay to show what was filled
+      this.terrain.createPolylineFillOverlay(polyline.points, polyline.thickness);
+      console.log('Created fill overlay for polyline operation');
+    }
   }
 
   // Utility methods for polygon operations
@@ -1400,15 +1619,96 @@ export class PrecisionToolManager {
       this.scene.remove(this.workflowState.previewOperation.previewMesh);
       this.workflowState.previewOperation.previewMesh = undefined;
     }
+    
+    // Also clear any fill overlays that were created during operation execution
+    this.clearFillOverlays();
+  }
+
+  /**
+   * Clear fill overlays from terrain after operation execution
+   */
+  private clearFillOverlays(): void {
+    // Clear fill overlays from terrain 
+    this.terrain.clearFillOverlays();
+    
+    // Show a brief notification that overlays were cleared
+    this.showOverlayClearedNotification();
+  }
+
+  /**
+   * Comprehensive cleanup of all visual artifacts and overlays
+   */
+  private clearAllArtifacts(): void {
+    // Clear fill overlays
+    this.terrain.clearFillOverlays();
+    
+    // Clear cut overlays 
+    this.terrain.cleanupAllOverlays();
+    
+    // Force terrain to regenerate contours and colors to fix any visual issues
+    this.terrain.forceCompleteUpdate();
+    
+    console.log('🧹 All visual artifacts cleared');
+  }
+
+  /**
+   * Show notification when overlays are cleared after execution
+   */
+  private showOverlayClearedNotification(): void {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      background: rgba(76, 175, 80, 0.9);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: Arial, sans-serif;
+      z-index: 1002;
+      animation: fadeInOut 2s ease-in-out;
+    `;
+    
+    notification.innerHTML = `✨ Preview cleared`;
+    
+    // Add fade animation styles if not already present
+    if (!document.querySelector('style[data-overlay-animations]')) {
+      const style = document.createElement('style');
+      style.setAttribute('data-overlay-animations', 'true');
+      style.textContent = `
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: translateY(10px); }
+          20% { opacity: 1; transform: translateY(0); }
+          80% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-10px); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after animation completes
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 2000);
   }
 
   clearWorkflow(): void {
     this.clearDrawingHelpers();
     this.clearPreview();
+    this.clearAllArtifacts();
     this.workflowState = {
       stage: 'direction',
       isDrawing: false
     };
+    
+    // Don't automatically restore camera view - let user control when to exit top-down mode
+    // this.restoreOriginalView();
+    
     this.updateUI();
   }
 
@@ -1482,5 +1782,185 @@ export class PrecisionToolManager {
         document.body.removeChild(message);
       }
     }, 3000);
+  }
+
+  /**
+   * Show notification about camera change
+   */
+  private showCameraChangeNotification(): void {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(33, 150, 243, 0.95);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      z-index: 1001;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      animation: slideDown 0.3s ease-out;
+    `;
+    
+    notification.innerHTML = `
+      📐 <strong>Top-Down View Active</strong><br>
+      <span style="font-size: 12px;">Camera positioned for precise area drawing<br>
+      🔍 Use scroll wheel or +/- keys to zoom<br>
+      📹 Press 'V' to return to 3D view</span>
+    `;
+    
+    // Add animation styles if not already present
+    if (!document.querySelector('style[data-camera-animations]')) {
+      const style = document.createElement('style');
+      style.setAttribute('data-camera-animations', 'true');
+      style.textContent = `
+        @keyframes slideDown {
+          from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+          to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 3000);
+  }
+
+  /**
+   * Check if currently in top-down drawing mode
+   */
+  public isInTopDownMode(): boolean {
+    return this.workflowState.stage === 'drawing' && this.workflowState.isDrawing && this.originalCameraState !== null;
+  }
+
+  /**
+   * Handle zoom in top-down mode
+   */
+  public handleTopDownZoom(direction: 'in' | 'out', amount: number = 20): void {
+    if (!this.isInTopDownMode()) return;
+    
+    const delta = direction === 'in' ? -amount : amount;
+    this.camera.position.y += delta;
+    
+    // Clamp camera height for top-down view
+    this.camera.position.y = Math.max(50, Math.min(400, this.camera.position.y));
+    
+    // Ensure camera stays centered and looking down
+    this.camera.position.x = 50;
+    this.camera.position.z = 50;
+    this.camera.lookAt(50, 0, 50);
+    
+    // Show zoom level feedback
+    this.showZoomFeedback();
+  }
+
+  /**
+   * Show current zoom level in top-down mode
+   */
+  public showZoomFeedback(): void {
+    if (!this.isInTopDownMode()) return;
+    
+    // Calculate zoom percentage (50 = closest, 400 = furthest)
+    const height = this.camera.position.y;
+    const zoomPercent = Math.round((400 - height) / (400 - 50) * 100);
+    
+    // Remove any existing zoom indicator
+    const existingIndicator = document.getElementById('zoom-indicator');
+    if (existingIndicator) {
+      existingIndicator.remove();
+    }
+    
+    // Create zoom level indicator
+    const indicator = document.createElement('div');
+    indicator.id = 'zoom-indicator';
+    indicator.style.cssText = `
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: Arial, sans-serif;
+      z-index: 1002;
+      transition: opacity 0.3s ease;
+    `;
+    
+    indicator.innerHTML = `🔍 ${zoomPercent}%`;
+    document.body.appendChild(indicator);
+    
+    // Auto-remove after 1 second
+    setTimeout(() => {
+      if (document.getElementById('zoom-indicator')) {
+        indicator.style.opacity = '0';
+        setTimeout(() => {
+          if (document.body.contains(indicator)) {
+            document.body.removeChild(indicator);
+          }
+        }, 300);
+      }
+    }, 1000);
+  }
+
+  /**
+   * Manually exit top-down mode and return to normal 3D view
+   */
+  public exitTopDownMode(): void {
+    if (this.isInTopDownMode()) {
+      this.restoreOriginalView();
+      
+      // Show exit notification
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(156, 39, 176, 0.95);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 6px;
+        z-index: 1001;
+        font-size: 14px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        animation: slideDown 0.3s ease-out;
+      `;
+      
+      notification.innerHTML = `
+        📹 <strong>3D View Restored</strong><br>
+        <span style="font-size: 12px;">Manually exited top-down mode</span>
+      `;
+      
+      // Add animation styles if not already present
+      if (!document.querySelector('style[data-camera-animations]')) {
+        const style = document.createElement('style');
+        style.setAttribute('data-camera-animations', 'true');
+        style.textContent = `
+          @keyframes slideDown {
+            from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      document.body.appendChild(notification);
+      
+      // Auto-remove after 2 seconds
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 2000);
+    }
   }
 } 
