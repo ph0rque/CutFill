@@ -77,6 +77,7 @@ export class Terrain {
   private contourLines: THREE.Line[] = [];
   private contourLabels: THREE.Sprite[] = [];
   private contourLinesVisible: boolean = true;
+  private contourLabelsVisible: boolean = true; // Track label visibility separately
   private contourInterval: number = 1.0; // Contour line every 1 foot
   private baseContourInterval: number = 1.0; // Base interval for zoom calculations
   private dynamicContours: boolean = true; // Enable dynamic contour adjustment
@@ -912,6 +913,9 @@ export class Terrain {
   private createContourLabels(points: THREE.Vector3[], color: THREE.Color): void {
     if (points.length < 2) return;
     
+    // Don't create labels if they're supposed to be hidden
+    if (!this.contourLabelsVisible) return;
+    
     const elevation = points[0]?.y || 0;
     
     // Calculate dynamic label spacing based on camera distance
@@ -1074,9 +1078,67 @@ export class Terrain {
    * Set contour label visibility independently
    */
   public setContourLabelsVisible(visible: boolean): void {
+    this.contourLabelsVisible = visible;
+    
+    if (visible) {
+      // When turning labels back on, check if we have any labels to show
+      // If not, regenerate them from existing contour lines
+      if (this.contourLabels.length === 0 && this.contourLines.length > 0) {
+        console.log('Regenerating contour labels after toggle on');
+        this.regenerateLabelsFromContourLines();
+      } else {
+        // Just make existing labels visible
+        this.contourLabels.forEach(label => {
+          label.visible = visible;
+        });
+      }
+    } else {
+      // When turning labels off, just hide them
+      this.contourLabels.forEach(label => {
+        label.visible = visible;
+      });
+    }
+  }
+
+  /**
+   * Regenerate labels from existing contour lines
+   */
+  private regenerateLabelsFromContourLines(): void {
+    // Clear any existing labels first
     this.contourLabels.forEach(label => {
-      label.visible = visible;
+      if (label) {
+        this.terrainGroup.remove(label);
+        if (label.material && typeof label.material.dispose === 'function') {
+          label.material.dispose();
+        }
+      }
     });
+    this.contourLabels = [];
+    
+    // Regenerate labels for each existing contour line
+    this.contourLines.forEach(line => {
+      const elevation = (line as any).elevation || 0;
+      const color = this.getColorAtElevation(elevation);
+      
+      // Extract points from line geometry
+      const positions = line.geometry.attributes.position.array;
+      const points: THREE.Vector3[] = [];
+      
+      for (let i = 0; i < positions.length; i += 3) {
+        points.push(new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]));
+      }
+      
+      if (points.length >= 2) {
+        this.createContourLabels(points, color);
+      }
+    });
+  }
+
+  /**
+   * Get current contour label visibility state
+   */
+  public getContourLabelsVisible(): boolean {
+    return this.contourLabelsVisible;
   }
 
   /**
@@ -1187,23 +1249,25 @@ export class Terrain {
         });
         this.contourLabels = [];
         
-        // Regenerate labels with current camera-based spacing
-        this.contourLines.forEach(line => {
-          const elevation = (line as any).elevation || 0;
-          const color = this.getColorAtElevation(elevation);
-          
-          // Extract points from line geometry
-          const positions = line.geometry.attributes.position.array;
-          const points: THREE.Vector3[] = [];
-          
-          for (let i = 0; i < positions.length; i += 3) {
-            points.push(new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]));
-          }
-          
-          if (points.length >= 2) {
-            this.createContourLabels(points, color);
-          }
-        });
+        // Regenerate labels with current camera-based spacing (only if labels should be visible)
+        if (this.contourLabelsVisible) {
+          this.contourLines.forEach(line => {
+            const elevation = (line as any).elevation || 0;
+            const color = this.getColorAtElevation(elevation);
+            
+            // Extract points from line geometry
+            const positions = line.geometry.attributes.position.array;
+            const points: THREE.Vector3[] = [];
+            
+            for (let i = 0; i < positions.length; i += 3) {
+              points.push(new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]));
+            }
+            
+            if (points.length >= 2) {
+              this.createContourLabels(points, color);
+            }
+          });
+        }
       }
       
       this.contourUpdateThrottle = null;

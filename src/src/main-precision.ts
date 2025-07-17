@@ -100,9 +100,15 @@ function initializeGame(): void {
     (window as any).precisionUI = precisionUI;
     (window as any).scaleReferences = scaleReferences;
     
-    // Initialize labels button when available
+    // Initialize labels button when available and ensure proper label visibility sync
     setTimeout(() => {
       precisionUI.updateLabelsButton();
+      // Ensure contour labels respect the current toggle state
+      const terrain = precisionToolManager.getTerrain();
+      if (terrain) {
+        console.log('Syncing label visibility on startup');
+        terrain.setContourLabelsVisible((precisionUI as any).labelsVisible);
+      }
     }, 500);
     
     // Set up controls
@@ -390,9 +396,9 @@ function setupControls(): void {
       lastMouseX = event.clientX;
       lastMouseY = event.clientY;
       
-      // Check if we're in drawing mode
+      // Check if we're in drawing mode or deepest point selection
       const state = precisionToolManager.getWorkflowState();
-      if (state.isDrawing || state.stage === 'preview') {
+      if (state.isDrawing || state.stage === 'deepest-point' || state.stage === 'preview') {
         handleTerrainClick(event);
       }
     }
@@ -480,29 +486,39 @@ function setupControls(): void {
 }
 
 function handleTerrainClick(event: MouseEvent): void {
+  console.log('handleTerrainClick called');
+  
   // Convert mouse position to normalized device coordinates
   const mouse = new THREE.Vector2();
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  
+  console.log('Mouse coordinates:', { x: mouse.x, y: mouse.y });
   
   // Raycast to find intersection with terrain
   const raycaster = new THREE.Raycaster();
   raycaster.setFromCamera(mouse, camera);
   
   const intersects = raycaster.intersectObject(terrain.getSurfaceMesh());
+  console.log('Intersects found:', intersects.length);
   
   if (intersects.length > 0) {
     const point = intersects[0].point;
     const state = precisionToolManager.getWorkflowState();
     
     console.log('Terrain clicked at:', point);
+    console.log('Current workflow state:', state);
     
     if (state.isDrawing) {
+      console.log('Adding point to drawing');
       // Add point to current drawing
       precisionToolManager.addPoint(point.x, point.z);
-    } else if (state.stage === 'preview') {
+    } else if (state.stage === 'deepest-point') {
+      console.log('Setting deepest point');
       // Set deepest point position
       precisionToolManager.setDeepestPoint(point.x, point.z);
+    } else {
+      console.log('No action taken - stage is', state.stage, 'and isDrawing is', state.isDrawing);
     }
   } else {
     console.log('No terrain intersection found');
@@ -542,6 +558,33 @@ function updateVolumeDisplay(): void {
     `;
   }
 }
+
+// Make updateVolumeDisplay globally available for precision tools
+(window as any).updateVolumeDisplay = updateVolumeDisplay;
+
+// Add CSS for notification animations
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideInOut {
+    0% { 
+      transform: translateX(100%); 
+      opacity: 0; 
+    }
+    15% { 
+      transform: translateX(0); 
+      opacity: 1; 
+    }
+    85% { 
+      transform: translateX(0); 
+      opacity: 1; 
+    }
+    100% { 
+      transform: translateX(100%); 
+      opacity: 0; 
+    }
+  }
+`;
+document.head.appendChild(style);
 
 // Window resize handler
 window.addEventListener('resize', () => {

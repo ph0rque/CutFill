@@ -37,6 +37,9 @@ export class PrecisionUI {
 
     this.updateUI();
     document.body.appendChild(this.container);
+    
+    // Sync initial label visibility state with terrain
+    this.syncLabelVisibility();
   }
 
   private updateUI(): void {
@@ -69,6 +72,9 @@ export class PrecisionUI {
       case 'cross-section':
         content += this.createCrossSectionStage();
         break;
+      case 'deepest-point':
+        content += this.createDeepestPointStage();
+        break;
       case 'preview':
         content += this.createPreviewStage();
         break;
@@ -81,14 +87,27 @@ export class PrecisionUI {
   }
 
   private createProgressIndicator(): string {
-    const stages = ['direction', 'magnitude', 'area-mode', 'drawing', 'cross-section', 'preview'];
-    const currentIndex = stages.indexOf(this.currentState.stage);
+    // Base stages that are always present
+    const baseStages = ['direction', 'magnitude', 'area-mode', 'drawing', 'cross-section'];
+    
+    // For straight cross-sections, skip deepest-point and go straight to preview
+    // For curved/angled cross-sections, include deepest-point before preview
+    const allStages = [...baseStages];
+    
+    // Only add deepest-point stage if cross-section is not straight
+    if (this.currentState.crossSection?.wallType !== 'straight') {
+      allStages.push('deepest-point');
+    }
+    
+    allStages.push('preview');
+    
+    const currentIndex = allStages.indexOf(this.currentState.stage);
     
     let indicator = '<div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">';
     indicator += '<div style="font-size: 12px; font-weight: bold; margin-bottom: 5px;">Progress:</div>';
     indicator += '<div style="display: flex; gap: 5px;">';
     
-    stages.forEach((stage, index) => {
+    allStages.forEach((stage, index) => {
       const isActive = index === currentIndex;
       const isCompleted = index < currentIndex;
       const color = isCompleted ? '#4CAF50' : isActive ? '#2196F3' : '#666';
@@ -98,7 +117,13 @@ export class PrecisionUI {
     });
     
     indicator += '</div>';
-    indicator += `<div style="font-size: 11px; color: #ccc; margin-top: 3px;">Step ${currentIndex + 1} of ${stages.length}</div>`;
+    indicator += `<div style="font-size: 11px; color: #ccc; margin-top: 3px;">Step ${currentIndex + 1} of ${allStages.length}</div>`;
+    
+    // Add explanation for straight cross-sections
+    if (this.currentState.crossSection?.wallType === 'straight') {
+      indicator += '<div style="font-size: 10px; color: #999; margin-top: 3px;">⚡ Straight walls: deepest point skipped (uniform depth)</div>';
+    }
+    
     indicator += '</div>';
     
     return indicator;
@@ -294,22 +319,77 @@ export class PrecisionUI {
         <div style="margin-bottom: 15px;">
           <div style="font-weight: bold; margin-bottom: 10px;">🏗️ Wall Type:</div>
           <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
-            <button onclick="precisionUI.setCrossSection('straight')" style="padding: 10px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; text-align: left;">
-              📐 <strong>Straight Walls</strong> - Vertical sides (90°)
+            <button onclick="precisionUI.setCrossSection('straight')" style="padding: 12px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; text-align: left; transition: background 0.2s;">
+              <div style="font-weight: bold; margin-bottom: 4px;">📐 Straight Walls (90°)</div>
+              <div style="font-size: 11px; opacity: 0.8;">Vertical sides throughout entire area</div>
+              <div style="font-size: 10px; color: #4CAF50; margin-top: 2px;">• Maximum material removal/addition</div>
             </button>
-            <button onclick="precisionUI.setCrossSection('curved')" style="padding: 10px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; text-align: left;">
-              🌊 <strong>Curved Walls</strong> - Smooth rounded sides
+            <button onclick="precisionUI.setCrossSection('curved')" style="padding: 12px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; text-align: left; transition: background 0.2s;">
+              <div style="font-weight: bold; margin-bottom: 4px;">🌊 Curved Walls (Smooth)</div>
+              <div style="font-size: 11px; opacity: 0.8;">Cosine curve from center to edges</div>
+              <div style="font-size: 10px; color: #2196F3; margin-top: 2px;">• Natural bowl/mound shape • Stable slopes</div>
             </button>
-            <button onclick="precisionUI.setCrossSection('angled')" style="padding: 10px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; text-align: left;">
-              ⚡ <strong>Angled Walls</strong> - 45° sloped sides
+            <button onclick="precisionUI.setCrossSection('angled')" style="padding: 12px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; text-align: left; transition: background 0.2s;">
+              <div style="font-weight: bold; margin-bottom: 4px;">⚡ Angled Walls (45°)</div>
+              <div style="font-size: 11px; opacity: 0.8;">Linear slopes from center outward</div>
+              <div style="font-size: 10px; color: #FF9800; margin-top: 2px;">• 1:1 slope ratio • Good drainage • Construction-ready</div>
             </button>
+          </div>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px; margin: 15px 0;">
+          <div style="font-weight: bold; margin-bottom: 10px; color: #4CAF50;">📊 Cross-Section Comparison:</div>
+          <div style="font-size: 11px; line-height: 1.6;">
+            <div style="margin-bottom: 4px;"><strong>Straight:</strong> Full depth everywhere (most excavation)</div>
+            <div style="margin-bottom: 4px;"><strong>Curved:</strong> Maximum at center, tapering smoothly to edges</div>
+            <div style="margin-bottom: 4px;"><strong>Angled:</strong> Slopes at 45° from center (practical for construction)</div>
           </div>
         </div>
         
         <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px; margin: 15px 0;">
           <div style="font-weight: bold; margin-bottom: 10px; color: #4CAF50;">📍 Next Step:</div>
           <div style="font-size: 12px; line-height: 1.4;">
-            After selecting wall type, you'll be able to position the deepest point within your drawn area by clicking on the terrain.
+            <div style="margin-bottom: 8px;"><strong>Straight Walls:</strong> Go directly to 3D preview (uniform depth everywhere)</div>
+            <div><strong>Curved/Angled Walls:</strong> Select deepest point position, then see 3D preview</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private createDeepestPointStage(): string {
+    const direction = this.currentState.direction;
+    const directionColor = direction === 'cut' ? '#FF4444' : '#2196F3';
+    const wallType = this.currentState.crossSection?.wallType || 'straight';
+    
+    return `
+      <div style="margin-bottom: 15px;">
+        <h3>Step 6: Position ${direction === 'cut' ? 'Deepest' : 'Highest'} Point</h3>
+        <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-bottom: 15px;">
+          <div style="color: ${directionColor}; font-weight: bold; margin-bottom: 5px;">
+            ${this.currentState.direction?.toUpperCase()} - ${this.currentState.magnitude} ft - ${this.currentState.areaMode?.toUpperCase()}
+          </div>
+          <div style="font-size: 12px; color: #ccc;">Cross-section: ${wallType} walls</div>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px; margin: 15px 0;">
+          <div style="font-weight: bold; margin-bottom: 10px; color: #4CAF50;">📍 ${direction === 'cut' ? 'Deepest' : 'Highest'} Point Position:</div>
+          <div style="font-size: 12px; line-height: 1.6;">
+            Click on the terrain within your drawn area to specify where the maximum ${direction === 'cut' ? 'excavation depth' : 'fill height'} should occur.
+            <br><br>
+            <strong>${direction === 'cut' ? 'For cuts:' : 'For fills:'}</strong> The ${this.currentState.magnitude} ft ${direction === 'cut' ? 'depth' : 'height'} will be applied at this point, with the cross-section shape determining how it transitions outward.
+          </div>
+        </div>
+        
+        <div style="background: rgba(${direction === 'cut' ? '255,68,68' : '33,150,243'}, 0.1); padding: 15px; border-radius: 6px; margin: 15px 0;">
+          <div style="font-weight: bold; margin-bottom: 8px; color: ${directionColor};">💡 Cross-Section Effect:</div>
+          <div style="font-size: 11px; line-height: 1.5;">
+            ${wallType === 'straight' ? 
+              `<strong>Straight walls:</strong> Full ${this.currentState.magnitude} ft ${direction === 'cut' ? 'depth' : 'height'} throughout the entire area.` :
+              wallType === 'curved' ?
+              `<strong>Curved walls:</strong> Maximum ${this.currentState.magnitude} ft at this point, smoothly tapering with a cosine curve toward the edges.` :
+              `<strong>Angled walls:</strong> Maximum ${this.currentState.magnitude} ft at this point, with 45° linear slopes extending outward.`
+            }
           </div>
         </div>
       </div>
@@ -480,6 +560,15 @@ export class PrecisionUI {
     
     // Update button appearance
     this.updateLabelsButton();
+  }
+
+  // Sync label visibility state with terrain on initialization
+  private syncLabelVisibility(): void {
+    const terrain = this.toolManager.getTerrain();
+    if (terrain) {
+      // Set terrain's label visibility to match UI state
+      terrain.setContourLabelsVisible(this.labelsVisible);
+    }
   }
 
   public updateLabelsButton(): void {
