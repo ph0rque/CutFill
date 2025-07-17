@@ -4,7 +4,8 @@ import { Terrain } from './terrain';
 import { MultiplayerManager } from './multiplayer';
 import { AuthService } from './auth';
 import { AuthUI } from './auth-ui';
-import { ToolManager } from './tools';
+import { PrecisionToolManager } from './precision-tools';
+import { PrecisionUI } from './precision-ui';
 import { AssignmentManager } from './assignments';
 import { ProgressTracker } from './progress';
 import { uiPolishSystem } from './ui-polish';
@@ -676,8 +677,12 @@ const authUI = new AuthUI(authService);
 // Create multiplayer manager
 const multiplayerManager = new MultiplayerManager(terrain);
 
-// Create tool manager
-const toolManager = new ToolManager(terrain);
+// Create precision tool manager and UI
+const precisionToolManager = new PrecisionToolManager(terrain, scene);
+const precisionUI = new PrecisionUI(precisionToolManager);
+
+// Make precisionUI globally available for UI callbacks
+(window as any).precisionUI = precisionUI;
 
 // Create assignment manager
 const assignmentManager = new AssignmentManager(terrain);

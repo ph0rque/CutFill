@@ -1071,6 +1071,15 @@ export class Terrain {
   }
 
   /**
+   * Set contour label visibility independently
+   */
+  public setContourLabelsVisible(visible: boolean): void {
+    this.contourLabels.forEach(label => {
+      label.visible = visible;
+    });
+  }
+
+  /**
    * Set contour line interval (distance between contour lines)
    */
   public setContourInterval(interval: number): void {
@@ -1491,7 +1500,7 @@ export class Terrain {
   /**
    * Get height at a specific X,Z position using interpolation
    */
-  private getHeightAtPosition(x: number, z: number): number {
+  public getHeightAtPosition(x: number, z: number): number {
     const vertices = this.geometry.attributes.position.array;
     let closestHeight = 0;
     let minDistance = Infinity;
@@ -1563,6 +1572,45 @@ export class Terrain {
    */
   public modifyHeight(x: number, z: number, heightChange: number): void {
     this.modifyHeightBrush(x, z, heightChange);
+  }
+
+  /**
+   * Update terrain height at a specific position for precision tools
+   */
+  public modifyHeightAtPosition(x: number, z: number, heightChange: number): void {
+    // Get grid dimensions
+    const widthSegments = this.geometry.parameters.widthSegments;
+    const heightSegments = this.geometry.parameters.heightSegments;
+    
+    // Convert world coordinates to grid coordinates
+    // Terrain spans from 0 to 100 in both X and Z directions
+    const gridX = Math.round((x / 100) * widthSegments);
+    const gridZ = Math.round((z / 100) * heightSegments);
+    
+    // Check bounds
+    if (gridX < 0 || gridX > widthSegments || gridZ < 0 || gridZ > heightSegments) {
+      return;
+    }
+    
+    // Calculate vertex index
+    const index = gridZ * (widthSegments + 1) + gridX;
+    
+    // Apply the height change directly to the vertex
+    const vertices = this.geometry.attributes.position.array as Float32Array;
+    if (index * 3 + 1 < vertices.length) {
+      vertices[index * 3 + 1] += heightChange;
+      
+      // Mark geometry as needing update
+      this.geometry.attributes.position.needsUpdate = true;
+      this.geometry.computeVertexNormals();
+      
+      // Update terrain colors and contours
+      this.updateTerrainColors();
+      this.generateContourLines();
+      
+      // Update 3D block geometry to match terrain changes
+      this.updateBlockGeometry();
+    }
   }
 
   /**
