@@ -704,7 +704,7 @@ export class AssignmentManager {
         name: '🌿 Environmental Land Restoration',
         description: 'Restore degraded land to natural contours while creating wildlife habitat features',
         difficulty: 3,
-        category: 'environmental',
+        category: 'grading',
         estimatedTime: 18,
         objectives: [
           {
@@ -751,7 +751,7 @@ export class AssignmentManager {
         terrainConfig: {
           width: 70,
           height: 70,
-          initialTerrain: 'disturbed_site'
+          initialTerrain: 'rough'
         },
         tools: ['cut', 'fill'],
         hints: [
@@ -984,12 +984,12 @@ export class AssignmentManager {
   private updateProgress(): void {
     if (!this.currentAssignment || !this.progress) return;
 
-    // Update volume data
+    // Update volume data - convert from cubic feet to cubic yards (1 yd³ = 27 ft³)
     const volumeData = this.terrain.calculateVolumeDifference();
     this.progress.volumeData = {
-      totalCut: volumeData.cut,
-      totalFill: volumeData.fill,
-      netMovement: Math.abs(volumeData.net),
+      totalCut: volumeData.cut / 27,  // Convert to cubic yards
+      totalFill: volumeData.fill / 27,  // Convert to cubic yards
+      netMovement: Math.abs(volumeData.net) / 27,  // Convert to cubic yards
       efficiency: volumeData.fill > 0 ? volumeData.cut / volumeData.fill : 0
     };
 

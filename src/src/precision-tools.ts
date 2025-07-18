@@ -1575,36 +1575,41 @@ export class PrecisionToolManager {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
     
-    // Set canvas size
-    canvas.width = 256;
-    canvas.height = 64;
+    // Dynamic canvas size based on camera distance (matching contour labels)
+    const cameraDistance = this.camera ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50)) : 100;
+    const scale = Math.max(0.5, Math.min(1.5, 100 / cameraDistance)); // Scale text based on distance
     
-    // Configure text style
-    context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    canvas.width = 96 * scale; // Match contour labels
+    canvas.height = 40 * scale; // Match contour labels
+    
+    // Style matching contour labels
+    context.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black background
     context.fillRect(0, 0, canvas.width, canvas.height);
     
-    context.font = 'bold 20px Arial';
+    // Add border matching the label color
+    context.strokeStyle = color;
+    context.lineWidth = 1;
+    context.strokeRect(0, 0, canvas.width, canvas.height);
+    
+    // Add text - white text like contour labels
+    context.fillStyle = '#FFFFFF'; // White text for good contrast
+    context.font = `bold ${20 * scale}px Arial`; // Dynamic font size like contour labels
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillStyle = color;
     context.fillText(text, canvas.width / 2, canvas.height / 2);
-    
-    // Add border
-    context.strokeStyle = color;
-    context.lineWidth = 2;
-    context.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
     
     // Create texture and material
     const texture = new THREE.CanvasTexture(canvas);
     const material = new THREE.SpriteMaterial({ 
       map: texture,
       transparent: true,
-      depthTest: false,
+      depthTest: false, // Always render on top like contour labels
       depthWrite: false
     });
     
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(8, 2, 1); // Scale to appropriate size
+    sprite.scale.set(8 * scale, 4 * scale, 1); // Match contour labels scaling
+    sprite.renderOrder = 1003; // Match contour labels render order
     
     return sprite;
   }

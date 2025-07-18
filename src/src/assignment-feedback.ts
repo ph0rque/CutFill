@@ -225,7 +225,7 @@ export class AssignmentFeedbackSystem {
       if (!objective) return;
 
       // Provide specific feedback based on objective type and progress
-      if (indicator.status === 'not_started' && this.getElapsedMinutes(progress.startTime) > 2) {
+      if (indicator.status === 'not_started' && this.getElapsedMinutes(progress.startTime) > 2 && !this.hasRecentFeedback(`objective_not_started_${objective.id}`)) {
         this.showFeedback({
           id: `objective_not_started_${objective.id}`,
           type: 'hint',
@@ -236,7 +236,7 @@ export class AssignmentFeedbackSystem {
         });
       }
 
-      if (indicator.trend === 'declining' && indicator.current > 20) {
+      if (indicator.trend === 'declining' && indicator.current > 20 && !this.hasRecentFeedback(`objective_declining_${objective.id}`)) {
         this.showFeedback({
           id: `objective_declining_${objective.id}`,
           type: 'warning',
@@ -247,7 +247,7 @@ export class AssignmentFeedbackSystem {
         });
       }
 
-      if (indicator.status === 'near_completion' && !objective.completed) {
+      if (indicator.status === 'near_completion' && !objective.completed && !this.hasRecentFeedback(`objective_near_complete_${objective.id}`)) {
         this.showFeedback({
           id: `objective_near_complete_${objective.id}`,
           type: 'tip',
@@ -282,7 +282,7 @@ export class AssignmentFeedbackSystem {
     }
 
     // Time-based feedback
-    if (elapsedMinutes > assignment.estimatedTime * 0.8 && overallScore < 50) {
+    if (elapsedMinutes > assignment.estimatedTime * 0.8 && overallScore < 50 && !this.hasRecentFeedback('time_pressure')) {
       this.showFeedback({
         id: 'time_pressure',
         type: 'warning',
