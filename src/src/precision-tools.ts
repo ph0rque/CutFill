@@ -58,6 +58,7 @@ export class PrecisionToolManager {
     position: THREE.Vector3;
     fov: number;
   } | null = null;
+  private showLengthLabels: boolean = true;
   
   constructor(terrain: Terrain, scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
     this.terrain = terrain;
@@ -122,6 +123,11 @@ export class PrecisionToolManager {
     this.camera.position.set(50, 200, 50); // High above center of terrain for better overview
     this.camera.lookAt(50, 0, 50); // Look down at center of terrain
     
+    // Update camera target for main-precision.ts controls
+    if ((window as any).cameraTarget) {
+      (window as any).cameraTarget.set(50, 0, 50);
+    }
+    
     // Reduce FOV significantly to minimize perspective distortion (more orthographic-like)
     this.camera.fov = 20; // Very narrow FOV for minimal perspective distortion
     this.camera.updateProjectionMatrix();
@@ -140,6 +146,12 @@ export class PrecisionToolManager {
       this.camera.position.copy(this.originalCameraState.position);
       this.camera.fov = this.originalCameraState.fov;
       this.camera.updateProjectionMatrix();
+      
+      // Restore camera target for main-precision.ts controls
+      if ((window as any).cameraTarget) {
+        (window as any).cameraTarget.set(0, 0, 0);
+      }
+      
       this.originalCameraState = null;
       console.log('🔄 Restored original camera view');
       
@@ -219,6 +231,21 @@ export class PrecisionToolManager {
     this.updateUI();
     
     console.log('Workflow reset, camera restored');
+  }
+
+  /**
+   * Toggle visibility of length labels on segments
+   */
+  toggleLengthLabels(): void {
+    this.showLengthLabels = !this.showLengthLabels;
+    this.updateDrawingVisualization(); // Refresh visualization
+  }
+
+  /**
+   * Get current length labels visibility state
+   */
+  getLengthLabelsVisible(): boolean {
+    return this.showLengthLabels;
   }
 
   // Drawing methods
@@ -1541,15 +1568,131 @@ export class PrecisionToolManager {
     }
   }
 
+  /**
+   * Create a text sprite for displaying length labels
+   */
+  private createTextSprite(text: string, color: string = '#ffffff'): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d')!;
+    
+    // Set canvas size
+    canvas.width = 256;
+    canvas.height = 64;
+    
+    // Configure text style
+    context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    
+    context.font = 'bold 20px Arial';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillStyle = color;
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+    
+    // Add border
+    context.strokeStyle = color;
+    context.lineWidth = 2;
+    context.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+    
+    // Create texture and material
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ 
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    });
+    
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(8, 2, 1); // Scale to appropriate size
+    
+    return sprite;
+  }
+
+  /**
+   * Calculate the distance between two points in feet
+   */
+  private calculateSegmentLength(point1: PrecisionPoint, point2: PrecisionPoint): number {
+    const dx = point2.x - point1.x;
+    const dz = point2.z - point1.z;
+    return Math.sqrt(dx * dx + dz * dz);
+  }
+
   private visualizePolygon(polygon: PolygonArea): void {
     if (polygon.vertices.length === 0) return;
     
     // Create line visualization
     const points = polygon.vertices.map(v => new THREE.Vector3(v.x, this.terrain.getHeightAtPosition(v.x, v.z) + 0.5, v.z));
     
+    const segmentPoints = [...points];
     if (polygon.closed && points.length > 2) {
-      points.push(points[0]); // Close the loop
+      segmentPoints.push(points[0]); // Close the loop
     }
+    
+    const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
+    const material = new THREE.LineBasicMaterial({ 
+      color: this.workflowState.direction === 'cut' ? 0xff4444 : 0x2196f3,
+      linewidth: 3
+    });
+    
+    const line = new THREE.Line(geometry, material);
+    this.drawingHelpers.push(line);
+    this.scene.add(line);
+    
+    // Add vertex markers
+    for (const point of points) {
+      const sphereGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+      const sphereMaterial = new THREE.MeshBasicMaterial({ 
+        color: this.workflowState.direction === 'cut' ? 0xff6666 : 0x4499ff 
+      });
+      const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      sphere.position.copy(point);
+      this.drawingHelpers.push(sphere);
+      this.scene.add(sphere);
+    }
+    
+    // Add length labels for each segment (if enabled)
+    if (this.showLengthLabels) {
+      for (let i = 0; i < polygon.vertices.length; i++) {
+        let nextIndex: number;
+        
+        if (polygon.closed) {
+          // For closed polygons, include the segment back to the first vertex
+          nextIndex = (i + 1) % polygon.vertices.length;
+        } else {
+          // For open polygons, stop at the last vertex
+          if (i === polygon.vertices.length - 1) break;
+          nextIndex = i + 1;
+        }
+        
+        const start = polygon.vertices[i];
+        const end = polygon.vertices[nextIndex];
+        
+        // Calculate segment length
+        const length = this.calculateSegmentLength(start, end);
+        
+        // Calculate midpoint for label placement
+        const midX = (start.x + end.x) / 2;
+        const midZ = (start.z + end.z) / 2;
+        const midY = this.terrain.getHeightAtPosition(midX, midZ) + 2; // Raised above terrain
+        
+        // Create length label
+        const lengthText = `${length.toFixed(1)} ft`;
+        const labelColor = this.workflowState.direction === 'cut' ? '#FF6666' : '#66AAFF';
+        const labelSprite = this.createTextSprite(lengthText, labelColor);
+        labelSprite.position.set(midX, midY, midZ);
+        
+        this.drawingHelpers.push(labelSprite);
+        this.scene.add(labelSprite);
+      }
+    }
+  }
+
+  private visualizePolyline(polyline: PolylineArea): void {
+    if (polyline.points.length === 0) return;
+    
+    // Create line visualization
+    const points = polyline.points.map(p => new THREE.Vector3(p.x, this.terrain.getHeightAtPosition(p.x, p.z) + 0.5, p.z));
     
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({ 
@@ -1572,23 +1715,31 @@ export class PrecisionToolManager {
       this.drawingHelpers.push(sphere);
       this.scene.add(sphere);
     }
-  }
-
-  private visualizePolyline(polyline: PolylineArea): void {
-    if (polyline.points.length === 0) return;
     
-    // Create line visualization
-    const points = polyline.points.map(p => new THREE.Vector3(p.x, this.terrain.getHeightAtPosition(p.x, p.z) + 0.5, p.z));
-    
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ 
-      color: this.workflowState.direction === 'cut' ? 0xff4444 : 0x2196f3,
-      linewidth: 3
-    });
-    
-    const line = new THREE.Line(geometry, material);
-    this.drawingHelpers.push(line);
-    this.scene.add(line);
+    // Add length labels for each segment (if enabled)
+    if (this.showLengthLabels) {
+      for (let i = 0; i < polyline.points.length - 1; i++) {
+        const start = polyline.points[i];
+        const end = polyline.points[i + 1];
+        
+        // Calculate segment length
+        const length = this.calculateSegmentLength(start, end);
+        
+        // Calculate midpoint for label placement
+        const midX = (start.x + end.x) / 2;
+        const midZ = (start.z + end.z) / 2;
+        const midY = this.terrain.getHeightAtPosition(midX, midZ) + 2; // Raised above terrain
+        
+        // Create length label
+        const lengthText = `${length.toFixed(1)} ft`;
+        const labelColor = this.workflowState.direction === 'cut' ? '#FF6666' : '#66AAFF';
+        const labelSprite = this.createTextSprite(lengthText, labelColor);
+        labelSprite.position.set(midX, midY, midZ);
+        
+        this.drawingHelpers.push(labelSprite);
+        this.scene.add(labelSprite);
+      }
+    }
     
     // Visualize thickness if more than one point
     if (points.length > 1) {
@@ -1807,7 +1958,8 @@ export class PrecisionToolManager {
     notification.innerHTML = `
       📐 <strong>Top-Down View Active</strong><br>
       <span style="font-size: 12px;">Camera positioned for precise area drawing<br>
-      🔍 Use scroll wheel or +/- keys to zoom<br>
+      🔍 Scroll wheel or +/- keys to zoom<br>
+      ↕️ Shift+drag to pan around<br>
       📹 Press 'V' to return to 3D view</span>
     `;
     

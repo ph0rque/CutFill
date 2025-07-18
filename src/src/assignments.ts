@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Terrain } from './terrain';
 import { supabase } from './supabase';
+import { AgeScalingSystem } from './age-scaling';
+import type { AgeGroup } from './age-scaling';
 
 export interface AssignmentObjective {
   id: string;
@@ -59,14 +61,17 @@ export class AssignmentManager {
   private currentAssignment: AssignmentConfig | null = null;
   private progress: AssignmentProgress | null = null;
   private updateInterval: NodeJS.Timeout | null = null;
+  private ageScaling: AgeScalingSystem;
   private callbacks: {
     onProgressUpdate?: (progress: AssignmentProgress) => void;
     onObjectiveComplete?: (objective: AssignmentObjective) => void;
     onAssignmentComplete?: (progress: AssignmentProgress) => void;
+    onAssignmentStop?: () => void;
   } = {};
 
   constructor(terrain: Terrain) {
     this.terrain = terrain;
+    this.ageScaling = new AgeScalingSystem();
   }
 
   // Assignment Templates
@@ -83,9 +88,9 @@ export class AssignmentManager {
           {
             id: 'level_pad',
             type: 'level_area',
-            description: 'Create a 15x15 meter level pad with ±5cm tolerance',
-            target: { x: 0, z: 0, width: 15, height: 15, elevation: 0 },
-            tolerance: 0.05,
+            description: 'Create a 50x50 ft level pad with ±2 inch tolerance',
+            target: { x: 0, z: 0, width: 50, height: 50, elevation: 0 },
+            tolerance: 0.17,
             weight: 0.8,
             completed: false,
             score: 0
@@ -173,7 +178,7 @@ export class AssignmentManager {
       {
         id: 'road_grading_1',
         name: 'Road Grading - Highway Section',
-        description: 'Grade a 200m highway section with proper crown and drainage',
+        description: 'Grade a 650 ft highway section with proper crown and drainage',
         difficulty: 3,
         category: 'road_construction',
         estimatedTime: 25,
@@ -357,6 +362,409 @@ export class AssignmentManager {
           timeBonus: true,
           volumeEfficiency: true
         }
+      },
+
+      // COMPETITIVE MULTIPLAYER ASSIGNMENTS
+      {
+        id: 'speed_foundation_race',
+        name: '⚡ Speed Foundation Race',
+        description: 'COMPETITIVE: Race against other players to level a foundation pad the fastest with highest accuracy',
+        difficulty: 2,
+        category: 'foundation',
+        estimatedTime: 8,
+        objectives: [
+          {
+            id: 'level_speed_pad',
+            type: 'level_area',
+            description: 'Level a 40x40 ft foundation pad within ±4 inch tolerance',
+            target: { x: 0, z: 0, width: 40, height: 40, elevation: 0 },
+            tolerance: 0.33,
+            weight: 0.6,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'speed_bonus',
+            type: 'volume_target',
+            description: 'Completion speed bonus (faster = higher score)',
+            target: { timeTarget: 300 }, // 5 minutes target
+            tolerance: 0.1,
+            weight: 0.3,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'efficiency_race',
+            type: 'volume_target',
+            description: 'Minimize material waste for efficiency bonus',
+            target: { maxNetMovement: 30 },
+            tolerance: 0.1,
+            weight: 0.1,
+            completed: false,
+            score: 0
+          }
+        ],
+        terrainConfig: {
+          width: 50,
+          height: 50,
+          initialTerrain: 'rolling'
+        },
+        tools: ['cut', 'fill'],
+        hints: [
+          '🏁 COMPETITIVE MODE: Fastest completion wins!',
+          'Balance speed with accuracy for maximum score',
+          'Use efficient cut/fill patterns to save time',
+          'Watch other players\' progress in real-time'
+        ],
+        successCriteria: {
+          minimumScore: 60,
+          timeBonus: true,
+          volumeEfficiency: true
+        }
+      },
+
+      {
+        id: 'drainage_duel',
+        name: '🌊 Drainage Channel Duel',
+        description: 'COMPETITIVE: Head-to-head challenge to create the most efficient drainage channel',
+        difficulty: 3,
+        category: 'drainage',
+        estimatedTime: 12,
+        objectives: [
+          {
+            id: 'channel_speed',
+            type: 'create_channel',
+            description: 'Dig drainage channel from point A to B with 2% slope',
+            target: { 
+              startPoint: { x: -15, z: 0 },
+              endPoint: { x: 15, z: 0 },
+              width: 3,
+              depth: 1.8,
+              slope: 0.02
+            },
+            tolerance: 0.15,
+            weight: 0.5,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'flow_efficiency',
+            type: 'grade_road',
+            description: 'Create optimal water flow with smooth grade transitions',
+            target: { slopeConsistency: 0.95 },
+            tolerance: 0.1,
+            weight: 0.3,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'construction_speed',
+            type: 'volume_target',
+            description: 'Complete construction faster than opponents',
+            target: { timeTarget: 600 }, // 10 minutes target
+            tolerance: 0.1,
+            weight: 0.2,
+            completed: false,
+            score: 0
+          }
+        ],
+        terrainConfig: {
+          width: 60,
+          height: 40,
+          initialTerrain: 'rough'
+        },
+        tools: ['cut', 'fill'],
+        hints: [
+          '🏁 COMPETITIVE MODE: Best drainage wins!',
+          'Maintain consistent 2% slope for optimal flow',
+          'Smooth transitions prevent erosion',
+          'Speed matters - but accuracy wins!'
+        ],
+        successCriteria: {
+          minimumScore: 70,
+          timeBonus: true,
+          volumeEfficiency: true
+        }
+      },
+
+      {
+        id: 'precision_showdown',
+        name: '🎯 Precision Earthworks Showdown',
+        description: 'COMPETITIVE: Ultimate precision challenge with multiple objectives and leaderboard scoring',
+        difficulty: 4,
+        category: 'grading',
+        estimatedTime: 15,
+        objectives: [
+          {
+            id: 'multi_pad_precision',
+            type: 'level_area',
+            description: 'Create 3 precise building pads at different elevations',
+            target: { 
+              pads: [
+                { x: -15, z: -10, width: 8, height: 8, elevation: 1.0 },
+                { x: 15, z: -10, width: 8, height: 8, elevation: 0.5 },
+                { x: 0, z: 15, width: 10, height: 6, elevation: 1.5 }
+              ]
+            },
+            tolerance: 0.05,
+            weight: 0.4,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'connecting_road',
+            type: 'grade_road',
+            description: 'Build connecting road between all pads with max 5% grade',
+            target: { maxGrade: 0.05, connectAll: true },
+            tolerance: 0.01,
+            weight: 0.3,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'volume_mastery',
+            type: 'volume_target',
+            description: 'Achieve perfect cut/fill balance (±3%)',
+            target: { balanceTolerance: 0.03 },
+            tolerance: 0.01,
+            weight: 0.2,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'championship_time',
+            type: 'volume_target',
+            description: 'Complete within championship time for bonus points',
+            target: { timeTarget: 900 }, // 15 minutes
+            tolerance: 0.1,
+            weight: 0.1,
+            completed: false,
+            score: 0
+          }
+        ],
+        terrainConfig: {
+          width: 80,
+          height: 60,
+          initialTerrain: 'rolling'
+        },
+        tools: ['cut', 'fill'],
+        hints: [
+          '🏆 CHAMPIONSHIP MODE: Ultimate precision test!',
+          'Plan pad elevations for optimal road connections',
+          'Balance speed with surgical precision',
+          'Perfect volume balance earns championship points',
+          'Every second counts in the final leaderboard!'
+        ],
+        successCriteria: {
+          minimumScore: 85,
+          timeBonus: true,
+          volumeEfficiency: true
+        }
+      },
+
+      // ADDITIONAL DIVERSE ASSIGNMENT TEMPLATES  
+      {
+        id: 'residential_site_prep',
+        name: '🏠 Residential Site Preparation',
+        description: 'Prepare a residential building site with proper drainage, grading, and utility access',
+        difficulty: 3,
+        category: 'grading',
+        estimatedTime: 20,
+        objectives: [
+          {
+            id: 'house_pad_level',
+            type: 'level_area',
+            description: 'Create level building pad (30x40ft) at 2ft elevation',
+            target: { x: 0, z: 0, width: 30, height: 40, elevation: 2.0 },
+            tolerance: 0.15,
+            weight: 0.35,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'driveway_grade',
+            type: 'grade_road',
+            description: 'Grade driveway access with max 8% slope to street',
+            target: { startPoint: { x: 15, z: 20 }, endPoint: { x: 25, z: 40 }, maxGrade: 0.08 },
+            tolerance: 0.02,
+            weight: 0.25,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'drainage_swales',
+            type: 'create_channel',
+            description: 'Create drainage swales to direct water away from house',
+            target: { depth: 0.5, width: 2, slopeToOutlet: true },
+            tolerance: 0.1,
+            weight: 0.25,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'utility_trenches',
+            type: 'create_channel',
+            description: 'Excavate utility trenches for water, sewer, and electric',
+            target: { depth: 1.2, width: 1.5, straightLines: true },
+            tolerance: 0.15,
+            weight: 0.15,
+            completed: false,
+            score: 0
+          }
+        ],
+        terrainConfig: {
+          width: 80,
+          height: 60,
+          initialTerrain: 'rolling'
+        },
+        tools: ['cut', 'fill'],
+        hints: [
+          'Start with the building pad - it sets the reference elevation',
+          'Ensure positive drainage away from the house foundation',
+          'Keep driveway grade under 8% for vehicle safety',
+          'Plan utility routes to avoid conflicts with foundation'
+        ],
+        successCriteria: {
+          minimumScore: 75,
+          timeBonus: true,
+          volumeEfficiency: true
+        }
+      },
+
+      {
+        id: 'highway_grading',
+        name: '🛣️ Highway Construction Grading',
+        description: 'Grade a section of highway with proper banking, drainage, and cut/fill balance',
+        difficulty: 4,
+        category: 'grading',
+        estimatedTime: 25,
+        objectives: [
+          {
+            id: 'roadway_profile',
+            type: 'grade_road',
+            description: 'Establish highway profile with 2% crown and max 6% grades',
+            target: { length: 200, crown: 0.02, maxGrade: 0.06 },
+            tolerance: 0.01,
+            weight: 0.4,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'cut_slopes',
+            type: 'grade_road',
+            description: 'Create stable cut slopes at 2:1 ratio for safety',
+            target: { slopeRatio: 0.5, stability: true },
+            tolerance: 0.05,
+            weight: 0.25,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'fill_slopes',
+            type: 'grade_road',
+            description: 'Build engineered fill slopes with proper compaction zones',
+            target: { slopeRatio: 0.67, engineered: true },
+            tolerance: 0.05,
+            weight: 0.25,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'balance_earthwork',
+            type: 'volume_target',
+            description: 'Balance cut and fill to minimize haul distance and cost',
+            target: { balanceTolerance: 0.05, haulDistance: 'minimal' },
+            tolerance: 0.02,
+            weight: 0.1,
+            completed: false,
+            score: 0
+          }
+        ],
+        terrainConfig: {
+          width: 100,
+          height: 40,
+          initialTerrain: 'rolling'
+        },
+        tools: ['cut', 'fill'],
+        hints: [
+          'Highway safety requires consistent grades and smooth transitions',
+          'Cut slopes must be stable - 2:1 ratio prevents erosion',
+          'Balance cut and fill to minimize expensive truck hauls',
+          'Proper crown sheds water to prevent hydroplaning'
+        ],
+        successCriteria: {
+          minimumScore: 80,
+          timeBonus: true,
+          volumeEfficiency: true
+        }
+      },
+
+      {
+        id: 'environmental_restoration',
+        name: '🌿 Environmental Land Restoration',
+        description: 'Restore degraded land to natural contours while creating wildlife habitat features',
+        difficulty: 3,
+        category: 'environmental',
+        estimatedTime: 18,
+        objectives: [
+          {
+            id: 'natural_contours',
+            type: 'level_area',
+            description: 'Restore natural-looking rolling contours (no straight lines)',
+            target: { naturalContours: true, smoothTransitions: true },
+            tolerance: 0.2,
+            weight: 0.3,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'wildlife_pond',
+            type: 'create_channel',
+            description: 'Create seasonal wildlife pond with gentle slopes',
+            target: { x: -33, z: 33, depth: 6, diameter: 50, gentleSlopes: true },
+            tolerance: 0.3,
+            weight: 0.25,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'habitat_mounds',
+            type: 'level_area',
+            description: 'Build small habitat mounds for wildlife cover',
+            target: { count: 3, height: 1.5, naturalShape: true },
+            tolerance: 0.25,
+            weight: 0.2,
+            completed: false,
+            score: 0
+          },
+          {
+            id: 'erosion_control',
+            type: 'grade_road',
+            description: 'Grade all slopes under 25% to prevent erosion',
+            target: { maxSlope: 0.25, erosionResistant: true },
+            tolerance: 0.05,
+            weight: 0.25,
+            completed: false,
+            score: 0
+          }
+        ],
+        terrainConfig: {
+          width: 70,
+          height: 70,
+          initialTerrain: 'disturbed_site'
+        },
+        tools: ['cut', 'fill'],
+        hints: [
+          'Nature rarely creates straight lines - vary your contours',
+          'Wildlife ponds need shallow areas for drinking and nesting',
+          'Small habitat mounds provide cover and nesting sites',
+          'Gentle slopes prevent erosion and allow vegetation growth'
+        ],
+        successCriteria: {
+          minimumScore: 70,
+          timeBonus: false,
+          volumeEfficiency: false
+        }
       }
     ];
   }
@@ -369,19 +777,53 @@ export class AssignmentManager {
         .select('*')
         .order('difficulty_level', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.warn('Failed to load assignments from database:', error);
+        return this.getAssignmentTemplates();
+      }
 
       if (data && data.length > 0) {
-        return data.map(this.convertDatabaseToConfig);
+        console.log(`Loaded ${data.length} assignments from database`);
+        return data.map(this.convertDatabaseToConfig).map(assignment => 
+          this.ageScaling.scaleAssignment(assignment)
+        );
+      } else {
+        console.log('No assignments found in database, using templates');
+        return this.getAssignmentTemplates().map(assignment => 
+          this.ageScaling.scaleAssignment(assignment)
+        );
       }
     } catch (error) {
-      console.log('Using local assignment templates');
+      console.warn('Database connection failed, using local assignment templates:', error);
+      return this.getAssignmentTemplates().map(assignment => 
+        this.ageScaling.scaleAssignment(assignment)
+      );
     }
-
-    return this.getAssignmentTemplates();
   }
 
   private convertDatabaseToConfig(dbAssignment: any): AssignmentConfig {
+    // Ensure objectives are properly formatted
+    let objectives: AssignmentObjective[] = [];
+    if (Array.isArray(dbAssignment.objectives)) {
+      objectives = dbAssignment.objectives.filter((obj: any) => 
+        obj && typeof obj === 'object' && obj.description && obj.id
+      );
+    }
+    
+    // If no valid objectives, create a default one
+    if (objectives.length === 0) {
+      objectives = [{
+        id: 'default_objective',
+        type: 'level_area',
+        description: 'Complete the assignment objectives',
+        target: { x: 0, z: 0, width: 20, height: 20, elevation: 0 },
+        tolerance: 0.5,
+        weight: 1.0,
+        completed: false,
+        score: 0
+      }];
+    }
+
     return {
       id: dbAssignment.id,
       name: dbAssignment.name,
@@ -389,7 +831,7 @@ export class AssignmentManager {
       difficulty: dbAssignment.difficulty_level,
       category: dbAssignment.name.toLowerCase().includes('foundation') ? 'foundation' : 'grading',
       estimatedTime: 15,
-      objectives: dbAssignment.objectives || [],
+      objectives,
       terrainConfig: dbAssignment.terrain_config || {
         width: 50,
         height: 50,
@@ -406,13 +848,21 @@ export class AssignmentManager {
   }
 
   public async startAssignment(assignmentId: string, userId: string): Promise<boolean> {
+    console.log(`Starting assignment: ${assignmentId} for user: ${userId}`);
+    
     const assignments = await this.getAvailableAssignments();
+    console.log(`Found ${assignments.length} available assignments`);
+    
     const assignment = assignments.find(a => a.id === assignmentId);
     
     if (!assignment) {
       console.error('Assignment not found:', assignmentId);
+      console.error('Available assignment IDs:', assignments.map(a => a.id));
       return false;
     }
+
+    console.log(`Found assignment: ${assignment.name}`);
+    console.log('Assignment config:', assignment);
 
     this.currentAssignment = assignment;
     this.progress = {
@@ -467,8 +917,9 @@ export class AssignmentManager {
   }
 
   private generateRollingTerrain(): void {
-    const mesh = this.terrain.getMesh();
-    const vertices = mesh.geometry.attributes.position.array;
+    const meshObject = this.terrain.getMesh();
+    const mesh = meshObject as THREE.Mesh;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array;
     
     for (let i = 0; i < vertices.length; i += 3) {
       const x = vertices[i];
@@ -479,14 +930,15 @@ export class AssignmentManager {
       vertices[i + 1] = height;
     }
     
-    mesh.geometry.attributes.position.needsUpdate = true;
+    (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     mesh.geometry.computeVertexNormals();
     this.terrain.updateTerrainColors();
   }
 
   private generateRoughTerrain(): void {
-    const mesh = this.terrain.getMesh();
-    const vertices = mesh.geometry.attributes.position.array;
+    const meshObject = this.terrain.getMesh();
+    const mesh = meshObject as THREE.Mesh;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
     
     for (let i = 0; i < vertices.length; i += 3) {
       const x = vertices[i];
@@ -500,20 +952,21 @@ export class AssignmentManager {
       vertices[i + 1] = height;
     }
     
-    mesh.geometry.attributes.position.needsUpdate = true;
+    (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     mesh.geometry.computeVertexNormals();
     this.terrain.updateTerrainColors();
   }
 
   private applyCustomHeights(heights: number[]): void {
-    const mesh = this.terrain.getMesh();
-    const vertices = mesh.geometry.attributes.position.array;
+    const meshObject = this.terrain.getMesh();
+    const mesh = meshObject as THREE.Mesh;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
     
     for (let i = 0; i < vertices.length && i < heights.length; i += 3) {
       vertices[i + 1] = heights[i / 3];
     }
     
-    mesh.geometry.attributes.position.needsUpdate = true;
+    (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     mesh.geometry.computeVertexNormals();
     this.terrain.updateTerrainColors();
   }
@@ -574,20 +1027,34 @@ export class AssignmentManager {
   }
 
   private evaluateObjective(objective: AssignmentObjective): number {
-    const mesh = this.terrain.getMesh();
-    const vertices = mesh.geometry.attributes.position.array;
-    
-    switch (objective.type) {
-      case 'level_area':
-        return this.evaluateLevelArea(objective, vertices);
-      case 'volume_target':
-        return this.evaluateVolumeTarget(objective);
-      case 'create_channel':
-        return this.evaluateChannelCreation(objective, vertices);
-      case 'grade_road':
-        return this.evaluateRoadGrade(objective, vertices);
-      default:
+    try {
+      const meshObject = this.terrain.getMesh();
+      
+      // Cast to THREE.Mesh and safety check for mesh and geometry
+      const mesh = meshObject as THREE.Mesh;
+      if (!mesh || !mesh.geometry || !mesh.geometry.attributes || !mesh.geometry.attributes.position) {
+        console.warn('Terrain mesh or geometry not properly initialized for objective evaluation');
         return 0;
+      }
+      
+      const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+      
+      switch (objective.type) {
+        case 'level_area':
+          return this.evaluateLevelArea(objective, vertices);
+        case 'volume_target':
+          return this.evaluateVolumeTarget(objective);
+        case 'create_channel':
+          return this.evaluateChannelCreation(objective, vertices);
+        case 'grade_road':
+          return this.evaluateRoadGrade(objective, vertices);
+        default:
+          console.warn(`Unknown objective type: ${objective.type}`);
+          return 0;
+      }
+    } catch (error) {
+      console.error('Error evaluating objective:', error);
+      return 0;
     }
   }
 
@@ -632,6 +1099,35 @@ export class AssignmentManager {
       const total = volumeData.totalCut + volumeData.totalFill;
       const imbalanceRatio = total > 0 ? imbalance / total : 0;
       return Math.max(0, 100 - (imbalanceRatio / target.balanceTolerance) * 100);
+    }
+
+    // Speed/time-based scoring for competitive assignments
+    if (target.timeTarget) {
+      const elapsedSeconds = this.progress!.startTime ? 
+        (Date.now() - this.progress!.startTime.getTime()) / 1000 : 0;
+      
+      if (elapsedSeconds <= target.timeTarget) {
+        // Bonus for completing under target time
+        const timeBonus = ((target.timeTarget - elapsedSeconds) / target.timeTarget) * 50;
+        return Math.min(100, 50 + timeBonus); // Base 50% + up to 50% time bonus
+      } else {
+        // Penalty for exceeding target time, but still give some credit
+        const timePenalty = Math.min(40, ((elapsedSeconds - target.timeTarget) / target.timeTarget) * 40);
+        return Math.max(10, 50 - timePenalty); // Base 50% minus penalty, minimum 10%
+      }
+    }
+
+    // Additional competitive scoring metrics
+    if (target.volumeAccuracy) {
+      const actualAccuracy = 1 - (volumeData.netMovement / (volumeData.totalCut + volumeData.totalFill + 1));
+      const accuracyScore = Math.max(0, (actualAccuracy / target.volumeAccuracy) * 100);
+      return Math.min(100, accuracyScore);
+    }
+
+    if (target.fillEfficiency) {
+      const efficiency = volumeData.totalFill > 0 ? volumeData.totalCut / volumeData.totalFill : 1;
+      const efficiencyScore = (efficiency / target.fillEfficiency) * 100;
+      return Math.min(100, efficiencyScore);
     }
     
     return 0;
@@ -716,22 +1212,102 @@ export class AssignmentManager {
   private async saveProgress(): Promise<void> {
     if (!this.progress) return;
 
-    const { error } = await supabase
-      .from('user_assignments')
-      .upsert({
-        user_id: this.progress.userId,
-        assignment_id: this.progress.assignmentId,
-        completed_at: this.progress.endTime?.toISOString(),
-        score: Math.round(this.progress.currentScore),
-        volume_data: this.progress.volumeData,
-        completion_time: this.progress.endTime && this.progress.startTime ? 
-          Math.round((this.progress.endTime.getTime() - this.progress.startTime.getTime()) / 1000) : null,
-        is_completed: this.progress.completed,
-        updated_at: new Date().toISOString()
-      });
+    // Skip database save for guest users, but allow local progress tracking
+    if (this.progress.userId === 'guest' || this.progress.userId.startsWith('guest_')) {
+      console.log('Guest user - assignment progress saved locally only');
+      return;
+    }
 
-    if (error) {
-      console.error('Failed to save assignment progress:', error);
+    try {
+      const { error } = await supabase
+        .from('user_assignments')
+        .upsert({
+          user_id: this.progress.userId,
+          assignment_id: this.progress.assignmentId,
+          completed_at: this.progress.endTime?.toISOString(),
+          score: Math.round(this.progress.currentScore),
+          volume_data: this.progress.volumeData,
+          completion_time: this.progress.endTime && this.progress.startTime ? 
+            Math.round((this.progress.endTime.getTime() - this.progress.startTime.getTime()) / 1000) : null,
+          is_completed: this.progress.completed,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Failed to save assignment progress to database:', error);
+        // Don't throw error - allow assignment to complete even if save fails
+      } else {
+        console.log('Assignment progress saved to database successfully');
+        
+        // Also update overall user progress if assignment completed
+        if (this.progress.completed) {
+          await this.updateUserProgress();
+        }
+      }
+    } catch (error) {
+      console.error('Database error while saving assignment progress:', error);
+      // Continue without throwing - offline functionality
+    }
+  }
+
+  /**
+   * Update overall user progress after assignment completion
+   */
+  private async updateUserProgress(): Promise<void> {
+    if (!this.progress || !this.currentAssignment) return;
+
+    try {
+      // Calculate XP reward based on score and difficulty
+      const baseXP = 100;
+      const difficultyMultiplier = this.currentAssignment.difficulty;
+      const scoreMultiplier = this.progress.currentScore / 100;
+      const xpReward = Math.round(baseXP * difficultyMultiplier * scoreMultiplier);
+
+      // Get current user progress
+      const { data: currentProgress } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', this.progress.userId)
+        .single();
+
+      if (currentProgress) {
+        // Update existing progress
+        const { error } = await supabase
+          .from('user_progress')
+          .update({
+            experience: currentProgress.experience + xpReward,
+            assignments_completed: currentProgress.assignments_completed + 1,
+            total_volume_moved: currentProgress.total_volume_moved + this.progress.volumeData.totalCut + this.progress.volumeData.totalFill,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', this.progress.userId);
+
+        if (error) {
+          console.error('Failed to update user progress:', error);
+        } else {
+          console.log(`Updated user progress: +${xpReward} XP, +1 assignment completed`);
+        }
+      } else {
+        // Create new progress record
+        const { error } = await supabase
+          .from('user_progress')
+          .insert({
+            user_id: this.progress.userId,
+            experience: xpReward,
+            assignments_completed: 1,
+            total_volume_moved: this.progress.volumeData.totalCut + this.progress.volumeData.totalFill,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (error) {
+          console.error('Failed to create user progress:', error);
+        } else {
+          console.log(`Created user progress: ${xpReward} XP, 1 assignment completed`);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating user progress:', error);
     }
   }
 
@@ -747,6 +1323,7 @@ export class AssignmentManager {
     onProgressUpdate?: (progress: AssignmentProgress) => void;
     onObjectiveComplete?: (objective: AssignmentObjective) => void;
     onAssignmentComplete?: (progress: AssignmentProgress) => void;
+    onAssignmentStop?: () => void;
   }): void {
     this.callbacks = callbacks;
   }
@@ -759,11 +1336,37 @@ export class AssignmentManager {
     
     this.currentAssignment = null;
     this.progress = null;
+    
+    // Notify UI that assignment has stopped
+    if (this.callbacks.onAssignmentStop) {
+      this.callbacks.onAssignmentStop();
+    }
   }
 
   public addToolUsage(toolName: string): void {
     if (this.progress && !this.progress.toolsUsed.includes(toolName)) {
       this.progress.toolsUsed.push(toolName);
     }
+  }
+
+  // Age scaling methods
+  public getAgeGroups(): AgeGroup[] {
+    return this.ageScaling.getAgeGroups();
+  }
+
+  public setAgeGroup(ageGroupId: string): boolean {
+    const success = this.ageScaling.setAgeGroup(ageGroupId);
+    if (success) {
+      console.log(`Assignment difficulty adjusted for age group: ${ageGroupId}`);
+    }
+    return success;
+  }
+
+  public getCurrentAgeGroup(): AgeGroup {
+    return this.ageScaling.getCurrentAgeGroup();
+  }
+
+  public getDifficultyAdjustments() {
+    return this.ageScaling.getDifficultyAdjustments();
   }
 } 

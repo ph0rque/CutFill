@@ -8,6 +8,7 @@ import { PrecisionToolManager } from './precision-tools';
 import { PrecisionUI } from './precision-ui';
 import { ViewControls } from './view-controls';
 import { AssignmentManager } from './assignments';
+import { AssignmentUI } from './assignment-ui';
 import { ProgressTracker } from './progress';
 import { uiPolishSystem } from './ui-polish';
 import { visualEnhancementSystem } from './visual-enhancements';
@@ -692,6 +693,13 @@ const viewControls = new ViewControls(camera, scene);
 // Create assignment manager
 const assignmentManager = new AssignmentManager(terrain);
 
+// Create assignment UI
+const assignmentUI = new AssignmentUI(assignmentManager);
+
+// Make assignment objects globally available for debugging
+(window as any).assignmentManager = assignmentManager;
+(window as any).assignmentUI = assignmentUI;
+
 // Create progress tracker
 const progressTracker = new ProgressTracker();
 
@@ -1221,7 +1229,7 @@ function setupGameControls() {
         authService.signOut();
         break;
       case 'a':
-        loadAssignments();
+        assignmentUI.toggle();
         break;
       case 'z':
         if (event.ctrlKey || event.metaKey) {
@@ -1703,7 +1711,7 @@ function setupGameControls() {
 
   if (assignmentsBtn) {
     assignmentsBtn.addEventListener('click', () => {
-      loadAssignments();
+      assignmentUI.toggle();
     });
   }
 
@@ -1981,6 +1989,9 @@ function setupUI() {
   
   // Initialize UI polish system
   uiPolishSystem.initialize();
+  
+  // Initialize assignment UI
+  assignmentUI.initialize();
   
   // Initialize visual enhancement system
   visualEnhancementSystem.initialize();

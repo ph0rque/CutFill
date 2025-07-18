@@ -4,6 +4,8 @@ import { Terrain } from './terrain';
 import { PrecisionToolManager } from './precision-tools';
 import { PrecisionUI } from './precision-ui';
 import { ViewControls } from './view-controls';
+import { AssignmentManager } from './assignments';
+import { AssignmentUI } from './assignment-ui';
 
 // Global variables
 let isGameReady = false;
@@ -11,6 +13,8 @@ let terrain: Terrain;
 let precisionToolManager: PrecisionToolManager;
 let precisionUI: PrecisionUI;
 let viewControls: ViewControls;
+let assignmentManager: AssignmentManager;
+let assignmentUI: AssignmentUI;
 let scaleReferences: { markers: THREE.Group };
 
 // Camera control variables
@@ -101,10 +105,17 @@ function initializeGame(): void {
     // Create view controls
     viewControls = new ViewControls(camera, scene);
     
+    // Create assignment manager and UI
+    assignmentManager = new AssignmentManager(terrain);
+    assignmentUI = new AssignmentUI(assignmentManager);
+    
     // Make precisionUI and scaleReferences globally available for UI callbacks
     (window as any).precisionUI = precisionUI;
     (window as any).scaleReferences = scaleReferences;
     (window as any).viewControls = viewControls;
+    (window as any).assignmentManager = assignmentManager;
+    (window as any).assignmentUI = assignmentUI;
+    (window as any).cameraTarget = cameraTarget;
     
     // Initialize labels button when available and ensure proper label visibility sync
     setTimeout(() => {
@@ -116,6 +127,17 @@ function initializeGame(): void {
         terrain.setContourLabelsVisible((precisionUI as any).labelsVisible);
       }
     }, 500);
+    
+    // Initialize assignment UI
+    assignmentUI.initialize();
+    
+    // Show persistent assignment progress panel if assignment is active
+    setTimeout(() => {
+      const currentAssignment = assignmentManager.getCurrentAssignment();
+      if (currentAssignment) {
+        assignmentUI.showPersistentProgress();
+      }
+    }, 100);
     
     // Set up controls
     setupControls();
@@ -383,6 +405,26 @@ function handleMousePan(deltaX: number, deltaY: number): void {
   camera.lookAt(cameraTarget);
 }
 
+// Top-down panning function for precision drawing mode
+function handleTopDownPan(deltaX: number, deltaY: number): void {
+  // Calculate pan sensitivity based on camera height (zoom level)
+  const height = camera.position.y;
+  const panScale = height * 0.001; // Adjust sensitivity based on zoom level
+  
+  // In top-down mode, X movement pans X, Y movement pans Z
+  const panX = -deltaX * panScale;
+  const panZ = deltaY * panScale; // Invert Y for intuitive panning
+  
+  // Update camera position and target
+  camera.position.x += panX;
+  camera.position.z += panZ;
+  cameraTarget.x += panX;
+  cameraTarget.z += panZ;
+  
+  // Maintain top-down view by ensuring camera looks straight down
+  camera.lookAt(cameraTarget.x, 0, cameraTarget.z);
+}
+
 function setupControls(): void {
   const canvas = renderer.domElement;
   
@@ -411,24 +453,34 @@ function setupControls(): void {
   });
   
   canvas.addEventListener('mousemove', (event) => {
-    if (isMouseDown && !precisionToolManager.getWorkflowState().isDrawing) {
+    if (isMouseDown) {
       const deltaX = event.clientX - lastMouseX;
       const deltaY = event.clientY - lastMouseY;
+      const state = precisionToolManager.getWorkflowState();
+      const isTopDownMode = state.stage === 'drawing' && state.isDrawing;
       
+      // Allow panning in any mode when Shift is held
       if (event.shiftKey) {
         // Shift + drag = Pan camera
-        handleMousePan(deltaX, deltaY);
-             } else {
-         // Default left drag = Camera rotation
-         const spherical = new THREE.Spherical();
-         spherical.setFromVector3(camera.position.clone().sub(cameraTarget));
-         spherical.theta -= deltaX * 0.01;
-         spherical.phi += deltaY * 0.01;
-         spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
-         
-         camera.position.setFromSpherical(spherical).add(cameraTarget);
-         camera.lookAt(cameraTarget);
-       }
+        if (isTopDownMode) {
+          // Top-down panning: move the camera while maintaining top-down view
+          handleTopDownPan(deltaX, deltaY);
+        } else {
+          // Normal 3D panning
+          handleMousePan(deltaX, deltaY);
+        }
+      } else if (!state.isDrawing) {
+        // Only allow rotation when not actively drawing points
+        // Default left drag = Camera rotation
+        const spherical = new THREE.Spherical();
+        spherical.setFromVector3(camera.position.clone().sub(cameraTarget));
+        spherical.theta -= deltaX * 0.01;
+        spherical.phi += deltaY * 0.01;
+        spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+        
+        camera.position.setFromSpherical(spherical).add(cameraTarget);
+        camera.lookAt(cameraTarget);
+      }
       
       lastMouseX = event.clientX;
       lastMouseY = event.clientY;
@@ -448,17 +500,15 @@ function setupControls(): void {
     const isTopDownMode = state.stage === 'drawing' && state.isDrawing;
     
     if (isTopDownMode) {
-      // Top-down mode: zoom by adjusting camera height while staying centered
+      // Top-down mode: zoom by adjusting camera height while maintaining current pan position
       const delta = event.deltaY * 0.5; // Adjust sensitivity for top-down zoom
       camera.position.y += delta;
       
       // Clamp camera height for top-down view (closer for detail, higher for overview)
       camera.position.y = Math.max(50, Math.min(400, camera.position.y));
       
-      // Ensure camera stays centered on terrain and looking straight down
-      camera.position.x = 50;
-      camera.position.z = 50;
-      camera.lookAt(50, 0, 50);
+      // Keep current X and Z position (don't reset to center) and maintain top-down view
+      camera.lookAt(cameraTarget.x, 0, cameraTarget.z);
       
       // Show zoom level feedback
       precisionToolManager.showZoomFeedback();
@@ -701,8 +751,9 @@ document.addEventListener('DOMContentLoaded', () => {
     <div style="line-height: 1.4;">
       <strong>Camera:</strong><br>
       • Left-drag: Rotate view<br>
-      • Shift+drag: Pan camera<br>
-      • Scroll: Zoom in/out<br><br>
+      • Shift+drag: Pan camera (works in top-down mode)<br>
+      • Scroll: Zoom in/out<br>
+      • V: Exit top-down mode<br><br>
       
       <strong>Tools:</strong><br>
       • Follow the workflow in the left panel<br>

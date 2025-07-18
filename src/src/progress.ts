@@ -384,7 +384,7 @@ export class ProgressTracker {
       difficultyLevel: 'beginner',
       notifications: true,
       autoSave: true,
-      measurementUnits: 'metric',
+      measurementUnits: 'imperial',
       themes: ['default']
     };
   }

@@ -230,16 +230,53 @@ export class PrecisionUI {
     const area = this.currentState.area;
     
     let progressInfo = '';
+    let totalLength = 0;
     if (area) {
       if (area.type === 'polygon') {
         const vertices = area.vertices.length;
         progressInfo = `Points added: ${vertices}`;
+        
+        // Calculate total perimeter for segments drawn so far
+        if (vertices > 1) {
+          for (let i = 0; i < vertices - 1; i++) {
+            const start = area.vertices[i];
+            const end = area.vertices[i + 1];
+            const dx = end.x - start.x;
+            const dz = end.z - start.z;
+            totalLength += Math.sqrt(dx * dx + dz * dz);
+          }
+          
+          if (area.closed && vertices > 2) {
+            // Add closing segment for closed polygons
+            const start = area.vertices[vertices - 1];
+            const end = area.vertices[0];
+            const dx = end.x - start.x;
+            const dz = end.z - start.z;
+            totalLength += Math.sqrt(dx * dx + dz * dz);
+            progressInfo += ` | Perimeter: ${totalLength.toFixed(1)} ft`;
+          } else {
+            progressInfo += ` | Length: ${totalLength.toFixed(1)} ft`;
+          }
+        }
+        
         if (vertices >= 3) {
           progressInfo += ' (Ready to close)';
         }
       } else {
         const points = area.points.length;
         progressInfo = `Points added: ${points}`;
+        
+        // Calculate total line length
+        if (points > 1) {
+          for (let i = 0; i < points - 1; i++) {
+            const start = area.points[i];
+            const end = area.points[i + 1];
+            const dx = end.x - start.x;
+            const dz = end.z - start.z;
+            totalLength += Math.sqrt(dx * dx + dz * dz);
+          }
+          progressInfo += ` | Total Length: ${totalLength.toFixed(1)} ft`;
+        }
       }
     }
     
@@ -263,6 +300,12 @@ export class PrecisionUI {
               : '• Click on the terrain to add line points<br>• Create a path for linear excavation<br>• Adjust thickness as needed<br>• Click "Finish Drawing" when ready'
             }
           </div>
+        </div>
+        
+        <div style="margin-bottom: 10px;">
+          <button onclick="precisionUI.toggleSegmentLabels()" style="padding: 8px; background: #9C27B0; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%;">
+            📏 ${this.toolManager.getLengthLabelsVisible() ? 'Hide' : 'Show'} Length Labels
+          </button>
         </div>
         
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -500,6 +543,11 @@ export class PrecisionUI {
 
   clearDrawing(): void {
     this.toolManager.clearWorkflow();
+  }
+
+  toggleSegmentLabels(): void {
+    this.toolManager.toggleLengthLabels();
+    this.updateUI(); // Refresh UI to update button text
   }
 
   setCrossSection(wallType: 'straight' | 'curved' | 'angled'): void {
