@@ -16,7 +16,7 @@ export interface PolygonArea {
 export interface PolylineArea {
   type: 'polyline';
   points: PrecisionPoint[];
-  thickness: number; // Width of the line in feet
+  thickness: number; // Width of the line in yards
 }
 
 export type DrawingArea = PolygonArea | PolylineArea;
@@ -28,7 +28,7 @@ export interface CrossSectionConfig {
 
 export interface CutFillOperation {
   direction: 'cut' | 'fill';
-  magnitude: number; // Depth (for cut) or height (for fill) in feet
+  magnitude: number; // Depth (for cut) or height (for fill) in yards
   area: DrawingArea;
   crossSection: CrossSectionConfig;
   previewMesh?: THREE.Mesh;
@@ -119,13 +119,13 @@ export class PrecisionToolManager {
     }
 
     // Set camera to top-down view centered on terrain
-    // Terrain is 100ft x 100ft from (0,0) to (100,100), so center is at (50, 0, 50)
-    this.camera.position.set(50, 200, 50); // High above center of terrain for better overview
-    this.camera.lookAt(50, 0, 50); // Look down at center of terrain
+    // Terrain is 120ft x 120ft from (0,0) to (120,120), so center is at (60, 0, 60)
+    this.camera.position.set(60, 200, 60); // High above center of terrain for better overview
+    this.camera.lookAt(60, 0, 60); // Look down at center of terrain
     
     // Update camera target for main-precision.ts controls
     if ((window as any).cameraTarget) {
-      (window as any).cameraTarget.set(50, 0, 50);
+      (window as any).cameraTarget.set(60, 0, 60);
     }
     
     // Reduce FOV significantly to minimize perspective distortion (more orthographic-like)
@@ -1161,8 +1161,8 @@ export class PrecisionToolManager {
           const maxAllowedChange = signedMagnitude < 0 ? -userSpecifiedLimit : userSpecifiedLimit;
           
           // Secondary limits: Prevent cuts deeper than 20 feet or fills higher than 20 feet
-          const maxCutDepth = -20.0;  // 20 feet below original terrain
-          const maxFillHeight = 20.0; // 20 feet above original terrain
+          const maxCutDepth = -6.67;  // 6.67 yards below original terrain (was 20 feet)
+          const maxFillHeight = 6.67; // 6.67 yards above original terrain (was 20 feet)
           const terrainBlockBottom = -25.0; // Don't cut through the terrain block bottom
           
           let limitedNewHeight = proposedNewHeight;
@@ -1327,8 +1327,8 @@ export class PrecisionToolManager {
           const maxAllowedChange = signedMagnitude < 0 ? -userSpecifiedLimit : userSpecifiedLimit;
           
           // Secondary limits: Prevent cuts deeper than 20 feet or fills higher than 20 feet
-          const maxCutDepth = -20.0;  // 20 feet below original terrain
-          const maxFillHeight = 20.0; // 20 feet above original terrain
+          const maxCutDepth = -6.67;  // 6.67 yards below original terrain (was 20 feet)
+          const maxFillHeight = 6.67; // 6.67 yards above original terrain (was 20 feet)
           const terrainBlockBottom = -25.0; // Don't cut through the terrain block bottom
           
           let limitedNewHeight = proposedNewHeight;
@@ -1359,9 +1359,9 @@ export class PrecisionToolManager {
             const originalCalculatedCut = proposedNewHeight - originalHeight;
             const actualAppliedCut = limitedNewHeight - originalHeight;
             console.log('Polyline cut depth debug:', {
-              userSpecified: `${Math.abs(signedMagnitude)} feet`,
-              originalCalculated: `${Math.abs(originalCalculatedCut).toFixed(1)} feet`,
-              actualApplied: `${Math.abs(actualAppliedCut).toFixed(1)} feet`,
+              userSpecified: `${(Math.abs(signedMagnitude) / 3).toFixed(1)} yards`,
+              originalCalculated: `${(Math.abs(originalCalculatedCut) / 3).toFixed(1)} yards`,
+              actualApplied: `${(Math.abs(actualAppliedCut) / 3).toFixed(1)} yards`,
               limited: originalCalculatedCut !== actualAppliedCut,
               crossSectionType: crossSection.wallType
             });
@@ -1682,7 +1682,8 @@ export class PrecisionToolManager {
         const midY = this.terrain.getHeightAtPosition(midX, midZ) + 2; // Raised above terrain
         
         // Create length label
-        const lengthText = `${length.toFixed(1)} ft`;
+        const lengthInYards = length / 3; // Convert to yards
+        const lengthText = `${lengthInYards.toFixed(1)} yd`;
         const labelColor = this.workflowState.direction === 'cut' ? '#FF6666' : '#66AAFF';
         const labelSprite = this.createTextSprite(lengthText, labelColor);
         labelSprite.position.set(midX, midY, midZ);
@@ -1736,7 +1737,8 @@ export class PrecisionToolManager {
         const midY = this.terrain.getHeightAtPosition(midX, midZ) + 2; // Raised above terrain
         
         // Create length label
-        const lengthText = `${length.toFixed(1)} ft`;
+        const lengthInYards = length / 3; // Convert to yards
+        const lengthText = `${lengthInYards.toFixed(1)} yd`;
         const labelColor = this.workflowState.direction === 'cut' ? '#FF6666' : '#66AAFF';
         const labelSprite = this.createTextSprite(lengthText, labelColor);
         labelSprite.position.set(midX, midY, midZ);
@@ -2011,9 +2013,9 @@ export class PrecisionToolManager {
     this.camera.position.y = Math.max(50, Math.min(400, this.camera.position.y));
     
     // Ensure camera stays centered and looking down
-    this.camera.position.x = 50;
-    this.camera.position.z = 50;
-    this.camera.lookAt(50, 0, 50);
+    this.camera.position.x = 60;
+    this.camera.position.z = 60;
+    this.camera.lookAt(60, 0, 60);
     
     // Show zoom level feedback
     this.showZoomFeedback();

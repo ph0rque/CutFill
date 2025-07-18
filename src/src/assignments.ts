@@ -22,10 +22,10 @@ export interface AssignmentConfig {
   difficulty: 1 | 2 | 3 | 4 | 5;
   category: 'foundation' | 'drainage' | 'grading' | 'excavation' | 'road_construction';
   estimatedTime: number; // minutes
-  levelNumber: number; // Sequential level (1, 2, 3...)
-  idealOperations: number; // Hand-authored par count for operations efficiency
-  levelVersion: number; // Version for future level updates
-  isCompetitive: boolean; // Whether this level has competitive multiplayer mode
+  levelNumber?: number; // Sequential level (1, 2, 3...)
+  idealOperations?: number; // Hand-authored par count for operations efficiency
+  levelVersion?: number; // Version for future level updates
+  isCompetitive?: boolean; // Whether this level has competitive multiplayer mode
   objectives: AssignmentObjective[];
   terrainConfig: {
     width: number;
@@ -75,6 +75,10 @@ export class AssignmentManager {
     onAssignmentStop?: () => void;
   } = {};
 
+  // Add terrain persistence properties
+  private currentTerrainId: string | null = null;
+  private originalTerrainData: any = null;
+
   constructor(terrain: Terrain) {
     this.terrain = terrain;
     this.ageScaling = new AgeScalingSystem();
@@ -98,7 +102,7 @@ export class AssignmentManager {
           {
             id: 'level_pad',
             type: 'level_area',
-            description: 'Create a 50x50 ft level pad with ±2 inch tolerance',
+            description: '🌍 FUTURE ENGINEERS: Level a 50x50 ft area within 2-inch elevation variance for building foundation',
             target: { x: 0, z: 0, width: 50, height: 50, elevation: 0 },
             tolerance: 0.17,
             weight: 0.8,
@@ -364,7 +368,7 @@ export class AssignmentManager {
           {
             id: 'time_efficiency',
             type: 'volume_target',
-            description: 'Complete within time limit',
+            description: 'Complete the excavation efficiently',
             target: { timeLimit: 45 },
             tolerance: 0.1,
             weight: 0.25,
@@ -524,6 +528,10 @@ export class AssignmentManager {
         difficulty: 4,
         category: 'grading',
         estimatedTime: 15,
+        levelNumber: 9,
+        idealOperations: 40,
+        levelVersion: 1,
+        isCompetitive: true,
         objectives: [
           {
             id: 'multi_pad_precision',
@@ -534,7 +542,7 @@ export class AssignmentManager {
                 { x: -15, z: -10, width: 8, height: 8, elevation: 1.0 },
                 { x: 15, z: -10, width: 8, height: 8, elevation: 0.5 },
                 { x: 0, z: 15, width: 10, height: 6, elevation: 1.5 }
-              ]
+              ] 
             },
             tolerance: 0.05,
             weight: 0.4,
@@ -564,8 +572,8 @@ export class AssignmentManager {
           {
             id: 'championship_time',
             type: 'volume_target',
-            description: 'Complete within championship time for bonus points',
-            target: { timeTarget: 900 }, // 15 minutes
+            description: 'Demonstrate mastery with precision work',
+            target: { timeTarget: 900 },
             tolerance: 0.1,
             weight: 0.1,
             completed: false,
@@ -750,30 +758,30 @@ export class AssignmentManager {
           {
             id: 'wildlife_pond',
             type: 'create_channel',
-            description: 'Create seasonal wildlife pond with gentle slopes',
-            target: { x: -33, z: 33, depth: 6, diameter: 50, gentleSlopes: true },
+            description: 'Create a wildlife pond with gradual slopes',
+            target: { depth: 2.5, width: 15, gradualSlopes: true },
             tolerance: 0.3,
-            weight: 0.25,
+            weight: 0.2,
             completed: false,
             score: 0
           },
           {
-            id: 'habitat_mounds',
+            id: 'vegetation_zones',
             type: 'level_area',
-            description: 'Build small habitat mounds for wildlife cover',
-            target: { count: 3, height: 1.5, naturalShape: true },
+            description: 'Create terraced zones for different vegetation types',
+            target: { terraces: 3, elevationDifference: 1.5 },
             tolerance: 0.25,
             weight: 0.2,
             completed: false,
             score: 0
           },
           {
-            id: 'erosion_control',
-            type: 'grade_road',
-            description: 'Grade all slopes under 25% to prevent erosion',
-            target: { maxSlope: 0.25, erosionResistant: true },
+            id: 'soil_conservation',
+            type: 'volume_target',
+            description: 'Minimize soil disturbance and erosion',
+            target: { maxDisturbance: 0.15 },
             tolerance: 0.05,
-            weight: 0.25,
+            weight: 0.3,
             completed: false,
             score: 0
           }
@@ -895,19 +903,31 @@ export class AssignmentManager {
     console.log('Assignment config:', assignment);
 
     this.currentAssignment = assignment;
+    let objectives: AssignmentObjective[] = [];
+    if (Array.isArray(assignment.objectives)) {
+      objectives = assignment.objectives.filter((obj: any) => 
+        obj && typeof obj === 'object' && obj.description && obj.id
+      );
+    }
+    // Removed default objective
+
     this.progress = {
       assignmentId,
       userId,
       startTime: new Date(),
       currentScore: 0,
       operationCount: 0,
-      operationsEfficiencyScore: 100,
-      objectives: assignment.objectives.map(obj => ({ ...obj })),
+      operationsEfficiencyScore: 0,
+      objectives: objectives.map(obj => ({
+        ...obj,
+        completed: false,
+        score: 0
+      })),
       volumeData: {
         totalCut: 0,
         totalFill: 0,
         netMovement: 0,
-        efficiency: 0
+        efficiency: 1
       },
       toolsUsed: [],
       completed: false,
@@ -917,8 +937,10 @@ export class AssignmentManager {
     // Configure terrain for assignment
     this.setupTerrainForAssignment(assignment);
 
-    // Start monitoring progress
-    this.startProgressMonitoring();
+    // Wait for terrain to fully initialize before starting progress monitoring
+    setTimeout(() => {
+      this.startProgressMonitoring();
+    }, 500); // 500ms delay to ensure terrain reset and setup operations are complete
 
     return true;
   }
@@ -948,6 +970,7 @@ export class AssignmentManager {
     }
   }
 
+  // Update existing rolling terrain method to match the pattern
   private generateRollingTerrain(): void {
     const meshObject = this.terrain.getMesh();
     const mesh = meshObject as THREE.Mesh;
@@ -957,9 +980,14 @@ export class AssignmentManager {
       const x = vertices[i];
       const z = vertices[i + 2];
       
-      // Create rolling hills with sine waves
-      const height = Math.sin(x * 0.1) * 2 + Math.cos(z * 0.15) * 1.5 + Math.random() * 0.5;
-      vertices[i + 1] = height;
+      // Rolling hills with multiple scales
+      const largeWaves = Math.sin(x * 0.018) * Math.cos(z * 0.015) * 1.33; // 1.33 yards large waves
+      const mediumWaves = Math.sin(x * 0.035) * Math.cos(z * 0.03) * 0.67; // 0.67 yards medium waves
+      const smallWaves = this.smoothNoise(x * 0.05, z * 0.05) * 0.5; // 0.5 yards small variation
+      const fineDetail = this.smoothNoise(x * 0.08, z * 0.08) * 0.17; // 0.17 yards fine detail
+      
+      const terrainHeight = largeWaves + mediumWaves + smallWaves + fineDetail;
+      vertices[i + 1] = Math.max(-3.33, Math.min(3.33, terrainHeight)); // Clamp to ±3.33 yards
     }
     
     (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
@@ -970,18 +998,19 @@ export class AssignmentManager {
   private generateRoughTerrain(): void {
     const meshObject = this.terrain.getMesh();
     const mesh = meshObject as THREE.Mesh;
-    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array;
     
     for (let i = 0; i < vertices.length; i += 3) {
       const x = vertices[i];
       const z = vertices[i + 2];
       
-      // Create rough terrain with multiple frequencies
-      const height = Math.sin(x * 0.2) * 3 + 
-                    Math.cos(z * 0.25) * 2 + 
-                    Math.sin(x * 0.05) * 5 +
-                    Math.random() * 2 - 1;
-      vertices[i + 1] = height;
+      // Rough terrain with more dramatic height changes
+      const roughness1 = this.smoothNoise(x * 0.03, z * 0.025) * 1.67; // 1.67 yards primary roughness
+      const roughness2 = this.smoothNoise(x * 0.08, z * 0.07) * 0.83; // 0.83 yards secondary roughness
+      const roughness3 = this.smoothNoise(x * 0.15, z * 0.12) * 0.33; // 0.33 yards fine roughness
+      
+      const terrainHeight = roughness1 + roughness2 + roughness3;
+      vertices[i + 1] = Math.max(-4, Math.min(4, terrainHeight)); // Clamp to ±4 yards
     }
     
     (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
@@ -1080,11 +1109,23 @@ export class AssignmentManager {
       // Cast to THREE.Mesh and safety check for mesh and geometry
       const mesh = meshObject as THREE.Mesh;
       if (!mesh || !mesh.geometry || !mesh.geometry.attributes || !mesh.geometry.attributes.position) {
-        console.warn('Terrain mesh or geometry not properly initialized for objective evaluation');
+        // Silently return 0 during initialization - no need to spam console warnings
         return 0;
       }
       
-      const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+      const positionAttribute = mesh.geometry.attributes.position as THREE.BufferAttribute;
+      
+      // Additional safety check: ensure the position array exists and has data
+      if (!positionAttribute.array || positionAttribute.array.length === 0) {
+        return 0;
+      }
+      
+      // Check if geometry is still being updated (needsUpdate flag indicates ongoing changes)
+      if (positionAttribute.needsUpdate) {
+        return 0;
+      }
+      
+      const vertices = positionAttribute.array as Float32Array;
       
       switch (objective.type) {
         case 'level_area':
@@ -1111,6 +1152,8 @@ export class AssignmentManager {
     
     let pointsInArea = 0;
     let pointsWithinTolerance = 0;
+    let minHeight = Infinity;
+    let maxHeight = -Infinity;
     
     for (let i = 0; i < vertices.length; i += 3) {
       const x = vertices[i];
@@ -1121,6 +1164,8 @@ export class AssignmentManager {
       if (x >= target.x - target.width/2 && x <= target.x + target.width/2 &&
           z >= target.z - target.height/2 && z <= target.z + target.height/2) {
         pointsInArea++;
+        minHeight = Math.min(minHeight, y);
+        maxHeight = Math.max(maxHeight, y);
         
         // Check if height is within tolerance
         if (Math.abs(y - target.elevation) <= tolerance) {
@@ -1129,7 +1174,21 @@ export class AssignmentManager {
       }
     }
     
-    return pointsInArea > 0 ? (pointsWithinTolerance / pointsInArea) * 100 : 0;
+    const score = pointsInArea > 0 ? (pointsWithinTolerance / pointsInArea) * 100 : 0;
+    
+    // Debug logging (only log every 10 evaluations to avoid spam)
+    if (Math.random() < 0.1) {
+      const status = pointsWithinTolerance === pointsInArea ? '✓' : '✗';
+      console.log(`Level Area Evaluation:
+      Target: ${(target.width / 3).toFixed(1)}x${(target.height / 3).toFixed(1)} yd at (${(target.x / 3).toFixed(1)}, ${(target.z / 3).toFixed(1)}), elevation ${(target.elevation / 3).toFixed(1)} yd
+      Tolerance: ±${(tolerance / 3).toFixed(2)} yd
+      
+      Status: ${status}
+      Height range in area: ${(minHeight / 3).toFixed(2)} to ${(maxHeight / 3).toFixed(2)} yd
+        Current score: ${score.toFixed(1)}%`);
+    }
+    
+    return score;
   }
 
   private evaluateVolumeTarget(objective: AssignmentObjective): number {
@@ -1148,20 +1207,10 @@ export class AssignmentManager {
       return Math.max(0, 100 - (imbalanceRatio / target.balanceTolerance) * 100);
     }
 
-    // Speed/time-based scoring for competitive assignments
+    // Speed/time-based scoring disabled for relaxed gameplay
     if (target.timeTarget) {
-      const elapsedSeconds = this.progress!.startTime ? 
-        (Date.now() - this.progress!.startTime.getTime()) / 1000 : 0;
-      
-      if (elapsedSeconds <= target.timeTarget) {
-        // Bonus for completing under target time
-        const timeBonus = ((target.timeTarget - elapsedSeconds) / target.timeTarget) * 50;
-        return Math.min(100, 50 + timeBonus); // Base 50% + up to 50% time bonus
-      } else {
-        // Penalty for exceeding target time, but still give some credit
-        const timePenalty = Math.min(40, ((elapsedSeconds - target.timeTarget) / target.timeTarget) * 40);
-        return Math.max(10, 50 - timePenalty); // Base 50% minus penalty, minimum 10%
-      }
+      // Always return full score for time-based objectives - no time pressure
+      return 100;
     }
 
     // Additional competitive scoring metrics
@@ -1253,9 +1302,10 @@ export class AssignmentManager {
     // Unlock next level if assignment passed
     if (this.progress.currentScore >= this.currentAssignment.successCriteria.minimumScore) {
       try {
-        const unlocked = await this.unlockNextLevel(this.progress.userId, this.currentAssignment.levelNumber);
+        const levelNumber = this.currentAssignment.levelNumber || 1;
+        const unlocked = await this.unlockNextLevel(this.progress.userId, levelNumber);
         if (unlocked) {
-          console.log(`🎉 Level ${this.currentAssignment.levelNumber + 1} unlocked!`);
+          console.log(`🎉 Level ${levelNumber + 1} unlocked!`);
         }
       } catch (error) {
         console.error('Error unlocking next level:', error);
@@ -1414,8 +1464,9 @@ export class AssignmentManager {
       
       // Calculate operations efficiency score
       if (this.currentAssignment) {
+        const idealOperations = this.currentAssignment.idealOperations || 30;
         this.progress.operationsEfficiencyScore = Math.min(100, 
-          (this.currentAssignment.idealOperations / this.progress.operationCount) * 100
+          (idealOperations / this.progress.operationCount) * 100
         );
       }
       
@@ -1503,8 +1554,8 @@ export class AssignmentManager {
     
     // Sort assignments by level number to create sequential progression
     return allAssignments
-      .filter(assignment => userUnlockedLevels.includes(assignment.levelNumber))
-      .sort((a, b) => a.levelNumber - b.levelNumber);
+      .filter(assignment => userUnlockedLevels.includes(assignment.levelNumber || 1))
+      .sort((a, b) => (a.levelNumber || 1) - (b.levelNumber || 1));
   }
 
   public isLevelUnlocked(levelNumber: number, userUnlockedLevels: number[]): boolean {
@@ -1513,7 +1564,7 @@ export class AssignmentManager {
 
   private getMaxLevelNumber(): number {
     const assignments = this.getAssignmentTemplates();
-    return Math.max(...assignments.map(a => a.levelNumber));
+    return Math.max(...assignments.map(a => a.levelNumber || 1));
   }
 
   // Age scaling methods
@@ -1535,5 +1586,432 @@ export class AssignmentManager {
 
   public getDifficultyAdjustments() {
     return this.ageScaling.getDifficultyAdjustments();
+  }
+
+  /**
+   * Load terrain configuration for the current assignment
+   */
+  private async loadTerrainForAssignment(assignment: AssignmentConfig): Promise<void> {
+    try {
+      // Extract level ID from assignment (assuming assignments have level indicators)
+      const levelId = this.extractLevelIdFromAssignment(assignment);
+      
+      console.log(`🌍 Loading terrain for Level ${levelId}, Assignment: ${assignment.name}`);
+
+      // Fetch terrain configuration from server
+      const response = await fetch(`http://localhost:3001/api/terrain/${levelId}?assignmentId=${assignment.id}`);
+      
+      if (!response.ok) {
+        console.warn(`Failed to load saved terrain for level ${levelId}, generating default terrain`);
+        await this.generateDefaultTerrain(assignment, levelId);
+        return;
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.terrain) {
+        console.log('✅ Loaded saved terrain configuration:', result.terrain.name);
+        await this.applyTerrainConfiguration(result.terrain);
+        this.currentTerrainId = result.terrain.id;
+      } else {
+        console.warn('No saved terrain found, generating default terrain');
+        await this.generateDefaultTerrain(assignment, levelId);
+      }
+    } catch (error) {
+      console.error('Error loading terrain configuration:', error);
+      // Fallback to existing terrain generation logic
+      this.generateTerrainForAssignment(assignment);
+    }
+  }
+
+  /**
+   * Extract level ID from assignment data
+   */
+  private extractLevelIdFromAssignment(assignment: AssignmentConfig): number {
+    // Check if assignment has explicit level_id
+    if (assignment.levelNumber) {
+      return assignment.levelNumber;
+    }
+
+    // Extract from assignment name or use existing logic
+    if (assignment.name.includes('Foundation Preparation')) return 1;
+    if (assignment.name.includes('Drainage Channel')) return 2;
+    if (assignment.name.includes('Site Development')) return 3;
+    
+    // Default to level 1
+    return 1;
+  }
+
+  /**
+   * Apply terrain configuration from database
+   */
+  private async applyTerrainConfiguration(terrainConfig: any): Promise<void> {
+    try {
+      const terrainData = terrainConfig.terrain_data;
+      
+      if (terrainData.vertices && terrainData.vertices.length > 0) {
+        // Apply saved vertex data directly
+        console.log('🔧 Applying saved terrain vertices');
+        this.terrain.importTerrain(terrainData);
+      } else if (terrainData.pattern) {
+        // Generate terrain using saved pattern
+        console.log(`🔧 Generating terrain with pattern: ${terrainData.pattern}`);
+        await this.generateTerrainFromPattern(terrainData.pattern, terrainData.parameters);
+      }
+
+      // Store original terrain data for comparison
+      this.originalTerrainData = this.terrain.exportTerrain();
+      
+      console.log('✅ Terrain configuration applied successfully');
+    } catch (error) {
+      console.error('Error applying terrain configuration:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate terrain from a specific pattern
+   */
+  private async generateTerrainFromPattern(pattern: string, parameters: any): Promise<void> {
+    // Use existing terrain generation methods
+    switch (pattern) {
+      case 'flat':
+        this.generateFlatTerrain();
+        break;
+      case 'gentle_slope':
+        this.generateSlopeTerrain();
+        break;
+      case 'rolling':
+        this.generateRollingTerrain();
+        break;
+      case 'valley':
+        this.generateValleyTerrain();
+        break;
+      case 'hill':
+        this.generateHillTerrain();
+        break;
+      default:
+        this.generateFlatTerrain();
+    }
+  }
+
+  /**
+   * Generate default terrain when no saved configuration exists
+   */
+  private async generateDefaultTerrain(assignment: AssignmentConfig, levelId: number): Promise<void> {
+    console.log(`🔧 Generating default terrain for Level ${levelId}`);
+    
+    // Generate terrain based on level requirements
+    this.generateTerrainForAssignment(assignment);
+
+    // Save the generated terrain as default for this level
+    await this.saveTerrainAsDefault(assignment, levelId);
+  }
+
+  /**
+   * Generate terrain based on assignment configuration
+   */
+  private generateTerrainForAssignment(assignment: AssignmentConfig): void {
+    const terrainType = assignment.terrainConfig?.initialTerrain || 'flat';
+    
+    switch (terrainType) {
+      case 'flat':
+        this.generateFlatTerrain();
+        break;
+      case 'rolling':
+        this.generateRollingTerrain();
+        break;
+      case 'rough':
+        this.generateRoughTerrain();
+        break;
+      default:
+        this.generateFlatTerrain();
+    }
+  }
+
+  /**
+   * Save current terrain as default for a level
+   */
+  private async saveTerrainAsDefault(assignment: AssignmentConfig, levelId: number): Promise<void> {
+    try {
+      // Get current user ID (implement based on your auth system)
+      const userId = await this.getCurrentUserId();
+      if (!userId) {
+        console.log('No user authenticated, skipping terrain save');
+        return;
+      }
+
+      const terrainData = this.terrain.exportTerrain();
+      
+      const saveData = {
+        levelId: levelId,
+        assignmentId: assignment.id,
+        name: `${assignment.name} - Default Terrain`,
+        description: `Auto-generated default terrain for ${assignment.name}`,
+        terrainData: terrainData,
+        terrainConfig: {
+          width: 100,
+          height: 100,
+          pattern: this.getPatternForLevel(levelId)
+        },
+        isDefault: true,
+        userId: userId
+      };
+
+      const response = await fetch('http://localhost:3001/api/terrain/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(saveData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Default terrain saved:', result.terrain.id);
+        this.currentTerrainId = result.terrain.id;
+      } else {
+        console.warn('Failed to save default terrain:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error saving default terrain:', error);
+    }
+  }
+
+  /**
+   * Get terrain pattern for a specific level
+   */
+  private getPatternForLevel(levelId: number): string {
+    switch (levelId) {
+      case 1: return 'flat';
+      case 2: return 'gentle_slope';
+      case 3: return 'rolling';
+      default: return 'flat';
+    }
+  }
+
+  /**
+   * Get current authenticated user ID
+   */
+  private async getCurrentUserId(): Promise<string | null> {
+    try {
+      // Import supabase client
+      const { supabase } = await import('./supabase');
+      const { data: { user } } = await supabase.auth.getUser();
+      return user?.id || null;
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save current terrain state (for manual saves)
+   */
+  async saveCurrentTerrain(name?: string, description?: string): Promise<boolean> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) {
+        console.log('No user authenticated, cannot save terrain');
+        return false;
+      }
+
+      if (!this.currentAssignment) {
+        console.log('No active assignment, cannot save terrain');
+        return false;
+      }
+
+      const levelId = this.extractLevelIdFromAssignment(this.currentAssignment);
+      const terrainData = this.terrain.exportTerrain();
+      
+      const saveData = {
+        levelId: levelId,
+        assignmentId: this.currentAssignment.id,
+        name: name || `${this.currentAssignment.name} - Custom Save ${new Date().toLocaleTimeString()}`,
+        description: description || `Manual save of terrain state during ${this.currentAssignment.name}`,
+        terrainData: terrainData,
+        terrainConfig: {
+          width: 100,
+          height: 100,
+          pattern: 'custom'
+        },
+        isDefault: false,
+        userId: userId
+      };
+
+      const response = await fetch('http://localhost:3001/api/terrain/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(saveData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Terrain saved:', result.terrain.id);
+        this.showNotification('Terrain saved successfully!', 'success');
+        return true;
+      } else {
+        console.warn('Failed to save terrain:', response.statusText);
+        this.showNotification('Failed to save terrain', 'error');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error saving terrain:', error);
+      this.showNotification('Error saving terrain', 'error');
+      return false;
+    }
+  }
+
+  /**
+   * Show notification to user
+   */
+  private showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
+    // Create simple notification - can be enhanced later
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    
+    // Try to use existing notification systems if available
+    if ((window as any).showNotification) {
+      (window as any).showNotification(message, type);
+    } else {
+      // Fallback: create simple UI notification
+      const notification = document.createElement('div');
+      notification.textContent = message;
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 4px;
+        color: white;
+        font-weight: bold;
+        z-index: 10000;
+        background-color: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#F44336' : '#2196F3'};
+      `;
+      
+      document.body.appendChild(notification);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 3000);
+    }
+  }
+
+  // Add missing terrain generation methods that are referenced but don't exist
+  private generateFlatTerrain(): void {
+    const meshObject = this.terrain.getMesh();
+    const mesh = meshObject as THREE.Mesh;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+    
+    for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const z = vertices[i + 2];
+      
+      // Mostly flat with very gentle undulation
+      const flatNoise = this.smoothNoise(x * 0.02, z * 0.02) * 0.5; // Gentle ±0.5 yards
+      const flatDetail = this.smoothNoise(x * 0.05, z * 0.05) * 0.17; // Fine detail ±0.17 yards
+      vertices[i + 1] = flatNoise + flatDetail;
+    }
+    
+    (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    this.terrain.updateTerrainColors();
+  }
+
+  private generateSlopeTerrain(): void {
+    const meshObject = this.terrain.getMesh();
+    const mesh = meshObject as THREE.Mesh;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+
+    for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const z = vertices[i + 2];
+      
+      // Gentle slope with natural variation
+      const slopeDirection = Math.PI * 0.3;
+      const slopeStrength = 0.01; // Adjusted for yards
+      let terrainHeight = (x * Math.cos(slopeDirection) + z * Math.sin(slopeDirection)) * slopeStrength;
+      terrainHeight += this.smoothNoise(x * 0.02, z * 0.02) * 0.83; // ±0.83 yards variation
+      terrainHeight += this.smoothNoise(x * 0.04, z * 0.04) * 0.33; // ±0.33 yards detail
+      
+      vertices[i + 1] = Math.max(-2.67, Math.min(2.67, terrainHeight)); // Clamp to ±2.67 yards
+    }
+    
+    (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    this.terrain.updateTerrainColors();
+  }
+
+  private generateValleyTerrain(): void {
+    const meshObject = this.terrain.getMesh();
+    const mesh = meshObject as THREE.Mesh;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+
+    const centerX = 50; // 100 width / 2
+    const centerZ = 50; // 100 height / 2
+    
+    for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const z = vertices[i + 2];
+      
+      // Create valley - lower in center, higher on edges
+      const distanceFromCenter = Math.sqrt((x - centerX) ** 2 + (z - centerZ) ** 2);
+      const maxRadius = 50; // Max distance to edge
+      const normalizedDistance = Math.min(distanceFromCenter / maxRadius, 1);
+      
+      // Valley shape: parabolic profile
+      const valleyDepth = -2; // 2 yards deep at center
+      const valleyHeight = normalizedDistance * normalizedDistance * (-valleyDepth) + valleyDepth;
+      
+      // Add natural variation
+      const noise = this.smoothNoise(x * 0.03, z * 0.03) * 0.67; // 0.67 yards noise
+      vertices[i + 1] = valleyHeight + noise;
+    }
+    
+    (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    this.terrain.updateTerrainColors();
+  }
+
+  private generateHillTerrain(): void {
+    const meshObject = this.terrain.getMesh();
+    const mesh = meshObject as THREE.Mesh;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+
+    const centerX = 50; // 100 width / 2
+    const centerZ = 50; // 100 height / 2
+    
+    for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const z = vertices[i + 2];
+      
+      // Create hill - higher in center, lower on edges
+      const distanceFromCenter = Math.sqrt((x - centerX) ** 2 + (z - centerZ) ** 2);
+      const maxRadius = 50; // Max distance to edge
+      const normalizedDistance = Math.min(distanceFromCenter / maxRadius, 1);
+      
+      // Hill shape: inverted parabolic profile
+      const hillHeight = 2.67; // 2.67 yards high at center
+      const currentHeight = hillHeight * (1 - normalizedDistance * normalizedDistance);
+      
+      // Add natural variation
+      const noise = this.smoothNoise(x * 0.03, z * 0.03) * 0.5; // 0.5 yards noise
+      vertices[i + 1] = currentHeight + noise;
+    }
+    
+    (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    this.terrain.updateTerrainColors();
+  }
+
+  /**
+   * Simple noise function for terrain generation
+   */
+  private smoothNoise(x: number, y: number): number {
+    return (Math.sin(x * 2.1 + Math.cos(y * 1.7)) + Math.sin(y * 1.9 + Math.cos(x * 2.3))) * 0.5;
   }
 } 

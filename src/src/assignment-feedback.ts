@@ -26,6 +26,7 @@ export class AssignmentFeedbackSystem {
   private lastProgressValues: Map<string, number> = new Map();
   private feedbackQueue: FeedbackMessage[] = [];
   private isInitialized: boolean = false;
+  private shownHints = new Set<string>();
 
   constructor() {
     this.createFeedbackUI();
@@ -83,6 +84,24 @@ export class AssignmentFeedbackSystem {
       message: `🚀 Assignment Started: ${assignment.name}`,
       priority: 'high',
       duration: 4000
+    });
+
+    // Show initial hints for all objectives
+    assignment.objectives.forEach((objective, index) => {
+      const hintId = `objective_start_hint_${objective.id}`;
+      if (!this.shownHints.has(hintId)) {
+        setTimeout(() => {
+          this.showFeedback({
+            id: hintId,
+            type: 'hint',
+            message: `💡 Ready to start? Focus on: ${objective.description}`,
+            priority: 'medium',
+            duration: 5000,
+            objectiveId: objective.id
+          });
+          this.shownHints.add(hintId);
+        }, 1000 + index * 2000);
+      }
     });
 
     // Show initial hints
@@ -172,7 +191,6 @@ export class AssignmentFeedbackSystem {
       </div>
 
       <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 11px; color: #ccc;">
-        ⏱️ Time: ${this.formatElapsedTime(progress.startTime)}<br>
         📊 Cut: ${progress.volumeData.totalCut.toFixed(1)} yd³ | Fill: ${progress.volumeData.totalFill.toFixed(1)} yd³
       </div>
     `;
@@ -224,18 +242,7 @@ export class AssignmentFeedbackSystem {
       const objective = progress.objectives.find(obj => obj.id === indicator.objectiveId);
       if (!objective) return;
 
-      // Provide specific feedback based on objective type and progress
-      if (indicator.status === 'not_started' && this.getElapsedMinutes(progress.startTime) > 2 && !this.hasRecentFeedback(`objective_not_started_${objective.id}`)) {
-        this.showFeedback({
-          id: `objective_not_started_${objective.id}`,
-          type: 'hint',
-          message: `💭 Haven't started: ${objective.description}`,
-          priority: 'medium',
-          duration: 5000,
-          objectiveId: objective.id
-        });
-      }
-
+      // Skip not_started feedback, as it's handled at start
       if (indicator.trend === 'declining' && indicator.current > 20 && !this.hasRecentFeedback(`objective_declining_${objective.id}`)) {
         this.showFeedback({
           id: `objective_declining_${objective.id}`,
@@ -261,7 +268,6 @@ export class AssignmentFeedbackSystem {
 
     // Overall progress feedback
     const overallScore = Math.round(progress.currentScore);
-    const elapsedMinutes = this.getElapsedMinutes(progress.startTime);
     
     if (overallScore >= 90 && !this.hasRecentFeedback('excellent_progress')) {
       this.showFeedback({
@@ -271,7 +277,7 @@ export class AssignmentFeedbackSystem {
         priority: 'high',
         duration: 4000
       });
-    } else if (overallScore >= 70 && elapsedMinutes > 5 && !this.hasRecentFeedback('good_progress')) {
+    } else if (overallScore >= 70 && !this.hasRecentFeedback('good_progress')) {
       this.showFeedback({
         id: 'good_progress',
         type: 'success',
@@ -281,16 +287,7 @@ export class AssignmentFeedbackSystem {
       });
     }
 
-    // Time-based feedback
-    if (elapsedMinutes > assignment.estimatedTime * 0.8 && overallScore < 50 && !this.hasRecentFeedback('time_pressure')) {
-      this.showFeedback({
-        id: 'time_pressure',
-        type: 'warning',
-        message: '⏰ Time is running out! Focus on the most important objectives.',
-        priority: 'high',
-        duration: 5000
-      });
-    }
+    // Time-based feedback removed as per user request
 
     // Volume balance feedback
     const netMovement = Math.abs(progress.volumeData.totalCut - progress.volumeData.totalFill);
@@ -423,23 +420,6 @@ export class AssignmentFeedbackSystem {
   }
 
   /**
-   * Get elapsed time in minutes
-   */
-  private getElapsedMinutes(startTime: Date): number {
-    return (Date.now() - startTime.getTime()) / 60000;
-  }
-
-  /**
-   * Format elapsed time
-   */
-  private formatElapsedTime(startTime: Date): string {
-    const elapsed = this.getElapsedMinutes(startTime);
-    const minutes = Math.floor(elapsed);
-    const seconds = Math.floor((elapsed - minutes) * 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }
-
-  /**
    * Show assignment completion feedback
    */
   public showAssignmentCompleted(assignment: AssignmentConfig, progress: AssignmentProgress, passed: boolean): void {
@@ -459,5 +439,10 @@ export class AssignmentFeedbackSystem {
     setTimeout(() => {
       this.hideProgressContainer();
     }, 3000);
+  }
+
+  // Add reset method to clear shown hints when assignment changes
+  public resetHints(): void {
+    this.shownHints.clear();
   }
 } 

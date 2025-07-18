@@ -15,6 +15,7 @@ import { visualEnhancementSystem } from './visual-enhancements';
 import { responsiveDesignSystem } from './responsive-design';
 import { performanceOptimizer, performanceMonitorUI } from './performance-optimization';
 import { GestureControls, type GestureState } from './gesture-controls';
+import { ToolManager } from './tool-manager';
 
 // Global variables that need to be available before any functions run
 let isGameReady = false;
@@ -104,7 +105,7 @@ canvas.addEventListener('webglcontextrestored', (e) => {
 });
 
 // Create terrain
-const terrain = new Terrain(100, 100, 32, 32); // 100 feet x 100 feet
+const terrain = new Terrain(120, 120, 32, 32); // 120 feet = 40 yards x 40 yards
 
 // Set camera reference for zoom-independent arrow scaling
 terrain.setCameraReference(camera);
@@ -181,7 +182,7 @@ function addScaleReferences(scene: THREE.Scene): { markers: THREE.Group } {
 
 // Function to add permanent scale grid and dimension markers
 function addPermanentScaleGrid(scene: THREE.Scene, markerGroup: THREE.Group): void {
-  const terrainSize = 100; // 100ft x 100ft terrain
+  const terrainSize = 120; // 120ft = 40yd x 40yd terrain
   
   // Create distance markers at key points for scale reference
   for (let x = 0; x <= terrainSize; x += 50) {
@@ -271,13 +272,13 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Calculate camera distance for dynamic scaling
   const cameraDistance = camera.position.distanceTo(new THREE.Vector3(50, 0, 50)); // Center of terrain
   
-  // Determine corner position based on camera view (terrain spans 0,0 to 100,100)
+  // Determine corner position based on camera view (terrain spans 0,0 to 120,120)
   let cornerX = 0; // Near corner (origin)
   let cornerZ = 0; // Near corner (origin)
   
   // Adjust corner based on camera direction to show axes at visible corner
-  if (cameraDirection.x > 0) cornerX = 100;  // Switch to far corner X if looking from negative X
-  if (cameraDirection.z > 0) cornerZ = 100;  // Switch to far corner Z if looking from negative Z
+  if (cameraDirection.x > 0) cornerX = 120;  // Switch to far corner X if looking from negative X
+  if (cameraDirection.z > 0) cornerZ = 120;  // Switch to far corner Z if looking from negative Z
   
   const axisY = 2; // Height above terrain
   const zAxisLength = 20; // Shortened Z-axis to 20 feet
@@ -435,13 +436,13 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
     return sprite;
   }
   
-  // Create X-axis line (red) - full length across terrain (0 to 100) with dynamic segmentation
+  // Create X-axis line (red) - full length across terrain (0 to 120) with dynamic segmentation
   const xAxisStartPoint = new THREE.Vector3(0, axisY, cornerZ);
-  const xAxisEndPoint = new THREE.Vector3(100, axisY, cornerZ);
+  const xAxisEndPoint = new THREE.Vector3(120, axisY, cornerZ);
   createSegmentedAxisLine(xAxisStartPoint, xAxisEndPoint, 0xff0000, 'xAxis');
   
   // Calculate dynamic intervals for X-axis
-  const totalXSegments = Math.floor(100 / segmentSpacing);
+  const totalXSegments = Math.floor(120 / segmentSpacing);
   const targetLabels = 4; // Aim for 4 labels per axis
   const xLabelInterval = Math.max(1, Math.ceil(totalXSegments / targetLabels));
   const xSegmentInterval = Math.max(1, Math.ceil(totalXSegments / (targetLabels * 2))); // Up to 2x labels worth of segments
@@ -449,7 +450,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Add X-axis segment markings and labels
   let segmentCount = 0;
   let displayedSegmentCount = 0;
-  for (let x = 0; x <= 100; x += segmentSpacing) {
+  for (let x = 0; x <= 120; x += segmentSpacing) {
     
     // Only show segment if it passes the culling interval
     if (segmentCount % xSegmentInterval === 0) {
@@ -470,8 +471,9 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       // Add number label every other displayed segment (skip 0ft and 100ft)
       if (displayedSegmentCount % 2 === 0) {
         // Use actual coordinate value
-        if (x !== 0 && x !== 100) { // Skip 0ft and 100ft
-          const labelText = segmentSpacing >= 5 ? `${x}ft` : `${x}`;
+        if (x !== 0 && x !== 120) { // Skip 0yd and 40yd endpoints
+          const labelValue = (x / 3).toFixed(1); // Convert to yards
+          const labelText = segmentSpacing >= 5 ? `${labelValue}yd` : `${labelValue}`;
           const labelOffset = cornerZ > 0 ? -2 : 2;
           markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000', false)); // false = larger labels
         }
@@ -481,9 +483,9 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
     segmentCount++;
   }
   
-  // Create Z-axis line (green) - full length across terrain (0 to 100) with dynamic segmentation
+  // Create Z-axis line (green) - full length across terrain (0 to 120) with dynamic segmentation
   const zAxisStartPoint = new THREE.Vector3(cornerX, axisY, 0);
-  const zAxisEndPoint = new THREE.Vector3(cornerX, axisY, 100);
+  const zAxisEndPoint = new THREE.Vector3(cornerX, axisY, 120);
   createSegmentedAxisLine(zAxisStartPoint, zAxisEndPoint, 0x00ff00, 'zAxis');
   
   // Calculate dynamic intervals for Z-axis (same as X-axis)
@@ -493,7 +495,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Add Z-axis segment markings and labels
   segmentCount = 0;
   displayedSegmentCount = 0;
-  for (let z = 0; z <= 100; z += segmentSpacing) {
+  for (let z = 0; z <= 120; z += segmentSpacing) {
     
     // Only show segment if it passes the culling interval
     if (segmentCount % zSegmentInterval === 0) {
@@ -514,8 +516,9 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       // Add number label every other displayed segment (skip 0ft and 100ft)
       if (displayedSegmentCount % 2 === 0) {
         // Use actual coordinate value
-        if (z !== 0 && z !== 100) { // Skip 0ft and 100ft
-          const labelText = segmentSpacing >= 5 ? `${z}ft` : `${z}`;
+        if (z !== 0 && z !== 120) { // Skip 0yd and 40yd endpoints
+          const labelValue = (z / 3).toFixed(1); // Convert to yards
+          const labelText = segmentSpacing >= 5 ? `${labelValue}yd` : `${labelValue}`;
           const labelOffset = cornerX > 0 ? -2 : 2;
           markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00', false)); // false = larger labels
         }
@@ -542,8 +545,8 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Y-axis tick marks and labels removed - contour lines provide elevation information
 
   // Add main axis endpoint labels (simple axis names)
-  markerGroup.add(createTextMarker('X', 100 + 6, axisY + 2, cornerZ, '#ff0000'));
-  markerGroup.add(createTextMarker('Z', cornerX, axisY + 2, 100 + 6, '#00ff00'));
+  markerGroup.add(createTextMarker('X', 120 + 6, axisY + 2, cornerZ, '#ff0000'));
+  markerGroup.add(createTextMarker('Z', cornerX, axisY + 2, 120 + 6, '#00ff00'));
   markerGroup.add(createTextMarker('Y', cornerX - 4, axisY + zAxisLength + 3, cornerZ, '#0000ff'));
 }
 
@@ -699,6 +702,40 @@ const assignmentUI = new AssignmentUI(assignmentManager);
 // Make assignment objects globally available for debugging
 (window as any).assignmentManager = assignmentManager;
 (window as any).assignmentUI = assignmentUI;
+
+// Add debugging helper functions
+(window as any).checkAssignmentStatus = () => {
+  const assignment = assignmentManager.getCurrentAssignment();
+  const progress = assignmentManager.getProgress();
+  
+  if (!assignment || !progress) {
+    console.log("❌ No active assignment. Press 'A' to select one.");
+    return;
+  }
+  
+  console.log("📋 Current Assignment:", assignment.name);
+  console.log("🎯 Objectives:");
+  progress.objectives.forEach((obj, i) => {
+    console.log(`  ${i + 1}. ${obj.completed ? '✅' : '⏳'} ${obj.description}`);
+    console.log(`     Score: ${obj.score.toFixed(1)}% (Need 80%+ to complete)`);
+    if (obj.target && obj.target.width) {
+      console.log(`     Target area: ${obj.target.width}x${obj.target.height} ft at (${obj.target.x}, ${obj.target.z})`);
+      console.log(`     Tolerance: ±${obj.tolerance} ft`);
+    }
+  });
+  console.log("📊 Overall Score:", progress.currentScore.toFixed(1) + "%");
+  console.log("🗿 Planning Mode:", terrain.isInPlanningMode() ? "ENABLED (press Enter to apply changes)" : "DISABLED");
+  console.log("📏 Volume Data:", progress.volumeData);
+};
+
+(window as any).checkTerrain = () => {
+  const hasChanges = terrain.hasPendingChanges();
+  const planningMode = terrain.isInPlanningMode();
+  console.log("🗿 Terrain Status:");
+  console.log("  Planning Mode:", planningMode ? "ENABLED" : "DISABLED");
+  console.log("  Pending Changes:", hasChanges ? "YES (press Enter to apply)" : "NO");
+  console.log("  Volume Data:", terrain.calculateVolumeDifference());
+};
 
 // Create progress tracker
 const progressTracker = new ProgressTracker();
@@ -967,7 +1004,7 @@ function setupGameControls() {
   renderer.domElement.addEventListener('mousemove', event => {
     // Enhanced hover tooltips for terrain information AND operation preview
     // Hide tooltips when cut or fill tools are engaged (selected) OR when Ctrl is held (modification mode)
-    const currentToolName = toolManager.getCurrentToolName();
+    const currentToolName = precisionToolManager.getCurrentToolName();
     const isCutOrFillToolEngaged = currentToolName === 'cut' || currentToolName === 'fill';
     const isCtrlHeld = event.ctrlKey || event.metaKey;
     
@@ -1023,7 +1060,7 @@ function setupGameControls() {
         }
         
                 // Get current tool info for preview
-        const currentTool = toolManager.getCurrentTool();
+        const currentTool = precisionToolManager.getCurrentTool();
         const toolSettings = currentTool.getSettings();
         const toolAction = toolSettings.name === 'cut' ? 'Cut (Remove Earth)' : 'Fill (Add Earth)';
         
@@ -1036,14 +1073,14 @@ function setupGameControls() {
         
         tooltip.innerHTML = `
           <div style="color: ${zoneColor}; font-weight: bold; margin-bottom: 4px;">🎯 ${zoneType}</div>
-          <div><strong>Elevation:</strong> ${height.toFixed(2)} ft</div>
-          <div><strong>Relative:</strong> ${relativeHeight > 0 ? '+' : ''}${relativeHeight.toFixed(2)} ft</div>
+          <div><strong>Elevation:</strong> ${(height / 3).toFixed(2)} yd</div>
+          <div><strong>Relative:</strong> ${relativeHeight > 0 ? '+' : ''}${(relativeHeight / 3).toFixed(2)} yd</div>
           <div><strong>Material:</strong> ${layerInfo}</div>
           <div style="margin-top: 4px; padding: 4px; background: rgba(${toolSettings.color.slice(1).match(/.{2}/g)!.map(h => parseInt(h, 16)).join(',')}, 0.2); border-radius: 3px; border-left: 3px solid ${toolSettings.color};">
             <div style="font-weight: bold; color: ${toolSettings.color};">${toolSettings.icon} ${toolSettings.displayName}</div>
             <div style="font-size: 10px; color: #ccc;">Preview: ${toolAction} Volume (Ctrl+drag to apply)</div>
             <div style="font-size: 10px; color: #ccc;">
-              Size: ${terrain.getBrushSettings().size.toFixed(1)}ft | 
+              Size: ${(terrain.getBrushSettings().size / 3).toFixed(1)}yd | 
               Strength: ${(terrain.getBrushSettings().strength * 100).toFixed(0)}% | 
               Shape: ${terrain.getBrushSettings().shape === 'circle' ? '○ Circle' : '□ Square'} |
               Falloff: ${terrain.getBrushSettings().falloff}
@@ -1090,7 +1127,7 @@ function setupGameControls() {
             const direction = lastMousePosition ? point.clone().sub(lastMousePosition).normalize() : undefined;
             
             // Apply current tool
-            toolManager.applyCurrentTool(
+            precisionToolManager.applyCurrentTool(
               point.x, 
               point.z, 
               modificationStrength, 
@@ -1101,15 +1138,15 @@ function setupGameControls() {
             terrain.saveModificationToDatabase(
               point.x,
               point.z,
-              toolManager.getCurrentToolName() === 'cut' ? -modificationStrength : modificationStrength,
-              toolManager.getCurrentToolName()
+              precisionToolManager.getCurrentToolName() === 'cut' ? -modificationStrength : modificationStrength,
+              precisionToolManager.getCurrentToolName()
             );
             
             // Track tool usage for assignment
-            assignmentManager.addToolUsage(toolManager.getCurrentToolName());
+            assignmentManager.addToolUsage(precisionToolManager.getCurrentToolName());
             
             // Track tool usage for progress
-            progressTracker.recordToolUsage(toolManager.getCurrentToolName());
+            progressTracker.recordToolUsage(precisionToolManager.getCurrentToolName());
             
             // Track volume movement for progress
             const volumeData = terrain.calculateVolumeDifference();
@@ -1275,11 +1312,11 @@ function setupGameControls() {
         }
         break;
       case 'q':
-        toolManager.setCurrentTool('cut');
+        precisionToolManager.setCurrentTool('cut');
         updateToolDisplay();
         break;
       case 'e':
-        toolManager.setCurrentTool('fill');
+        precisionToolManager.setCurrentTool('fill');
         updateToolDisplay();
         break;
       case 'r':
@@ -1400,30 +1437,6 @@ function setupGameControls() {
             // Force immediate volume update to show new cumulative totals
             updateVolumeDisplay(true);
             
-            // Show brief notification that volumes have been updated
-            const volumeNotification = document.createElement('div');
-            volumeNotification.style.cssText = `
-              position: fixed;
-              bottom: 20px;
-              right: 20px;
-              background: #4CAF50;
-              color: white;
-              padding: 10px 15px;
-              border-radius: 4px;
-              z-index: 1001;
-              font-size: 14px;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-              animation: slideInOut 2s ease-in-out;
-            `;
-            volumeNotification.innerHTML = '📊 Volume totals updated!';
-            document.body.appendChild(volumeNotification);
-            
-            setTimeout(() => {
-              if (document.body.contains(volumeNotification)) {
-                document.body.removeChild(volumeNotification);
-              }
-            }, 2000);
-            
             hideProcessingIndicator();
           }, 10);
         }
@@ -1474,7 +1487,7 @@ function setupGameControls() {
     targetElevationSlider.addEventListener('input', () => {
       const elevation = parseFloat(targetElevationSlider.value);
       terrain.setTargetElevation(elevation);
-      targetElevationValue.textContent = `${elevation.toFixed(1)} ft`;
+      targetElevationValue.textContent = `${(elevation / 3).toFixed(1)} yd`;
     });
   }
 
@@ -1494,7 +1507,7 @@ function setupGameControls() {
     contourIntervalSlider.addEventListener('input', () => {
       const interval = parseFloat(contourIntervalSlider.value);
       terrain.setBaseContourInterval(interval);
-      contourIntervalValue.textContent = `${interval.toFixed(1)} ft`;
+      contourIntervalValue.textContent = `${(interval / 3).toFixed(1)} yd`;
       updateContourStats();
     });
   }
@@ -1513,11 +1526,11 @@ function setupGameControls() {
     const toolName = btn.getAttribute('data-tool');
     if (toolName) {
       btn.addEventListener('click', () => {
-        toolManager.setCurrentTool(toolName);
+        precisionToolManager.setCurrentTool(toolName);
         updateToolDisplay();
         
         // Update brush settings based on tool defaults
-        const tool = toolManager.getCurrentTool();
+        const tool = precisionToolManager.getCurrentTool();
         const settings = tool.getSettings();
         terrain.setBrushSettings({
           size: settings.defaultSize,
@@ -1580,9 +1593,8 @@ function setupGameControls() {
         padding: 15px;
         border-radius: 4px;
         z-index: 1001;
-        font-family: Arial, sans-serif;
-        max-width: 300px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        font-size: 14px;
+        animation: slideInOut 2s ease-in-out;
       `;
       
       if (success) {
@@ -1760,7 +1772,43 @@ function setupUI() {
       <button id="toggle-menu-btn" style="position: absolute; top: 5px; right: 5px; background: #666; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer;">Hide Menu</button>
       <h2>CutFill - Enhanced Terrain System</h2>
       
-              <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+      <!-- Current Assignment Objective -->
+      <div id="current-objective-display" style="
+        margin-bottom: 15px; 
+        padding: 12px; 
+        background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(33, 150, 243, 0.2)); 
+        border: 2px solid rgba(76, 175, 80, 0.6); 
+        border-radius: 8px;
+        font-size: 14px;
+        color: #E8F5E8;
+        text-align: center;
+        font-weight: bold;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        display: none;
+      ">
+        <div style="margin-bottom: 4px; color: #4CAF50; font-size: 12px;">🎯 CURRENT OBJECTIVE</div>
+        <div id="objective-text">Select an assignment to begin</div>
+      </div>
+      
+      <div class="panel-section" style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+        <strong>Foundation Preparation</strong>
+        <div id="assignment-objectives" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <h4 style="margin: 0 0 10px 0; color: #E8F5E8;">Objectives:</h4>
+          <ul id="objectives-list" style="list-style: none; padding: 0; margin: 0; font-size: 13px; color: #ccc;">
+            <!-- Objectives will be dynamically inserted here -->
+          </ul>
+        </div>
+        <div style="display: flex; gap: 8px; font-size: 10px; margin-bottom: 4px;">
+          <span style="background: rgba(76, 175, 80, 0.2); color: #4CAF50; padding: 2px 6px; border-radius: 10px; border: 1px solid #4CAF50;">
+            ⭐ Difficulty: 1/5
+          </span>
+          <span style="background: rgba(33, 150, 243, 0.2); color: #2196F3; padding: 2px 6px; border-radius: 10px; border: 1px solid #2196F3;">
+            📂 foundation
+          </span>
+        </div>
+      </div>
+      
+      <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
           <strong>User:</strong> <span id="user-info">Loading...</span><br>
           <strong>Connection:</strong> <span id="connection-status">Connecting...</span><br>
           <strong>Session:</strong> <span id="session-status">Not in session</span><br>
@@ -1941,8 +1989,8 @@ function setupUI() {
       <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
         <strong>Terrain Stats:</strong><br>
         <div id="terrain-stats">
-          <strong>Dimensions:</strong> 100ft × 100ft<br>
-          <strong>Work Area:</strong> 10,000 ft²<br>
+          <strong>Dimensions:</strong> 40 × 40 yd<br>
+          <strong>Work Area:</strong> 1,600 yd²<br>
           Vertices: 0<br>
           Triangles: 0
         </div>
@@ -2030,7 +2078,7 @@ function setupUI() {
     targetElevationSlider.addEventListener('input', () => {
       const elevation = parseFloat(targetElevationSlider.value);
       terrain.setTargetElevation(elevation);
-      targetElevationValue.textContent = `${elevation.toFixed(1)} ft`;
+      targetElevationValue.textContent = `${(elevation / 3).toFixed(1)} yd`;
     });
   }
 
@@ -2088,30 +2136,6 @@ function setupUI() {
       // Force immediate volume update to show new cumulative totals
       updateVolumeDisplay(true);
       
-      // Show brief notification that volumes have been updated
-      const volumeNotification = document.createElement('div');
-      volumeNotification.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: #4CAF50;
-        color: white;
-        padding: 10px 15px;
-        border-radius: 4px;
-        z-index: 1001;
-        font-size: 14px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        animation: slideInOut 2s ease-in-out;
-      `;
-      volumeNotification.innerHTML = '📊 Volume totals updated!';
-      document.body.appendChild(volumeNotification);
-      
-      setTimeout(() => {
-        if (document.body.contains(volumeNotification)) {
-          document.body.removeChild(volumeNotification);
-        }
-      }, 2000);
-      
       hideProcessingIndicator();
     }, 10);
   });
@@ -2123,7 +2147,7 @@ function setupUI() {
   setInterval(refreshPlanButtons, 1000);
   
   // Initialize volume display to show 0,0,0 on fresh load
-  updateVolumeDisplay(true); // Force immediate update
+  updateVolumeDisplay(true);
 }
 
 // Enhanced real-time volume tracking
@@ -2252,7 +2276,7 @@ function startRealTimeVolumeUpdates() {
 
 // Preview volume calculation for operation planning
 function calculatePreviewVolume(point: THREE.Vector3): { cutPreview: number; fillPreview: number } {
-  const currentTool = toolManager.getCurrentTool();
+  const currentTool = precisionToolManager.getCurrentTool();
   const toolSettings = currentTool.getSettings();
   const brushSettings = terrain.getBrushSettings();
   
@@ -2286,8 +2310,8 @@ function calculatePreviewVolume(point: THREE.Vector3): { cutPreview: number; fil
 function updateToolDisplay() {
   const toolStatus = document.getElementById('tool-status');
   const toolDescription = document.getElementById('tool-description');
-  const currentTool = toolManager.getCurrentTool();
-  const currentToolName = toolManager.getCurrentToolName();
+  const currentTool = precisionToolManager.getCurrentTool();
+  const currentToolName = precisionToolManager.getCurrentToolName();
   
   if (toolStatus) {
     toolStatus.innerHTML = `Current Tool: ${currentTool.getIcon()} ${currentTool.getDisplayName()}`;
@@ -2873,7 +2897,7 @@ function showOperationPreview(point: THREE.Vector3): void {
   
   hideOperationPreview(); // Remove existing preview
   
-  const currentTool = toolManager.getCurrentTool();
+  const currentTool = precisionToolManager.getCurrentTool();
   const toolSettings = currentTool.getSettings();
   const brushSettings = terrain.getBrushSettings();
   
@@ -3032,3 +3056,5 @@ function initializeAccessibilityFeatures() {
   // The actual accessibility features are handled by uiPolishSystem
   console.log('Accessibility features initialized');
 }
+
+  const toolManager = new ToolManager(terrain);

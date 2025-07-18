@@ -1,0 +1,199 @@
+Description: Competitive level design patterns and implementation guidelines for CutFill's multi-level gameplay system
+Globs: src/src/assignments.ts, src/src/assignment-ui.ts, src/src/multiplayer-enhanced.ts, server/server.js
+
+# Competitive Level Design Patterns for CutFill
+
+## Level System Architecture
+
+### Assignment-to-Level Transformation
+- **levelNumber**: Sequential integer (1, 2, 3...) derived from difficulty and creation order
+- **idealOperations**: Hand-authored par count for each level (typically 15-50 operations)
+- **levelVersion**: Version number for future level updates (start with 1)
+- **isCompetitive**: Boolean flag identifying existing competitive assignments
+
+### Sequential Progression Rules
+- Level 1 is always unlocked by default
+- Completing level N unlocks level N+1
+- Minimum score threshold for unlocking: 60 points
+- Levels are sorted by difficulty, then by estimated completion time
+- No level skipping - linear progression enforced
+
+## Scoring System Framework
+
+### Multi-Factor Scoring (Total: 100 points)
+- **Objective Score (50%)**: Assignment-specific goals completion
+- **Net-Zero Score (30%)**: Cut/fill volume balance (100 points = perfect balance)
+- **Operations Efficiency (20%)**: (idealOperations / actualOperations) * 100
+
+### Server-Side Validation
+- Client score tolerance: 5% deviation allowed
+- Server recalculates scores using identical algorithms
+- Anti-cheat measures: bounds checking, rate limiting, impossible score detection
+- All scores stored with `server_validated = true` flag
+
+## Competitive vs Practice Mode Design
+
+### Practice Mode Characteristics
+- Focus on skill development and learning
+- No XP rewards (encourages experimentation)
+- Results stored in database with `is_practice = true`
+- Individual progression without ranking pressure
+- Unlimited attempts without competitive pressure
+
+### Competitive Mode Characteristics
+- XP rewards based on final score
+- Podium bonuses: +20% XP (1st place), +10% XP (2nd place)
+- Real-time leaderboards during matches
+- Minimum 2 players required for competitive sessions
+- Results contribute to global leaderboards
+
+## Database Schema Patterns
+
+### level_attempts Table Structure
+```sql
+- id: UUID (primary key)
+- user_id: UUID (foreign key to users)
+- level_id: TEXT (assignment ID used as level identifier)
+- level_version: INTEGER (for future level updates)
+- score: INTEGER (final calculated score)
+- objective_points: INTEGER (50% weight component)
+- net_zero_points: INTEGER (30% weight component)
+- operations_points: INTEGER (20% weight component)
+- operations_count: INTEGER (actual operations performed)
+- ideal_operations: INTEGER (par count for efficiency calculation)
+- net_volume: DECIMAL (cut/fill balance in cubic yards)
+- duration_seconds: INTEGER (completion time)
+- is_practice: BOOLEAN (true for practice, false for competitive)
+- server_validated: BOOLEAN (true when server-calculated)
+```
+
+### Optimized Indexing
+- Leaderboard queries: `idx_level_attempts_leaderboard (level_id, score DESC, is_practice)`
+- User progress: `idx_level_attempts_user (user_id, completed_at)`
+- Competitive filtering: `idx_level_attempts_competitive (level_id, is_practice, score DESC)`
+
+## UI/UX Design Patterns
+
+### Level Selection Interface
+- Professional level cards with clear status indicators
+- Lock states: 🔒 (Locked), ✅ (Unlocked), 🏆 (Competitive Available)
+- Dual-mode buttons: "Practice" (blue) and "Compete" (gold/orange)
+- Par operations display: "Par: X operations" for efficiency targets
+- Clear unlock requirements: "Complete Level N-1 to unlock"
+
+### Real-Time Competition Display
+- Live leaderboard panel during competitive matches
+- Operation count display with efficiency percentage
+- Score breakdown: Objectives | Net-Zero | Operations | Total
+- Real-time updates every 2 seconds during active competition
+- Podium display immediately upon completion
+
+## Server-Side Implementation Patterns
+
+### Terrain Modification Validation
+```javascript
+// Validation rules enforced server-side
+- Bounds checking: 0 ≤ x,z ≤ 100 (terrain limits)
+- Height change limits: |heightChange| ≤ 20 feet per operation
+- Rate limiting: minimum 50ms between modifications
+- Data validation: number type checking for all coordinates
+```
+
+### Anti-Cheat Measures
+- Server-side score recalculation for all submissions
+- Impossible score detection (> 100 points per category)
+- Rapid-fire operation detection and throttling
+- Terrain modification bounds enforcement
+- Network request validation and sanitization
+
+## Performance Optimization Guidelines
+
+### Competitive Play Requirements
+- Maintain 60+ FPS during competitive sessions (currently achieving 121 FPS)
+- Optimize leaderboard queries with proper indexing
+- Efficient real-time score updates (2-second intervals)
+- Memory management during intensive competitive play
+- Network optimization for real-time synchronization
+
+### Database Optimization
+- Use indexed queries for leaderboard retrieval
+- Limit leaderboard displays to top 10-20 entries
+- Implement query result caching where appropriate
+- Regular database maintenance for optimal performance
+
+## Level Design Guidelines
+
+### Difficulty Progression
+- Start with simple foundation preparation (Level 1)
+- Gradually introduce complex geometric requirements
+- Increase terrain complexity and constraints progressively
+- Balance cut/fill requirements for fairness
+- Consider tool variety and technique requirements
+
+### Competitive Balance
+- Par operations should be achievable but challenging
+- Test ideal operation counts with multiple approaches
+- Ensure levels can be completed by different skill levels
+- Avoid overly punitive efficiency requirements
+- Balance speed vs precision in competitive scenarios
+
+### Educational Value
+- Each level should teach specific earthworks concepts
+- Progressive skill building across the level sequence
+- Clear learning objectives for each level
+- Real-world applicability of techniques taught
+- Appropriate complexity for target age groups
+
+## Error Handling Patterns
+
+### Server-Side Error Management
+- Graceful handling of database connection failures
+- Fallback scoring when server validation fails
+- Proper error logging for debugging and monitoring
+- User-friendly error messages for client display
+- Automatic retry mechanisms for transient failures
+
+### Client-Side Resilience
+- Handle server validation failures gracefully
+- Provide fallback UI states for network issues
+- Clear feedback when competitive features are unavailable
+- Offline practice mode when server is unreachable
+- Progress preservation during connection interruptions
+
+## Testing and Validation
+
+### Competitive System Testing
+- Level progression validation (unlock sequence)
+- Score calculation accuracy across all components
+- Real-time multiplayer synchronization testing
+- Disconnect and reconnection handling
+- Performance testing under competitive load
+
+### Anti-Cheat Validation
+- Test server-side score validation tolerances
+- Verify bounds checking for terrain modifications
+- Rate limiting effectiveness testing
+- Impossible score detection validation
+- Network security and input sanitization testing
+
+## Future Enhancement Patterns
+
+### Scalability Considerations
+- Design for additional competitive modes
+- Support for tournament-style competitions
+- Seasonal leaderboard resets and archives
+- Advanced analytics and performance tracking
+- Integration with educational institution systems
+
+### Level System Evolution
+- Support for level updates via version numbers
+- A/B testing for level difficulty balancing
+- Community-created level support framework
+- Advanced level editor for educators
+- Adaptive difficulty based on player performance
+
+This rule file provides comprehensive guidelines for maintaining and extending the competitive level system while preserving the educational value and technical excellence of the CutFill platform.
+description:
+globs:
+alwaysApply: false
+---

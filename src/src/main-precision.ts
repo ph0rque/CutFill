@@ -177,7 +177,7 @@ function addScaleReferences(scene: THREE.Scene): { markers: THREE.Group } {
 
 // Function to add coordinate markers at terrain perimeter
 function addCoordinateMarkers(scene: THREE.Scene): void {
-  const terrainSize = 100; // 100ft x 100ft terrain
+  const terrainSize = 120; // 120ft = 40yd x 40yd terrain
   
   // Create distance markers at key points for scale reference
   for (let x = 0; x <= terrainSize; x += 50) {
@@ -223,7 +223,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Calculate camera distance for dynamic scaling
   const cameraDistance = camera.position.distanceTo(new THREE.Vector3(50, 0, 50)); // Center of terrain
   
-  // Determine corner position based on camera view (terrain spans 0,0 to 100,100)
+  // Determine corner position based on camera view (terrain spans 0,0 to 120,120)
   let cornerX = 0; // Near corner (origin)
   let cornerZ = 0; // Near corner (origin)
   
@@ -283,7 +283,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Create X-axis line (red) - full length across terrain
   const xAxisGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(0, axisY, cornerZ),
-    new THREE.Vector3(100, axisY, cornerZ)
+    new THREE.Vector3(120, axisY, cornerZ)
   ]);
   const xAxisMaterial = new THREE.LineBasicMaterial({ 
     color: 0xff0000, 
@@ -295,7 +295,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   markerGroup.add(xAxisLine);
   
   // Add X-axis segment markings and labels
-  for (let x = 0; x <= 100; x += segmentSpacing) {
+  for (let x = 0; x <= 120; x += segmentSpacing) {
     if (x % (segmentSpacing * 2) === 0) { // Every other segment gets a tick
       const tickHeight = 1;
       const tickGeometry = new THREE.BufferGeometry().setFromPoints([
@@ -311,9 +311,10 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       tickLine.renderOrder = 1001;
       markerGroup.add(tickLine);
       
-      // Add number labels (skip 0ft and 100ft)
-      if (x !== 0 && x !== 100) {
-        const labelText = segmentSpacing >= 5 ? `${x}ft` : `${x}`;
+      // Add number labels (skip 0yd and 40yd endpoints)
+      if (x !== 0 && x !== 120) {
+        const labelValue = (x / 3).toFixed(1); // Convert to yards
+        const labelText = segmentSpacing >= 5 ? `${labelValue}yd` : `${labelValue}`;
         const labelOffset = cornerZ > 0 ? -2 : 2;
         markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000'));
       }
@@ -323,7 +324,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   // Create Z-axis line (green) - full length across terrain
   const zAxisGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(cornerX, axisY, 0),
-    new THREE.Vector3(cornerX, axisY, 100)
+    new THREE.Vector3(cornerX, axisY, 120)
   ]);
   const zAxisMaterial = new THREE.LineBasicMaterial({ 
     color: 0x00ff00, 
@@ -335,7 +336,7 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   markerGroup.add(zAxisLine);
   
   // Add Z-axis segment markings and labels
-  for (let z = 0; z <= 100; z += segmentSpacing) {
+  for (let z = 0; z <= 120; z += segmentSpacing) {
     if (z % (segmentSpacing * 2) === 0) { // Every other segment gets a tick
       const tickHeight = 1;
       const tickGeometry = new THREE.BufferGeometry().setFromPoints([
@@ -351,9 +352,10 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
       tickLine.renderOrder = 1001;
       markerGroup.add(tickLine);
       
-      // Add number labels (skip 0ft and 100ft)
-      if (z !== 0 && z !== 100) {
-        const labelText = segmentSpacing >= 5 ? `${z}ft` : `${z}`;
+      // Add number labels (skip 0yd and 40yd endpoints)
+      if (z !== 0 && z !== 120) {
+        const labelValue = (z / 3).toFixed(1); // Convert to yards
+        const labelText = segmentSpacing >= 5 ? `${labelValue}yd` : `${labelValue}`;
         const labelOffset = cornerX > 0 ? -2 : 2;
         markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00'));
       }
@@ -375,8 +377,8 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   markerGroup.add(yAxisLine);
 
   // Add main axis endpoint labels
-  markerGroup.add(createTextMarker('X', 100 + 6, axisY + 2, cornerZ, '#ff0000'));
-  markerGroup.add(createTextMarker('Z', cornerX, axisY + 2, 100 + 6, '#00ff00'));
+  markerGroup.add(createTextMarker('X', 120 + 6, axisY + 2, cornerZ, '#ff0000'));
+  markerGroup.add(createTextMarker('Z', cornerX, axisY + 2, 120 + 6, '#00ff00'));
   markerGroup.add(createTextMarker('Y', cornerX - 4, axisY + axisLength + 3, cornerZ, '#0000ff'));
 }
 

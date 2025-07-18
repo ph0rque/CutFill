@@ -1,101 +1,109 @@
 # Active Context
 
-## Current Focus
+## Current Focus: **TERRAIN DIMENSIONS UPDATED TO EVEN YARD NUMBERS** ✅
 
-### ✅ COMPLETED: Precision Cut & Fill System Implementation
+### Just Completed: Even Terrain Dimensions 
+The CutFill game terrain has been updated to use more even numbers in yards: **40×40 yards lot with 10 yard depth**, making calculations and measurements more intuitive for professional use.
 
-#### Revolutionary UI Workflow Successfully Deployed
-- **Complete System Overhaul**: ✅ Successfully replaced brush-based tools with precision geometry-based operations
-- **Six-Stage Workflow**: ✅ Direction → Magnitude → Area Mode → Drawing → Cross-Section → Preview
-- **Professional Planning Interface**: ✅ Step-by-step guided workflow for precise earthworks operations
-- **Real-time 3D Preview**: ✅ Visual preview of operations before execution working correctly
-- **Geometric Precision**: ✅ Polygon and polyline area definition with exact measurements implemented
+---
 
-#### New Precision Tool Architecture - FULLY OPERATIONAL
-- **PrecisionToolManager**: ✅ Core workflow state management and geometric operations
-- **PrecisionUI**: ✅ Comprehensive UI component with progress tracking and guided steps
-- **Geometry-Based Operations**: ✅ Mathematical precision replacing brush modifications
-- **Cross-Section Profiles**: ✅ Straight (90°), curved (radius=depth/2), and angled (45°) wall options
-- **Smart Elevation Calculation**: ✅ Automatic highest/lowest point detection for cut/fill operations
+## Key Changes in This Session
 
-#### Workflow Implementation - TESTED AND WORKING
-1. **Direction Selection**: ✅ Clear emphasis on cut (down) vs fill (up) with visual distinction
-2. **Magnitude Configuration**: ✅ Relative depth/height specification with preset and custom values
-3. **Area Definition**: ✅ Working correctly
-   - **Polygon Mode**: ✅ Click vertices to define custom shapes with intersection handling
-   - **Polyline Mode**: ✅ Linear excavation with visual and numeric thickness controls
-4. **Cross-Section Setup**: ✅ Wall type selection and deepest point positioning
-5. **3D Preview**: ✅ Real-time visualization with translucent operation preview
-6. **Execution**: ✅ One-click application with volume tracking integration
+### 📏 **Terrain Dimension Standardization** (Just Completed)
+**Problem**: Previous terrain was 33.3×33.3 yards (100×100 feet), creating awkward fractional measurements.
 
-#### Technical Integration - SUCCESSFULLY RESOLVED
-- **Terrain Integration**: ✅ Added `modifyHeightAtPosition()` method for precise vertex manipulation
-- **Volume Tracking**: ✅ Maintained cubic yard display and red/blue color scheme
-- **Simplified Main Loop**: ✅ Created `main-precision.ts` focused on new workflow
-- **Event-Driven Architecture**: ✅ Custom events for workflow state synchronization
-- **Geometric Algorithms**: ✅ Point-in-polygon testing, line segment distance calculations
-- **Rendering Issues**: ✅ Resolved black screen issue with improved camera positioning and lighting
-- **Import/Export Issues**: ✅ Fixed TypeScript interface imports with proper type-only imports
+**Solution Implemented**:
+- **Lot Size**: Updated to exactly **40×40 yards** (120×120 feet)
+- **Lot Depth**: Updated to exactly **10 yards** (30 feet) 
+- **Work Area**: Now a clean **1,600 square yards** (vs previous 1,111 yd²)
+- **Volume**: Maximum excavation now **16,000 cubic yards** capacity
 
-#### User Experience - VALIDATED
-- **Intuitive Workflow**: ✅ Users guided through each step with progress indicators
-- **Professional Interface**: ✅ CAD-like precision tools working correctly
-- **Real-time Feedback**: ✅ Visual previews and volume calculations operational
-- **Camera Controls**: ✅ Mac-optimized controls working (left-drag rotate, scroll zoom)
-- **Keyboard Shortcuts**: ✅ All shortcuts functional (Enter, Escape, R, G, D for debug)
+### 🔧 **Technical Updates**:
+1. **Terrain Class**: Updated constructor to use 120×120 internal units
+2. **Coordinate System**: All hardcoded references updated (axis ranges, bounds checking, center points)
+3. **UI Displays**: Updated terrain stats to show "40 × 40 yd" and "1,600 yd²"
+4. **Database Migration**: Created migration to update existing terrain configurations
+5. **API Integration**: Updated terrain save/load operations to use new dimensions
 
-### STABLE FEATURES: Complete Cut/Fill Visualization System
-- **Cut Visualization**: Red semitransparent overlay (50% opacity) showing original terrain ONLY in excavated areas
-- **Fill Visualization**: Blue semitransparent overlay showing filled volume ONLY in areas with added material
-- **Auto-Enabled on Modifications**: Overlays are hidden on fresh terrain but automatically enabled when cut/fill operations occur
-- **Selective Overlay Display**: Overlays only appear where actual cut/fill operations have occurred (>0.1 ft change)
-- **Smart Arrow Positioning**: Cut arrows (red, 6.0 length) positioned inside excavated volume, fill arrows (blue, 6.0 length) positioned inside filled volume
-- **Grayscale Terrain**: Surface and walls use height-based grayscale from #444 (deep/dark) to #DDD (high/light)
-- **Flat Shading**: All materials use MeshBasicMaterial for minimal lighting and clean technical appearance
-- **Dynamic Updates**: Both overlays and grayscale coloring update in real-time as terrain is modified
-- **Enhanced Visibility**: Overlays positioned higher above terrain (0.5-0.6 units) for better visibility
-- **UI Controls**: "Show Original" and "Show Fill" toggle buttons (green when hidden, colored when shown) with automatic state synchronization
-- **Technical**: Uses RGBA vertex colors with alpha transparency for precise selective visibility
+### 🎯 **User Experience Benefits**:
+- **Cleaner Numbers**: All measurements now use whole or half-yard increments
+- **Professional Standards**: 40×40 yard lots are common in construction industry
+- **Easier Calculations**: Volume calculations work with round numbers
+- **Consistent Display**: All UI elements now show exact yard measurements
 
-### Previous Enhancement: Dynamic Volume Updates After Save Operations
-- **Forced Volume Updates**: Volume display immediately updates after each Save/Enter operation with cumulative totals
-- **Visual Confirmation**: Green notification "📊 Volume totals updated!" appears after each save to confirm update
-- **Real-time Accumulation**: Cut and fill volumes now properly accumulate with each executed plan
-- **Immediate Feedback**: Users see updated volumes instantly after committing planned operations
-- **Dual Implementation**: Works consistently for both Save button clicks and Enter key presses
+---
 
-### Previous Fix: Volume Calculation Initialization 
-- **Zero Initialization**: Volume display now properly shows 0.00 yd³ for cut and fill on fresh page load
-- **Precision Handling**: Added 0.001 yd³ threshold to eliminate floating point precision noise
-- **Forced Update**: Initial volume display update called during game initialization
-- **Negative Value Protection**: Math.max(0, value) ensures cut/fill volumes never show negative
-- **Clean Fresh State**: Unmodified terrain now correctly displays 0.00 cut, 0.00 fill, 0.00 net
+## Previous Achievements
 
-### Next Priorities
-1. ✅ **User Testing**: Successfully tested the complete precision workflow
-2. **Feature Enhancements**: Consider additional cross-section profiles or advanced measurement tools
-3. **User Experience**: Gather feedback on workflow efficiency and usability
-4. **Performance**: Monitor geometric operations performance with complex shapes
+### 🌍 **Terrain Persistence System** (Complete)
+**Problem Solved**: Previously, each level generated random terrain, making it difficult for players to develop strategies and compare performance.
 
-## Implementation Notes
+**Solution Implemented**:
+1. **Database Schema**: Created `level_terrains` table with JSONB storage for terrain data
+2. **Server API**: 6 comprehensive endpoints for terrain management:
+   - `GET /api/terrain/:levelId` - Load terrain for level
+   - `POST /api/terrain/save` - Save new terrain configuration  
+   - `PUT /api/terrain/:terrainId` - Update existing terrain
+   - `DELETE /api/terrain/:terrainId` - Delete terrain configuration
+   - `GET /api/terrain/list/:levelId` - List all terrains for level
+3. **Frontend Integration**: Modified `AssignmentManager` to load saved terrains
+4. **Terrain Class**: Added server persistence methods
+5. **Default Configurations**: Pre-populated terrains for levels 1-3
 
-### Revolutionary Architecture Changes - COMPLETED
-- **Precision Tools**: ✅ Complete replacement of brush-based modification system
-- **Workflow State Management**: ✅ Event-driven architecture with six distinct stages
-- **Geometric Operations**: ✅ Mathematical precision for polygon and polyline operations
-- **Cross-Section Modeling**: ✅ Parametric wall profiles with configurable geometry
-- **Real-time Preview**: ✅ 3D visualization of planned operations before execution
+### 📏 **Yard Measurement Conversion** (Complete)
+**Change Made**: Converted all terrain measurements from feet to yards (1 yard = 3 feet) for professional consistency.
 
-### System Architecture - PRODUCTION READY
-- **Terrain**: Solid 3D blocks with Y-up coordinate system, 100ft x 100ft plots
-- **Materials**: Realistic layered geology (topsoil, subsoil, clay, rock) visible in cross-section
-- **Controls**: Mac-optimized with trackpad gestures (two-finger zoom, left-drag rotate)
-- **Multiplayer**: WebSocket-based real-time collaboration ready
-- **Performance**: Optimized for precise geometric operations and real-time preview updates
+**Updated Components**:
+- **Terrain Generation**: All height variations now in yards (±0.5 to ±3.33 yards)
+- **Material Layers**: Depths converted (topsoil: 0.08 yards, subsoil: 0.92 yards, etc.)
+- **Database Configs**: Updated default terrain descriptions and parameters
+- **UI Labels**: All depth/height displays show yard measurements
+- **Cut/Fill Limits**: Maximum operations now 6.67 yards (was 20 feet)
 
-### Technical Achievements
-- **Import Resolution**: Fixed TypeScript interface imports using proper `import type` syntax
-- **Rendering Pipeline**: Resolved black screen with improved camera positioning and enhanced lighting
-- **Canvas Management**: Proper z-index and positioning preventing UI overlap
-- **Debug Tools**: Comprehensive logging and debug key (D) for troubleshooting
-- **Error Handling**: Robust error catching and logging throughout initialization 
+---
+
+## Current Measurement Standards
+
+### Terrain Dimensions (NEW)
+- **Lot Size**: **40×40 yards** (120×120 feet internal)
+- **Work Area**: **1,600 square yards** 
+- **Maximum Depth**: **10 yards** (30 feet)
+- **Maximum Volume**: **16,000 cubic yards** theoretical capacity
+
+### Terrain Heights (in yards)
+- **Flat Terrain**: ±0.5 yards variation with ±0.17 yards detail
+- **Gentle Slope**: ±0.83 yards variation, clamped to ±2.67 yards
+- **Rolling Hills**: 1.33 yards large waves, ±3.33 yards total range
+- **Rough Terrain**: Up to ±4 yards dramatic height changes
+
+### Material Layers (in yards)
+- **Topsoil**: 0.08 yards deep
+- **Subsoil**: 0.92 yards deep  
+- **Clay**: 2.33 yards deep
+- **Deep Soil**: 3.33 yards deep
+- **Rock**: 1.67 yards deep
+
+### Cut/Fill Operations (in yards)
+- **Maximum Cut**: 6.67 yards below original surface
+- **Maximum Fill**: 6.67 yards above original surface
+- **Precision Tools**: Support 0.33 to 3.33 yard depth/height operations
+- **Thickness Control**: Line operations from 0.17 to 2.0 yards thickness
+
+---
+
+## Next Potential Enhancements
+
+### Terrain Management UI
+- Admin interface for creating/editing level terrains
+- Preview system for terrain configurations
+- Terrain variant selection for players
+
+### Advanced Features  
+- Seasonal terrain variations
+- Weather effects on terrain properties
+- Custom terrain editor for advanced users
+- Terrain sharing between players
+
+### Performance Optimizations
+- Terrain caching strategies
+- Level-of-detail rendering for large terrains 

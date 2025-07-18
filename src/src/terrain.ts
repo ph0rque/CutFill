@@ -42,7 +42,7 @@ export class Terrain {
   private wallMeshes: THREE.Mesh[] = [];
   // bottomMesh is now part of the box geometry
   private materialLayers: MaterialLayer[] = [];
-  private blockDepth: number = 25; // ~25 feet depth (with 20 feet practical limit)
+  private blockDepth: number = 30; // 30 feet = 10 yards depth
   private crossSectionGeometries: THREE.BufferGeometry[] = [];
   private arrows: THREE.ArrowHelper[] = [];
 
@@ -104,8 +104,8 @@ export class Terrain {
   private suppressOverlays: boolean = false;
 
   constructor(
-    width: number = 100,  // 100 feet x 100 feet
-    height: number = 100, // 100 feet x 100 feet  
+    width: number = 120,  // 120 feet = 40 yards
+    height: number = 120, // 120 feet = 40 yards  
     widthSegments: number = 32,  // Higher resolution for better cut/fill visualization
     heightSegments: number = 32  // Higher resolution for better cut/fill visualization
   ) {
@@ -1013,8 +1013,9 @@ export class Terrain {
    * Create a single elevation label sprite
    */
   private createElevationLabel(elevation: number, position: THREE.Vector3, lineColor: THREE.Color): THREE.Sprite | null {
-    // Format elevation text
-    const elevationText = elevation >= 0 ? `+${elevation.toFixed(1)}` : elevation.toFixed(1);
+    // Convert elevation from feet to yards and format text
+    const elevationInYards = elevation / 3;
+    const elevationText = elevationInYards >= 0 ? `+${elevationInYards.toFixed(1)}yd` : `${elevationInYards.toFixed(1)}yd`;
     
     // Create canvas for text
     const canvas = document.createElement('canvas');
@@ -1548,8 +1549,8 @@ export class Terrain {
         const changeFromOriginal = newHeight - originalHeight;
         
         // Apply 20-foot limits for cut and fill operations
-        const maxCutDepth = -20.0; // 20 feet below original
-        const maxFillHeight = 20.0; // 20 feet above original
+        const maxCutDepth = -6.67; // 6.67 yards below original (was 20 feet)
+        const maxFillHeight = 6.67; // 6.67 yards above original (was 20 feet)
         
         let limitedNewHeight = newHeight;
         
@@ -1682,9 +1683,9 @@ export class Terrain {
     const heightSegments = this.geometry.parameters.heightSegments;
     
     // Convert world coordinates to grid coordinates
-    // Terrain spans from 0 to 100 in both X and Z directions
-    const gridX = Math.round((x / 100) * widthSegments);
-    const gridZ = Math.round((z / 100) * heightSegments);
+    // Terrain spans from 0 to 120 in both X and Z directions
+    const gridX = Math.round((x / 120) * widthSegments);
+    const gridZ = Math.round((z / 120) * heightSegments);
     
     // Check bounds
     if (gridX < 0 || gridX > widthSegments || gridZ < 0 || gridZ > heightSegments) {
@@ -2328,9 +2329,9 @@ export class Terrain {
     const brushRadius = radius * 1.2;
     let bounds = {
       minX: Math.max(0, centerX - brushRadius),
-      maxX: Math.min(100, centerX + brushRadius),
+      maxX: Math.min(120, centerX + brushRadius),
       minZ: Math.max(0, centerZ - brushRadius),
-      maxZ: Math.min(100, centerZ + brushRadius)
+      maxZ: Math.min(120, centerZ + brushRadius)
     };
 
     // Recursively merge with ANY existing cut areas that touch/overlap until no more merges are possible
@@ -2377,9 +2378,9 @@ export class Terrain {
     const brushRadius = radius * 1.2;
     let bounds = {
       minX: Math.max(0, centerX - brushRadius),
-      maxX: Math.min(100, centerX + brushRadius),
+      maxX: Math.min(120, centerX + brushRadius),
       minZ: Math.max(0, centerZ - brushRadius),
-      maxZ: Math.min(100, centerZ + brushRadius)
+      maxZ: Math.min(120, centerZ + brushRadius)
     };
 
     // Recursively merge with ANY existing fill areas that touch/overlap until no more merges are possible
@@ -2435,9 +2436,9 @@ export class Terrain {
     // Ensure bounds are within terrain limits
     const bounds = {
       minX: Math.max(0, minX),
-      maxX: Math.min(100, maxX),
+      maxX: Math.min(120, maxX),
       minZ: Math.max(0, minZ),
-      maxZ: Math.min(100, maxZ)
+      maxZ: Math.min(120, maxZ)
     };
     
     // Create geometry for the polyline fill area
@@ -2480,9 +2481,9 @@ export class Terrain {
     
     const bounds = {
       minX: Math.max(0, minX),
-      maxX: Math.min(100, maxX),
+      maxX: Math.min(120, maxX),
       minZ: Math.max(0, minZ),
-      maxZ: Math.min(100, maxZ)
+      maxZ: Math.min(120, maxZ)
     };
     
     const centerX = (bounds.minX + bounds.maxX) / 2;
@@ -3306,5 +3307,167 @@ export class Terrain {
     this.showFillVolumeOverlay = false;
     
     console.log('Fill overlays cleared successfully');
+  }
+
+  /**
+   * Load terrain configuration from server
+   */
+  public async loadTerrainFromServer(levelId: number, assignmentId?: string): Promise<boolean> {
+    try {
+      console.log(`🌍 Loading terrain from server: Level ${levelId}, Assignment ${assignmentId}`);
+      
+      let url = `http://localhost:3001/api/terrain/${levelId}`;
+      if (assignmentId) {
+        url += `?assignmentId=${assignmentId}`;
+      }
+
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.warn(`Failed to load terrain: ${response.statusText}`);
+        return false;
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.terrain) {
+        console.log('✅ Terrain loaded from server:', result.terrain.name);
+        
+        // Apply the terrain data
+        if (result.terrain.terrain_data) {
+          this.importTerrain(result.terrain.terrain_data);
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error loading terrain from server:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Save current terrain state to server
+   */
+  public async saveTerrainToServer(
+    levelId: number,
+    assignmentId?: string,
+    name?: string,
+    description?: string,
+    isDefault: boolean = false
+  ): Promise<string | null> {
+    try {
+      // Get current user ID
+      const userId = await this.getCurrentUserId();
+      if (!userId) {
+        console.log('No user authenticated, cannot save terrain');
+        return null;
+      }
+
+      const terrainData = this.exportTerrain();
+      
+      const saveData = {
+        levelId: levelId,
+        assignmentId: assignmentId,
+        name: name || `Level ${levelId} Terrain - ${new Date().toLocaleString()}`,
+        description: description || `Terrain configuration for level ${levelId}`,
+        terrainData: terrainData,
+        terrainConfig: {
+          width: 120,
+          height: 120,
+          pattern: 'custom'
+        },
+        isDefault: isDefault,
+        userId: userId
+      };
+
+      const response = await fetch('http://localhost:3001/api/terrain/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(saveData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Terrain saved to server:', result.terrain.id);
+        return result.terrain.id;
+      } else {
+        console.warn('Failed to save terrain:', response.statusText);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error saving terrain to server:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get current authenticated user ID
+   */
+  private async getCurrentUserId(): Promise<string | null> {
+    try {
+      // Import supabase client
+      const { supabase } = await import('./supabase');
+      const { data: { user } } = await supabase.auth.getUser();
+      return user?.id || null;
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      return null;
+    }
+  }
+
+  /**
+   * List available terrain configurations for a level
+   */
+  public async listTerrainsForLevel(levelId: number): Promise<any[]> {
+    try {
+      const response = await fetch(`http://localhost:3001/api/terrain/list/${levelId}`);
+      
+      if (response.ok) {
+        const result = await response.json();
+        return result.terrains || [];
+      } else {
+        console.warn('Failed to list terrains:', response.statusText);
+        return [];
+      }
+    } catch (error) {
+      console.error('Error listing terrains:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Delete a terrain configuration
+   */
+  public async deleteTerrainFromServer(terrainId: string): Promise<boolean> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) {
+        console.log('No user authenticated, cannot delete terrain');
+        return false;
+      }
+
+      const response = await fetch(`http://localhost:3001/api/terrain/${terrainId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId })
+      });
+
+      if (response.ok) {
+        console.log('✅ Terrain deleted from server');
+        return true;
+      } else {
+        console.warn('Failed to delete terrain:', response.statusText);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error deleting terrain:', error);
+      return false;
+    }
   }
 }

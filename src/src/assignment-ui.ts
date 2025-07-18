@@ -40,6 +40,7 @@ export class AssignmentUI {
       onProgressUpdate: (progress) => {
         this.updateProgressDisplay(progress);
         this.updatePersistentProgressPanel();
+        this.updateMainObjectiveDisplay();
         // Update real-time feedback system
         const assignment = this.assignmentManager.getCurrentAssignment();
         if (assignment) {
@@ -60,6 +61,7 @@ export class AssignmentUI {
       onAssignmentStop: () => {
         this.hidePersistentProgress();
         this.updateMainUIAssignmentDisplay();
+        this.updateMainObjectiveDisplay();
       }
     });
   }
@@ -609,6 +611,77 @@ export class AssignmentUI {
       });
     });
 
+    // Practice mode buttons
+    const practiceBtns = this.container.querySelectorAll('.practice-btn');
+    practiceBtns.forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const target = e.target as HTMLElement;
+        const assignmentId = target.getAttribute('data-assignment-id');
+        if (assignmentId) {
+          // Ensure we have a user ID (wait for it if needed)
+          if (!this.currentUserId) {
+            await this.getCurrentUser();
+          }
+          
+          // Use guest as fallback if still no user ID
+          const userId = this.currentUserId || 'guest';
+          
+          console.log(`Starting assignment ${assignmentId} in practice mode for user ${userId}`);
+          
+          const success = await this.assignmentManager.startAssignment(assignmentId, userId);
+          if (success) {
+            this.hide();
+            this.updateMainUIAssignmentDisplay();
+            this.showAssignmentStarted(assignmentId);
+            console.log(`Assignment ${assignmentId} started in practice mode`);
+          } else {
+            console.error(`Failed to start assignment ${assignmentId} in practice mode`);
+            this.showNotification('Failed to start assignment. Please try again.', 'warning');
+          }
+        } else {
+          console.error('No assignment ID found on practice button');
+        }
+      });
+    });
+
+    // Compete mode buttons
+    const competeBtns = this.container.querySelectorAll('.compete-btn');
+    competeBtns.forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const target = e.target as HTMLElement;
+        const assignmentId = target.getAttribute('data-assignment-id');
+        if (assignmentId) {
+          // Ensure we have a user ID (wait for it if needed)
+          if (!this.currentUserId) {
+            await this.getCurrentUser();
+          }
+          
+          // Use guest as fallback if still no user ID
+          const userId = this.currentUserId || 'guest';
+          
+          console.log(`Starting assignment ${assignmentId} in competitive mode for user ${userId}`);
+          
+          // For competitive mode, we need to create a multiplayer session
+          this.showNotification('Competitive mode requires multiplayer session. Creating session...', 'info');
+          
+          // TODO: Integration with multiplayer system for competitive mode
+          // For now, start in competitive single-player mode
+          const success = await this.assignmentManager.startAssignment(assignmentId, userId);
+          if (success) {
+            this.hide();
+            this.updateMainUIAssignmentDisplay();
+            this.showAssignmentStarted(assignmentId);
+            console.log(`Assignment ${assignmentId} started in competitive mode`);
+          } else {
+            console.error(`Failed to start assignment ${assignmentId} in competitive mode`);
+            this.showNotification('Failed to start assignment. Please try again.', 'warning');
+          }
+        } else {
+          console.error('No assignment ID found on compete button');
+        }
+      });
+    });
+
     // Age group selector
     const ageGroupSelector = this.container.querySelector('#age-group-selector') as HTMLSelectElement;
     ageGroupSelector?.addEventListener('change', async () => {
@@ -690,10 +763,35 @@ export class AssignmentUI {
   }
 
   /**
+   * Update the main UI objective display
+   */
+  private updateMainObjectiveDisplay(): void {
+    const objectiveDisplay = document.getElementById('current-objective-display');
+    const objectiveText = document.getElementById('objective-text');
+    
+    if (!objectiveDisplay || !objectiveText) return;
+    
+    const assignment = this.assignmentManager.getCurrentAssignment();
+    const progress = this.assignmentManager.getProgress();
+    
+    if (assignment && progress && progress.objectives.length > 0) {
+      // Show the main objective prominently
+      objectiveDisplay.style.display = 'block';
+      objectiveText.textContent = progress.objectives[0].description;
+    } else {
+      // Hide when no assignment is active
+      objectiveDisplay.style.display = 'none';
+    }
+  }
+
+  /**
    * Show assignment started notification
    */
   private showAssignmentStarted(assignmentId: string): void {
     this.showNotification(`🚀 Assignment Started! Follow the objectives in the precision tools.`, 'info');
+    
+    // Update main objective display
+    this.updateMainObjectiveDisplay();
     
     // Show persistent progress panel
     this.showPersistentProgress();
@@ -912,7 +1010,6 @@ export class AssignmentUI {
     const completedObjectives = progress.objectives.filter(obj => obj.completed).length;
     const totalObjectives = progress.objectives.length;
     const progressPercent = Math.round(progress.currentScore);
-    const timeElapsed = Math.floor((Date.now() - progress.startTime.getTime()) / 60000);
 
     this.persistentProgressPanel.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
@@ -920,6 +1017,23 @@ export class AssignmentUI {
           <h3 style="margin: 0 0 4px 0; color: #4CAF50;">📋 ${assignment.name}</h3>
           <div style="font-size: 12px; color: #ccc; line-height: 1.3; margin-bottom: 6px;">
             ${assignment.description}
+          </div>
+          
+          <!-- Objectives List -->
+          <div style="margin: 8px 0;">
+            <div style="font-size: 12px; font-weight: bold; margin-bottom: 6px;">Objectives (${completedObjectives}/${totalObjectives}):</div>
+            <div style="max-height: 150px; overflow-y: auto; padding-right: 5px;">
+              ${progress.objectives.map(obj => `
+                <div style="display: flex; align-items: flex-start; margin: 4px 0; font-size: 11px; line-height: 1.3;">
+                  <span style="color: ${obj.completed ? '#4CAF50' : '#ccc'}; margin-right: 6px; margin-top: 2px;">
+                    ${obj.completed ? '✅' : '⏳'}
+                  </span>
+                  <span style="color: ${obj.completed ? '#4CAF50' : '#ccc'};">
+                    ${obj.description}
+                  </span>
+                </div>
+              `).join('')}
+            </div>
           </div>
           <div style="display: flex; gap: 8px; font-size: 10px; margin-bottom: 4px;">
             <span style="background: rgba(76, 175, 80, 0.2); color: #4CAF50; padding: 2px 6px; border-radius: 10px; border: 1px solid #4CAF50;">
@@ -968,25 +1082,7 @@ export class AssignmentUI {
         </div>
       </div>
 
-      <div style="margin-bottom: 10px;">
-        <div style="font-size: 12px; font-weight: bold; margin-bottom: 6px;">Objectives (${completedObjectives}/${totalObjectives}):</div>
-        <div style="max-height: 80px; overflow-y: auto;">
-          ${progress.objectives.slice(0, 3).map(obj => `
-            <div style="display: flex; align-items: center; margin: 3px 0; font-size: 11px;">
-              <span style="color: ${obj.completed ? '#4CAF50' : '#ccc'}; margin-right: 6px;">
-                ${obj.completed ? '✅' : '⏳'}
-              </span>
-              <span style="color: ${obj.completed ? '#4CAF50' : '#ccc'};">
-                ${obj.description.substring(0, 45)}${obj.description.length > 45 ? '...' : ''}
-              </span>
-            </div>
-          `).join('')}
-          ${progress.objectives.length > 3 ? `<div style="font-size: 10px; color: #999; text-align: center; margin-top: 4px;">+${progress.objectives.length - 3} more objectives</div>` : ''}
-        </div>
-      </div>
-
-      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #ccc; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
-        <span>⏱️ Time: ${timeElapsed}min</span>
+      <div style="display: flex; justify-content: center; font-size: 10px; color: #ccc; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2);">
         <span>🎯 Min Score: ${assignment.successCriteria.minimumScore}%</span>
       </div>
     `;
@@ -1044,6 +1140,7 @@ export class AssignmentUI {
   public initialize(): void {
     // Update initial display
     this.updateMainUIAssignmentDisplay();
+    this.updateMainObjectiveDisplay();
     
     // Show persistent progress panel if assignment is active
     const currentAssignment = this.assignmentManager.getCurrentAssignment();
