@@ -146,16 +146,21 @@ export class AssignmentUI {
     `;
 
     header.innerHTML = `
-      <h2 style="margin: 0; color: #4CAF50;">📋 Assignments & Training</h2>
-      <button id="close-assignments" style="
-        background: #666;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 8px 12px;
-        cursor: pointer;
-        font-size: 14px;
-      ">✕ Close</button>
+      <h2 style="margin: 0; color: #4CAF50;">🎮 Level Selection</h2>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <div style="font-size: 12px; color: #ccc;">
+          🔒 Locked | ✅ Unlocked | 🏆 Competitive
+        </div>
+        <button id="close-assignments" style="
+          background: #666;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          padding: 8px 12px;
+          cursor: pointer;
+          font-size: 14px;
+        ">✕ Close</button>
+      </div>
     `;
 
     // Get available assignments
@@ -278,10 +283,13 @@ export class AssignmentUI {
   }
 
   /**
-   * Create assignments selection section
+   * Create level selection section with unlock status
    */
   private async createAssignmentsSection(assignments: AssignmentConfig[]): Promise<HTMLElement> {
     const section = document.createElement('div');
+    
+    // Get user's unlocked levels
+    const unlockedLevels = await this.assignmentManager.getUnlockedLevels(this.currentUserId || 'guest');
     
     // Section header
     const header = document.createElement('div');
@@ -293,24 +301,12 @@ export class AssignmentUI {
     `;
     
     header.innerHTML = `
-      <h3 style="margin: 0; color: white;">📚 Available Assignments</h3>
+      <h3 style="margin: 0; color: white;">🎮 Available Levels</h3>
       <div style="display: flex; gap: 10px; align-items: center;">
-        <select id="age-group-selector" style="
-          background: rgba(76,175,80,0.2);
-          color: white;
-          border: 1px solid #4CAF50;
-          border-radius: 4px;
-          padding: 4px 8px;
-          font-size: 12px;
-          margin-right: 10px;
-        ">
-          ${this.assignmentManager.getAgeGroups().map(group => `
-            <option value="${group.id}" ${group.id === this.assignmentManager.getCurrentAgeGroup().id ? 'selected' : ''}>
-              ${group.name} (${group.ageRange})
-            </option>
-          `).join('')}
-        </select>
-        <select id="difficulty-filter" style="
+        <div style="font-size: 12px; color: #4CAF50;">
+          Progress: ${unlockedLevels.length} levels unlocked
+        </div>
+        <select id="level-filter" style="
           background: rgba(255,255,255,0.1);
           color: white;
           border: 1px solid #666;
@@ -318,12 +314,10 @@ export class AssignmentUI {
           padding: 4px 8px;
           font-size: 12px;
         ">
-          <option value="all">All Difficulties</option>
-          <option value="1">⭐ Level 1 (Beginner)</option>
-          <option value="2">⭐⭐ Level 2 (Easy)</option>
-          <option value="3">⭐⭐⭐ Level 3 (Medium)</option>
-          <option value="4">⭐⭐⭐⭐ Level 4 (Hard)</option>
-          <option value="5">⭐⭐⭐⭐⭐ Level 5 (Expert)</option>
+          <option value="all">All Levels</option>
+          <option value="unlocked">Unlocked Only</option>
+          <option value="competitive">Competitive Only</option>
+          <option value="practice">Practice Only</option>
         </select>
       </div>
     `;
@@ -343,44 +337,45 @@ export class AssignmentUI {
       gap: 15px;
     `;
 
-    // Create assignment cards
-    assignments.forEach(assignment => {
-      const card = this.createAssignmentCard(assignment);
-      grid.appendChild(card);
-    });
+    // Create level cards with unlock status
+    assignments
+      .sort((a, b) => (a.levelNumber || a.difficulty) - (b.levelNumber || b.difficulty))
+      .forEach(assignment => {
+        const card = this.createAssignmentCard(assignment, unlockedLevels);
+        grid.appendChild(card);
+      });
 
     section.appendChild(grid);
     return section;
   }
 
   /**
-   * Create individual assignment card
+   * Create individual level card with Practice/Compete options
    */
-  private createAssignmentCard(assignment: AssignmentConfig): HTMLElement {
+  private createAssignmentCard(assignment: AssignmentConfig, unlockedLevels: number[] = []): HTMLElement {
     const card = document.createElement('div');
     card.className = 'assignment-card';
     card.setAttribute('data-difficulty', assignment.difficulty.toString());
     
-    // Check if this is a competitive assignment
-    const isCompetitive = assignment.name.includes('COMPETITIVE') || 
-                         assignment.description.includes('COMPETITIVE') ||
-                         assignment.id.includes('race') || 
-                         assignment.id.includes('duel') || 
-                         assignment.id.includes('showdown');
+    // Check level unlock status
+    const levelNumber = assignment.levelNumber || assignment.difficulty;
+    const isUnlocked = unlockedLevels.includes(levelNumber);
+    const isCompetitive = assignment.isCompetitive || assignment.name.includes('COMPETITIVE');
 
     card.style.cssText = `
-      background: ${isCompetitive ? 'rgba(255,165,0,0.15)' : 'rgba(255,255,255,0.1)'};
-      border: 1px solid ${isCompetitive ? '#FF6B35' : '#666'};
-      border-radius: 6px;
-      padding: 15px;
-      cursor: pointer;
-      transition: all 0.3s ease;
+      background: ${!isUnlocked ? 'rgba(100,100,100,0.2)' : isCompetitive ? 'rgba(156,39,176,0.15)' : 'rgba(76,175,80,0.15)'};
+      border: 2px solid ${!isUnlocked ? '#666' : isCompetitive ? '#9C27B0' : '#4CAF50'};
+      border-radius: 8px;
+      padding: 18px;
       position: relative;
-      ${isCompetitive ? 'box-shadow: 0 0 10px rgba(255,107,53,0.3);' : ''}
+      transition: all 0.3s ease;
+      ${!isUnlocked ? 'filter: grayscale(80%); opacity: 0.6;' : ''}
+      ${isCompetitive && isUnlocked ? 'box-shadow: 0 0 15px rgba(156,39,176,0.4);' : ''}
     `;
 
-    // Difficulty stars
-    const stars = '⭐'.repeat(assignment.difficulty);
+    // Level progression indicators
+    const levelIcon = !isUnlocked ? '🔒' : isCompetitive ? '🏆' : '✅';
+    const levelStatus = !isUnlocked ? 'LOCKED' : isCompetitive ? 'COMPETITIVE' : 'UNLOCKED';
     
     // Category color
     const categoryColors: Record<string, string> = {
@@ -393,17 +388,33 @@ export class AssignmentUI {
     const categoryColor = categoryColors[assignment.category] || '#666';
 
     card.innerHTML = `
-      ${isCompetitive ? '<div style="position: absolute; top: -5px; right: -5px; background: #FF6B35; color: white; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; transform: rotate(15deg);">⚡ COMPETITIVE</div>' : ''}
-      
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <div style="color: ${categoryColor}; font-weight: bold; font-size: 12px; text-transform: uppercase;">
-          ${assignment.category.replace('_', ' ')}
-        </div>
-        <div style="color: #FFD700; font-size: 14px;">${stars}</div>
+      <!-- Level Status Badge -->
+      <div style="position: absolute; top: -8px; right: -8px; background: ${!isUnlocked ? '#666' : isCompetitive ? '#9C27B0' : '#4CAF50'}; color: white; padding: 6px 10px; border-radius: 15px; font-size: 10px; font-weight: bold; transform: rotate(12deg); box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+        ${levelIcon} ${levelStatus}
       </div>
       
-      <h4 style="margin: 0 0 8px 0; color: ${isCompetitive ? '#FFB366' : 'white'}; font-size: 16px;">${assignment.name}</h4>
-      <p style="margin: 0 0 12px 0; color: #ccc; font-size: 14px; line-height: 1.4;">${assignment.description}</p>
+      <!-- Level Header -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="background: ${categoryColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; text-transform: uppercase;">
+            ${assignment.category.replace('_', ' ')}
+          </div>
+          <div style="color: #ccc; font-size: 12px;">
+            Level ${levelNumber}
+          </div>
+        </div>
+        <div style="color: #FFD700; font-size: 14px;">
+          ${'⭐'.repeat(assignment.difficulty)}
+        </div>
+      </div>
+      
+      <!-- Level Title and Description -->
+      <h4 style="margin: 0 0 8px 0; color: ${!isUnlocked ? '#888' : isCompetitive ? '#E1BEE7' : 'white'}; font-size: 16px; line-height: 1.3;">
+        ${assignment.name}
+      </h4>
+      <p style="margin: 0 0 15px 0; color: #ccc; font-size: 13px; line-height: 1.4;">
+        ${assignment.description}
+      </p>
       
       ${isCompetitive ? `
         <div style="margin-bottom: 12px; padding: 8px; background: rgba(255,107,53,0.2); border-left: 3px solid #FF6B35; border-radius: 4px;">
@@ -417,40 +428,71 @@ export class AssignmentUI {
         </div>
       ` : ''}
       
-      <div style="margin-bottom: 12px;">
-        <div style="font-weight: bold; font-size: 12px; color: #4CAF50; margin-bottom: 5px;">Objectives:</div>
-        <div style="font-size: 11px; color: #ccc;">
-          ${assignment.objectives.slice(0, 2).map(obj => `• ${obj.description}`).join('<br>')}
-          ${assignment.objectives.length > 2 ? `<br>• +${assignment.objectives.length - 2} more objectives` : ''}
-        </div>
-      </div>
-      
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; font-size: 11px;">
+      <!-- Level Stats -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 15px; font-size: 11px;">
         <div style="text-align: center; padding: 6px; background: rgba(255,255,255,0.1); border-radius: 4px;">
-          <div style="font-weight: bold; color: #2196F3;">Est. Time</div>
-          <div>${assignment.estimatedTime} min</div>
+          <div style="font-weight: bold; color: #2196F3;">⏱️ Time</div>
+          <div>${assignment.estimatedTime}min</div>
         </div>
         <div style="text-align: center; padding: 6px; background: rgba(255,255,255,0.1); border-radius: 4px;">
-          <div style="font-weight: bold; color: #4CAF50;">Min Score</div>
+          <div style="font-weight: bold; color: #FF9800;">🎯 Target</div>
           <div>${assignment.successCriteria.minimumScore}%</div>
+        </div>
+        <div style="text-align: center; padding: 6px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+          <div style="font-weight: bold; color: #4CAF50;">⚡ Par</div>
+          <div>${assignment.idealOperations || '—'}</div>
         </div>
       </div>
 
-      <button 
-        class="start-assignment-btn" 
-        data-assignment-id="${assignment.id}"
-        style="
-          width: 100%;
-          padding: 8px;
-          background: ${isCompetitive ? '#FF6B35' : '#4CAF50'};
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: bold;
-          transition: background 0.3s ease;
-        "
-      >${isCompetitive ? '🏁 Join Competition' : '🚀 Start Assignment'}</button>
+      <!-- Action Buttons -->
+      ${!isUnlocked ? `
+        <div style="text-align: center; padding: 12px; background: rgba(100,100,100,0.3); border-radius: 4px; color: #888;">
+          🔒 Complete Level ${levelNumber - 1} to unlock
+        </div>
+      ` : `
+        <div style="display: flex; gap: 8px;">
+          <button 
+            class="practice-btn" 
+            data-assignment-id="${assignment.id}"
+            data-mode="practice"
+            style="
+              flex: 1;
+              padding: 10px;
+              background: #4CAF50;
+              color: white;
+              border: none;
+              border-radius: 4px;
+              cursor: pointer;
+              font-weight: bold;
+              font-size: 12px;
+              transition: all 0.3s ease;
+            "
+          >
+            📚 Practice
+          </button>
+          ${isCompetitive ? `
+            <button 
+              class="compete-btn" 
+              data-assignment-id="${assignment.id}"
+              data-mode="competitive"
+              style="
+                flex: 1;
+                padding: 10px;
+                background: #9C27B0;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 12px;
+                transition: all 0.3s ease;
+              "
+            >
+              🏆 Compete
+            </button>
+          ` : ''}
+        </div>
+      `}
     `;
 
     // Hover effects

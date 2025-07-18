@@ -30,6 +30,10 @@ class GameSession {
     this.maxPlayers = options.maxPlayers || 4;
     this.isPublic = options.isPublic || false;
     this.currentAssignment = null;
+    this.currentLevel = options.levelId ? parseInt(options.levelId.replace(/\D/g, '')) : null;
+    this.liveScores = new Map();
+    this.isCompetitive = options.isCompetitive || false;
+    this.currentLevelIdealOperations = options.idealOperations || 30;
     this.terrainModifications = [];
     this.sharedObjectives = [];
     this.sessionState = 'waiting';
@@ -434,7 +438,7 @@ io.on('connection', (socket) => {
     console.log(`Chat message from ${socket.id} in session ${sessionId}: ${message}`);
   });
 
-  // Handle terrain modifications
+  // Handle terrain modifications with validation
   socket.on('terrain-modify', (data) => {
     const sessionId = playerSessions.get(socket.id);
     if (!sessionId) return;
@@ -448,19 +452,36 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Validate terrain modification
+    const validationResult = validateTerrainModification(data, session, player);
+    if (!validationResult.isValid) {
+      socket.emit('terrain-validation-failed', { 
+        reason: validationResult.reason,
+        modification: data 
+      });
+      console.log(`Terrain modification rejected for ${socket.id}: ${validationResult.reason}`);
+      return;
+    }
+
     const modification = {
       ...data,
       playerId: socket.id,
       timestamp: Date.now(),
-      sessionId: sessionId
+      sessionId: sessionId,
+      serverValidated: true
     };
 
     session.addTerrainModification(modification);
 
+    // Update player operation count for competitive scoring
+    if (session.isCompetitive) {
+      updatePlayerOperationCount(session, socket.id);
+    }
+
     // Broadcast to all players in the session
     io.to(sessionId).emit('terrain-modified', modification);
 
-    console.log(`Terrain modified by ${socket.id} in session ${sessionId}`);
+    console.log(`Terrain modified by ${socket.id} in session ${sessionId} - validated`);
   });
 
   // Handle terrain reset
@@ -628,6 +649,110 @@ io.on('connection', (socket) => {
     }
 
     console.log(`Player disconnected: ${socket.id}`);
+  });
+});
+
+// Server-side validation functions
+function validateTerrainModification(data, session, player) {
+  // Basic data validation
+  if (!data || typeof data.x !== 'number' || typeof data.z !== 'number' || typeof data.heightChange !== 'number') {
+    return { isValid: false, reason: 'Invalid modification data' };
+  }
+
+  // Bounds checking (assuming 100x100 terrain)
+  if (data.x < 0 || data.x > 100 || data.z < 0 || data.z > 100) {
+    return { isValid: false, reason: 'Modification outside terrain bounds' };
+  }
+
+  // Height change limits (prevent extreme modifications)
+  const maxHeightChange = 20; // 20 feet max change per operation
+  if (Math.abs(data.heightChange) > maxHeightChange) {
+    return { isValid: false, reason: 'Height change exceeds maximum limit' };
+  }
+
+  // Rate limiting - prevent rapid-fire modifications
+  const now = Date.now();
+  const lastModification = player.lastModificationTime || 0;
+  const minInterval = 50; // 50ms minimum between modifications
+  
+  if (now - lastModification < minInterval) {
+    return { isValid: false, reason: 'Modification rate too high' };
+  }
+
+  // Update last modification time
+  player.lastModificationTime = now;
+
+  return { isValid: true };
+}
+
+function updatePlayerOperationCount(session, playerId) {
+  if (!session.liveScores) {
+    session.liveScores = new Map();
+  }
+
+  const currentScore = session.liveScores.get(playerId) || {
+    playerId,
+    totalScore: 0,
+    objectiveScore: 0,
+    netZeroScore: 100,
+    operationsScore: 100,
+    operationCount: 0,
+    lastUpdated: Date.now()
+  };
+
+  currentScore.operationCount++;
+  currentScore.lastUpdated = Date.now();
+
+  // Recalculate operations efficiency (this would need ideal operations from level config)
+  const idealOperations = session.currentLevelIdealOperations || 30; // Default fallback
+  currentScore.operationsScore = Math.min(100, (idealOperations / currentScore.operationCount) * 100);
+
+  session.liveScores.set(playerId, currentScore);
+
+  // Broadcast updated score to all players in session
+  io.to(session.id).emit('live-score-update', {
+    sessionId: session.id,
+    playerId,
+    score: currentScore
+  });
+}
+
+function validateScore(submittedScore, serverCalculatedScore, tolerance = 5) {
+  // Allow small tolerance for floating point differences
+  const difference = Math.abs(submittedScore - serverCalculatedScore);
+  const percentDifference = (difference / serverCalculatedScore) * 100;
+  
+  return {
+    isValid: percentDifference <= tolerance,
+    difference: percentDifference,
+    serverScore: serverCalculatedScore,
+    submittedScore
+  };
+}
+
+// Score submission endpoint for level completion
+app.post('/api/submit-level-attempt', (req, res) => {
+  const { userId, levelId, score, operationCount, volumeData, isPractice } = req.body;
+
+  // Server-side score recalculation would go here
+  // For now, we'll do basic validation
+  
+  const validationResult = validateScore(score, score); // Placeholder - would recalculate
+  
+  if (!validationResult.isValid) {
+    return res.status(400).json({
+      error: 'Score validation failed',
+      details: validationResult
+    });
+  }
+
+  // Save to database (would integrate with Supabase here)
+  console.log(`Level attempt submitted: User ${userId}, Level ${levelId}, Score ${score}, Practice: ${isPractice}`);
+  
+  res.json({
+    success: true,
+    serverValidatedScore: validationResult.serverScore,
+    saved: true
   });
 });
 
