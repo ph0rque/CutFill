@@ -116,6 +116,9 @@ terrain.forceDisablePatterns();
 // Force disable wireframe mode initially
 terrain.forceDisableWireframe();
 
+// Force clean terrain rendering - disable all problematic elements
+terrain.forceCleanRendering();
+
 // Change to unlit material for even lighting
 terrain.getSurfaceMesh().material = new THREE.MeshBasicMaterial({
   vertexColors: true,
@@ -702,6 +705,36 @@ const assignmentUI = new AssignmentUI(assignmentManager);
 // Make assignment objects globally available for debugging
 (window as any).assignmentManager = assignmentManager;
 (window as any).assignmentUI = assignmentUI;
+
+// Add terrain helpers for debugging
+(window as any).terrainHelpers = {
+  toggle3D: () => {
+    if (terrain.getMesh().children.some(child => child.visible)) {
+      terrain.disable3DTerrainBlock();
+      console.log('🎯 3D terrain block disabled');
+    } else {
+      terrain.enable3DTerrainBlock();
+      console.log('🎯 3D terrain block enabled');
+    }
+  },
+  disable3D: () => {
+    terrain.disable3DTerrainBlock();
+    console.log('🎯 3D terrain block disabled');
+  },
+  enable3D: () => {
+    terrain.enable3DTerrainBlock();
+    console.log('🎯 3D terrain block enabled');
+  },
+  cleanRender: () => {
+    terrain.forceCleanRendering();
+    console.log('🎯 Terrain rendering cleaned');
+  },
+  resetTerrain: () => {
+    terrain.reset();
+    terrain.forceCleanRendering();
+    console.log('🎯 Terrain reset and cleaned');
+  }
+};
 
 // Add debugging helper functions
 (window as any).checkAssignmentStatus = () => {

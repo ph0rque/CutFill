@@ -117,6 +117,9 @@ function initializeGame(): void {
     (window as any).assignmentUI = assignmentUI;
     (window as any).cameraTarget = cameraTarget;
     
+    // Expose terrain for testing
+    (window as any).terrain = terrain;
+    
     // Initialize labels button when available and ensure proper label visibility sync
     setTimeout(() => {
       precisionUI.updateLabelsButton();
@@ -774,4 +777,77 @@ document.addEventListener('DOMContentLoaded', () => {
       precisionUI.updateLabelsButton();
     }
   }, 100);
-}); 
+});
+
+// Expose global variables and functions for testing (will be set when game initializes)
+
+// Add terrain helpers for debugging and testing
+(window as any).terrainHelpers = {
+  toggle3D: () => {
+    const currentTerrain = (window as any).terrain;
+    if (currentTerrain && currentTerrain.getMesh().children.some((child: THREE.Object3D) => child.visible)) {
+      currentTerrain.disable3DTerrainBlock();
+      console.log('🎯 3D terrain block disabled');
+    } else if (currentTerrain) {
+      currentTerrain.enable3DTerrainBlock();
+      console.log('🎯 3D terrain block enabled');
+    }
+  },
+  disable3D: () => {
+    const currentTerrain = (window as any).terrain;
+    if (currentTerrain) {
+      currentTerrain.disable3DTerrainBlock();
+      console.log('🎯 3D terrain block disabled');
+    }
+  },
+  enable3D: () => {
+    const currentTerrain = (window as any).terrain;
+    if (currentTerrain) {
+      currentTerrain.enable3DTerrainBlock();
+      console.log('🎯 3D terrain block enabled');
+    }
+  },
+  cleanRender: () => {
+    const currentTerrain = (window as any).terrain;
+    if (currentTerrain) {
+      currentTerrain.forceCleanRendering();
+      console.log('🎯 Terrain rendering cleaned');
+    }
+  },
+  resetTerrain: () => {
+    const currentTerrain = (window as any).terrain;
+    if (currentTerrain) {
+      currentTerrain.reset();
+      currentTerrain.forceCleanRendering();
+      console.log('🎯 Terrain reset and cleaned');
+    }
+  }
+};
+
+// Add debugging helper functions
+(window as any).checkAssignmentStatus = () => {
+  const currentAssignmentManager = (window as any).assignmentManager;
+  const currentTerrain = (window as any).terrain;
+  
+  const assignment = currentAssignmentManager?.getCurrentAssignment();
+  const progress = currentAssignmentManager?.getProgress();
+  
+  if (!assignment || !progress) {
+    console.log("❌ No active assignment. Press 'A' to select one.");
+    return;
+  }
+  
+  console.log("📋 Current Assignment:", assignment.name);
+  console.log("🎯 Objectives:");
+  progress.objectives.forEach((obj: any, i: number) => {
+    console.log(`  ${i + 1}. ${obj.completed ? '✅' : '⏳'} ${obj.description}`);
+    console.log(`     Score: ${obj.score.toFixed(1)}% (Need 80%+ to complete)`);
+    if (obj.target && obj.target.width) {
+      console.log(`     Target area: ${obj.target.width}x${obj.target.height} ft at (${obj.target.x}, ${obj.target.z})`);
+      console.log(`     Tolerance: ±${obj.tolerance} ft`);
+    }
+  });
+  console.log("📊 Overall Score:", progress.currentScore.toFixed(1) + "%");
+  console.log("🗿 Planning Mode:", currentTerrain?.isInPlanningMode() ? "ENABLED (press Enter to apply changes)" : "DISABLED");
+  console.log("📏 Volume Data:", progress.volumeData);
+};

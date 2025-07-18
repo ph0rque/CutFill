@@ -42,7 +42,7 @@ export class Terrain {
   private wallMeshes: THREE.Mesh[] = [];
   // bottomMesh is now part of the box geometry
   private materialLayers: MaterialLayer[] = [];
-  private blockDepth: number = 30; // 30 feet = 10 yards depth
+  private blockDepth: number = 30; // 10 yards = 30 feet depth
   private crossSectionGeometries: THREE.BufferGeometry[] = [];
   private arrows: THREE.ArrowHelper[] = [];
 
@@ -177,44 +177,45 @@ export class Terrain {
 
   /**
    * Initialize realistic material layers with consistent depth-based color gradient
+   * Updated to match CLAUDE.md standardized values
    * 
    * Depth Ranges:
-   * - 0.0 to 0.25 feet: Green topsoil
-   * - 0.25 to 3.0 feet: Yellow subsoil  
-   * - 3.0 to 10.0 feet: Mud-red-brown clay
-   * - 10.0 to 20.0 feet: Darker brown deep soil
-   * - 20.0+ feet: Gray rock/bedrock
+   * - 0.0 to 0.3 feet: Green topsoil (0.1 yards)
+   * - 0.3 to 3.0 feet: Yellow subsoil (0.9 yards)
+   * - 3.0 to 12.0 feet: Mud-red-brown clay (3 yards)
+   * - 12.0 to 21.0 feet: Darker brown deep soil (3 yards)
+   * - 21.0+ feet: Gray rock/bedrock (3 yards)
    */
   private initializeMaterialLayers(): void {
     this.materialLayers = [
       {
         name: 'Topsoil',
         color: new THREE.Color(0x228B22), // Green topsoil (Forest Green)
-        depth: 0.25, // Top 0.25 feet
+        depth: 0.3, // 0.1 yards = 0.3 feet
         hardness: 0.2
       },
       {
         name: 'Subsoil', 
         color: new THREE.Color(0xFFD700), // Yellow subsoil (Gold)
-        depth: 2.75, // Next 2.75 feet (0.25 to 3.0 total)
+        depth: 2.7, // 0.9 yards = 2.7 feet
         hardness: 0.4
       },
       {
         name: 'Clay',
         color: new THREE.Color(0x8B4513), // Mud-red-brown clay (Saddle Brown)
-        depth: 7, // Next 7 feet (3.0 to 10.0 total)
+        depth: 9, // 3 yards = 9 feet
         hardness: 0.6
       },
       {
         name: 'Deep Soil',
         color: new THREE.Color(0x654321), // Darker brown deeper soil (Dark Brown)
-        depth: 10, // Next 10 feet (10.0 to 20.0 total)
+        depth: 9, // 3 yards = 9 feet
         hardness: 0.8
       },
       {
         name: 'Rock',
         color: new THREE.Color(0x808080), // Gray rock/bedrock (Gray)
-        depth: 20, // Next 20+ feet (20.0+ total)
+        depth: 9, // 3 yards = 9 feet
         hardness: 1.0
       }
     ];
@@ -2658,6 +2659,73 @@ export class Terrain {
         block.material.wireframe = false;
       }
     });
+  }
+
+  /**
+   * Disable 3D terrain block for cleaner terrain view
+   */
+  public disable3DTerrainBlock(): void {
+    // Hide all wall meshes (3D terrain block)
+    this.wallMeshes.forEach(block => {
+      block.visible = false;
+    });
+    
+    // Ensure surface mesh is visible and properly positioned
+    this.surfaceMesh.visible = true;
+    this.surfaceMesh.position.y = 0;
+    
+    // Also hide contour lines temporarily to fix rendering issues
+    this.contourLines.forEach(line => {
+      line.visible = false;
+    });
+    this.contourLabels.forEach(label => {
+      label.visible = false;
+    });
+    
+    console.log('🎯 3D terrain block disabled - showing surface only');
+  }
+
+  /**
+   * Enable 3D terrain block
+   */
+  public enable3DTerrainBlock(): void {
+    // Show all wall meshes (3D terrain block)
+    this.wallMeshes.forEach(block => {
+      block.visible = true;
+    });
+    
+    // Re-enable contour lines
+    this.contourLines.forEach(line => {
+      line.visible = true;
+    });
+    this.contourLabels.forEach(label => {
+      label.visible = true;
+    });
+    
+    console.log('🎯 3D terrain block enabled');
+  }
+
+  /**
+   * Force clean terrain rendering - disable all problematic elements
+   */
+  public forceCleanRendering(): void {
+    // Disable 3D terrain block
+    this.disable3DTerrainBlock();
+    
+    // Ensure surface mesh uses basic material
+    const surfaceMaterial = this.surfaceMesh.material as THREE.MeshBasicMaterial;
+    surfaceMaterial.wireframe = false;
+    surfaceMaterial.transparent = false;
+    surfaceMaterial.opacity = 1.0;
+    
+    // Force update geometry
+    this.geometry.attributes.position.needsUpdate = true;
+    this.geometry.computeVertexNormals();
+    
+    // Update colors
+    this.updateTerrainColors();
+    
+    console.log('🎯 Terrain rendering cleaned - surface only with basic material');
   }
 
   /**

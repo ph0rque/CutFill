@@ -153,6 +153,16 @@ export class AssignmentUI {
         <div style="font-size: 12px; color: #ccc;">
           🔒 Locked | ✅ Unlocked | 🏆 Competitive
         </div>
+        <button id="dev-mode-toggle" style="
+          background: ${this.assignmentManager.isDeveloperMode() ? '#FF9800' : '#666'};
+          color: white;
+          border: none;
+          border-radius: 4px;
+          padding: 6px 10px;
+          cursor: pointer;
+          font-size: 12px;
+          margin-right: 5px;
+        ">🔧 Dev Mode</button>
         <button id="close-assignments" style="
           background: #666;
           color: white;
@@ -329,6 +339,10 @@ export class AssignmentUI {
     // Age scaling info panel
     const ageInfo = this.createAgeScalingInfoPanel();
     section.appendChild(ageInfo);
+
+    // Level progression panel
+    const progressionPanel = this.createLevelProgressionPanel(unlockedLevels);
+    section.appendChild(progressionPanel);
 
     // Assignments grid
     const grid = document.createElement('div');
@@ -561,6 +575,85 @@ export class AssignmentUI {
   }
 
   /**
+   * Create level progression panel
+   */
+  private createLevelProgressionPanel(unlockedLevels: number[]): HTMLElement {
+    const panel = document.createElement('div');
+    panel.style.cssText = `
+      background: rgba(33,150,243,0.15);
+      border: 1px solid rgba(33,150,243,0.5);
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 20px;
+    `;
+
+    const maxLevel = Math.max(...this.assignmentManager.getAssignmentTemplates().map(a => a.levelNumber || 1));
+    const progressPercent = (unlockedLevels.length / maxLevel) * 100;
+
+    panel.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+        <h4 style="margin: 0; color: #2196F3;">🎯 Level Progress</h4>
+        <div style="display: flex; gap: 10px;">
+          ${this.assignmentManager.isDeveloperMode() ? '' : `
+            <button id="unlock-all-levels" style="
+              background: #FF9800;
+              color: white;
+              border: none;
+              border-radius: 4px;
+              padding: 6px 12px;
+              cursor: pointer;
+              font-size: 12px;
+            ">🔓 Unlock All</button>
+          `}
+          <span style="font-size: 12px; color: #2196F3; font-weight: bold;">
+            ${unlockedLevels.length}/${maxLevel} levels unlocked
+          </span>
+        </div>
+      </div>
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-size: 13px;">Overall Progress</span>
+        <span style="color: #2196F3; font-weight: bold;">${progressPercent.toFixed(1)}%</span>
+      </div>
+      <div style="background: rgba(255,255,255,0.2); border-radius: 10px; height: 8px; overflow: hidden;">
+        <div style="background: #2196F3; height: 100%; width: ${progressPercent}%; transition: width 0.3s ease;"></div>
+      </div>
+      
+      <div style="margin-top: 12px;">
+        <div style="font-size: 12px; font-weight: bold; margin-bottom: 8px;">Quick Level Access:</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+          ${Array.from({length: maxLevel}, (_, i) => i + 1).map(level => {
+            const isUnlocked = unlockedLevels.includes(level);
+            const isCurrent = this.assignmentManager.getCurrentAssignment()?.levelNumber === level;
+            return `
+              <button 
+                class="quick-level-btn" 
+                data-level="${level}"
+                style="
+                  background: ${isCurrent ? '#4CAF50' : isUnlocked ? '#2196F3' : '#666'};
+                  color: white;
+                  border: none;
+                  border-radius: 4px;
+                  padding: 4px 8px;
+                  cursor: ${isUnlocked || this.assignmentManager.isDeveloperMode() ? 'pointer' : 'not-allowed'};
+                  font-size: 11px;
+                  opacity: ${isUnlocked || this.assignmentManager.isDeveloperMode() ? '1' : '0.5'};
+                  min-width: 30px;
+                "
+                ${!isUnlocked && !this.assignmentManager.isDeveloperMode() ? 'disabled' : ''}
+              >
+                ${level}${isCurrent ? '⭐' : ''}
+              </button>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    return panel;
+  }
+
+  /**
    * Setup UI event listeners
    */
   private setupUIEventListeners(): void {
@@ -569,6 +662,20 @@ export class AssignmentUI {
     // Close button
     const closeBtn = this.container.querySelector('#close-assignments');
     closeBtn?.addEventListener('click', () => this.hide());
+
+    // Dev mode toggle
+    const devModeBtn = this.container.querySelector('#dev-mode-toggle');
+    devModeBtn?.addEventListener('click', async () => {
+      if (this.assignmentManager.isDeveloperMode()) {
+        this.assignmentManager.disableDeveloperMode();
+        this.showNotification('🔒 Developer mode disabled', 'info');
+      } else {
+        this.assignmentManager.enableDeveloperMode();
+        this.showNotification('🔧 Developer mode enabled - all levels unlocked!', 'success');
+      }
+      // Refresh the UI to show updated unlock status
+      await this.show();
+    });
 
     // Stop assignment button
     const stopBtn = this.container.querySelector('#stop-assignment');
@@ -697,6 +804,56 @@ export class AssignmentUI {
     const difficultyFilter = this.container.querySelector('#difficulty-filter') as HTMLSelectElement;
     difficultyFilter?.addEventListener('change', () => {
       this.filterAssignments(difficultyFilter.value);
+    });
+
+    // Unlock all levels button
+    const unlockAllBtn = this.container.querySelector('#unlock-all-levels');
+    unlockAllBtn?.addEventListener('click', async () => {
+      if (this.currentUserId && this.currentUserId !== 'guest') {
+        const success = await this.assignmentManager.unlockAllLevels(this.currentUserId);
+        if (success) {
+          this.showNotification('🎉 All levels unlocked!', 'success');
+          await this.show(); // Refresh UI
+        } else {
+          this.showNotification('Failed to unlock levels', 'warning');
+        }
+      } else {
+        this.showNotification('Sign in to unlock levels permanently', 'info');
+      }
+    });
+
+    // Quick level access buttons
+    const quickLevelBtns = this.container.querySelectorAll('.quick-level-btn');
+    quickLevelBtns.forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const target = e.target as HTMLElement;
+        const level = parseInt(target.getAttribute('data-level') || '1');
+        
+        // Find assignment for this level
+        const assignments = await this.assignmentManager.getAvailableAssignments();
+        const assignment = assignments.find(a => a.levelNumber === level);
+        
+        if (assignment) {
+          // Ensure we have a user ID
+          if (!this.currentUserId) {
+            await this.getCurrentUser();
+          }
+          
+          const userId = this.currentUserId || 'guest';
+          const success = await this.assignmentManager.startAssignment(assignment.id, userId);
+          
+          if (success) {
+            this.hide();
+            this.updateMainUIAssignmentDisplay();
+            this.showAssignmentStarted(assignment.id);
+            this.showNotification(`🎯 Started Level ${level}: ${assignment.name}`, 'success');
+          } else {
+            this.showNotification('Failed to start level', 'warning');
+          }
+        } else {
+          this.showNotification(`Level ${level} not found`, 'warning');
+        }
+      });
     });
 
     // Click outside to close
@@ -1135,6 +1292,62 @@ export class AssignmentUI {
   }
 
   /**
+   * Add global helper methods for easy testing
+   */
+  private addGlobalHelpers(): void {
+    // Add global methods for easy testing
+    (window as any).levelHelpers = {
+      devMode: () => {
+        this.assignmentManager.enableDeveloperMode();
+        console.log('🔧 Developer mode enabled - all levels unlocked!');
+      },
+      normalMode: () => {
+        this.assignmentManager.disableDeveloperMode();
+        console.log('🔒 Developer mode disabled - normal progression restored');
+      },
+      showLevels: () => {
+        this.toggle();
+      },
+      unlockAll: async () => {
+        if (this.currentUserId && this.currentUserId !== 'guest') {
+          const success = await this.assignmentManager.unlockAllLevels(this.currentUserId);
+          if (success) {
+            console.log('🎉 All levels unlocked!');
+          } else {
+            console.log('❌ Failed to unlock levels');
+          }
+        } else {
+          console.log('ℹ️ Sign in to unlock levels permanently');
+        }
+      },
+      startLevel: async (levelNumber: number) => {
+        const assignments = await this.assignmentManager.getAvailableAssignments();
+        const assignment = assignments.find(a => a.levelNumber === levelNumber);
+        if (assignment) {
+          const userId = this.currentUserId || 'guest';
+          const success = await this.assignmentManager.startAssignment(assignment.id, userId);
+          if (success) {
+            console.log(`🎯 Started Level ${levelNumber}: ${assignment.name}`);
+          } else {
+            console.log(`❌ Failed to start level ${levelNumber}`);
+          }
+        } else {
+          console.log(`❌ Level ${levelNumber} not found`);
+        }
+      }
+    };
+
+    console.log(`
+🎮 Level Helper Commands:
+- levelHelpers.devMode()        - Enable developer mode (unlock all levels)
+- levelHelpers.normalMode()     - Disable developer mode  
+- levelHelpers.showLevels()     - Show level selection UI
+- levelHelpers.unlockAll()      - Unlock all levels (for signed in users)
+- levelHelpers.startLevel(X)    - Start level X directly
+    `);
+  }
+
+  /**
    * Initialize the assignment UI system
    */
   public initialize(): void {
@@ -1147,6 +1360,9 @@ export class AssignmentUI {
     if (currentAssignment) {
       this.showPersistentProgress();
     }
+    
+    // Add global helper methods for easy testing
+    this.addGlobalHelpers();
     
     // Set up keyboard shortcut (A key)
     document.addEventListener('keydown', (event) => {

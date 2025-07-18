@@ -934,8 +934,8 @@ export class AssignmentManager {
       attempts: 1
     };
 
-    // Configure terrain for assignment
-    this.setupTerrainForAssignment(assignment);
+    // Configure terrain for assignment (now async)
+    await this.setupTerrainForAssignment(assignment);
 
     // Wait for terrain to fully initialize before starting progress monitoring
     setTimeout(() => {
@@ -945,28 +945,39 @@ export class AssignmentManager {
     return true;
   }
 
-  private setupTerrainForAssignment(assignment: AssignmentConfig): void {
-    const config = assignment.terrainConfig;
+  private async setupTerrainForAssignment(assignment: AssignmentConfig): Promise<void> {
+    console.log(`Setting up terrain for assignment: ${assignment.name}`);
     
-    // Reset terrain
+    // Reset terrain first
     this.terrain.reset();
     
-    // Apply initial terrain configuration
-    switch (config.initialTerrain) {
-      case 'flat':
-        // Already flat from reset
-        break;
-      case 'rolling':
-        this.generateRollingTerrain();
-        break;
-      case 'rough':
-        this.generateRoughTerrain();
-        break;
-      case 'custom':
-        if (config.customHeights) {
-          this.applyCustomHeights(config.customHeights);
-        }
-        break;
+    // Try to load saved terrain from database
+    const savedTerrain = await this.loadSavedTerrain(assignment.levelNumber);
+    
+    if (savedTerrain) {
+      console.log(`Loading saved terrain for level ${assignment.levelNumber}`);
+      this.applySavedTerrain(savedTerrain);
+    } else {
+      console.log(`No saved terrain found, using fallback generation for level ${assignment.levelNumber}`);
+      // Fallback to existing terrain generation
+      const config = assignment.terrainConfig;
+      
+      switch (config.initialTerrain) {
+        case 'flat':
+          // Already flat from reset
+          break;
+        case 'rolling':
+          this.generateRollingTerrain();
+          break;
+        case 'rough':
+          this.generateRoughTerrain();
+          break;
+        case 'custom':
+          if (config.customHeights) {
+            this.applyCustomHeights(config.customHeights);
+          }
+          break;
+      }
     }
   }
 
@@ -980,14 +991,14 @@ export class AssignmentManager {
       const x = vertices[i];
       const z = vertices[i + 2];
       
-      // Rolling hills with multiple scales
-      const largeWaves = Math.sin(x * 0.018) * Math.cos(z * 0.015) * 1.33; // 1.33 yards large waves
-      const mediumWaves = Math.sin(x * 0.035) * Math.cos(z * 0.03) * 0.67; // 0.67 yards medium waves
-      const smallWaves = this.smoothNoise(x * 0.05, z * 0.05) * 0.5; // 0.5 yards small variation
-      const fineDetail = this.smoothNoise(x * 0.08, z * 0.08) * 0.17; // 0.17 yards fine detail
+      // Rolling hills with multiple scales - updated to CLAUDE.md standards
+      const largeWaves = Math.sin(x * 0.018) * Math.cos(z * 0.015) * 1.0; // 1 yard large waves
+      const mediumWaves = Math.sin(x * 0.035) * Math.cos(z * 0.03) * 0.5; // 0.5 yards medium waves
+      const smallWaves = this.smoothNoise(x * 0.05, z * 0.05) * 0.3; // 0.3 yards small variation
+      const fineDetail = this.smoothNoise(x * 0.08, z * 0.08) * 0.2; // 0.2 yards fine detail
       
       const terrainHeight = largeWaves + mediumWaves + smallWaves + fineDetail;
-      vertices[i + 1] = Math.max(-3.33, Math.min(3.33, terrainHeight)); // Clamp to ±3.33 yards
+      vertices[i + 1] = Math.max(-4, Math.min(4, terrainHeight)); // Clamp to ±4 yards total range
     }
     
     (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
@@ -1004,13 +1015,13 @@ export class AssignmentManager {
       const x = vertices[i];
       const z = vertices[i + 2];
       
-      // Rough terrain with more dramatic height changes
-      const roughness1 = this.smoothNoise(x * 0.03, z * 0.025) * 1.67; // 1.67 yards primary roughness
-      const roughness2 = this.smoothNoise(x * 0.08, z * 0.07) * 0.83; // 0.83 yards secondary roughness
-      const roughness3 = this.smoothNoise(x * 0.15, z * 0.12) * 0.33; // 0.33 yards fine roughness
+      // Rough terrain with more dramatic height changes - updated to CLAUDE.md standards
+      const roughness1 = this.smoothNoise(x * 0.03, z * 0.025) * 2.5; // 2.5 yards primary roughness
+      const roughness2 = this.smoothNoise(x * 0.08, z * 0.07) * 1.5; // 1.5 yards secondary roughness
+      const roughness3 = this.smoothNoise(x * 0.15, z * 0.12) * 1.0; // 1.0 yards fine roughness
       
       const terrainHeight = roughness1 + roughness2 + roughness3;
-      vertices[i + 1] = Math.max(-4, Math.min(4, terrainHeight)); // Clamp to ±4 yards
+      vertices[i + 1] = Math.max(-5, Math.min(5, terrainHeight)); // Clamp to ±5 yards dramatic height changes
     }
     
     (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
@@ -1025,6 +1036,117 @@ export class AssignmentManager {
     
     for (let i = 0; i < vertices.length && i < heights.length; i += 3) {
       vertices[i + 1] = heights[i / 3];
+    }
+    
+    (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    this.terrain.updateTerrainColors();
+  }
+
+  // New methods for terrain persistence
+  private async loadSavedTerrain(levelNumber: number | undefined): Promise<any> {
+    if (!levelNumber) {
+      console.log('No level number provided, cannot load saved terrain');
+      return null;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/terrain/${levelNumber}`);
+      
+      if (!response.ok) {
+        console.log(`No saved terrain found for level ${levelNumber}: ${response.status}`);
+        return null;
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.terrain) {
+        console.log(`Successfully loaded saved terrain for level ${levelNumber}`);
+        return data.terrain;
+      } else {
+        console.log(`Invalid terrain data received for level ${levelNumber}`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`Error loading saved terrain for level ${levelNumber}:`, error);
+      return null;
+    }
+  }
+
+  private applySavedTerrain(savedTerrain: any): void {
+    try {
+      const terrainData = savedTerrain.terrain_data;
+      
+      if (!terrainData || !terrainData.parameters) {
+        console.error('Invalid terrain data structure:', terrainData);
+        return;
+      }
+
+      // Apply the saved terrain pattern
+      switch (terrainData.pattern) {
+        case 'flat':
+          this.generateFlatTerrain(terrainData.parameters);
+          break;
+        case 'gentle_slope':
+          this.generateGentleSlopeTerrain(terrainData.parameters);
+          break;
+        case 'rolling':
+          this.generateRollingTerrain();
+          break;
+        case 'rough':
+          this.generateRoughTerrain();
+          break;
+        default:
+          console.log(`Unknown terrain pattern: ${terrainData.pattern}, using flat`);
+          this.generateFlatTerrain(terrainData.parameters);
+      }
+      
+      console.log(`Applied saved terrain pattern: ${terrainData.pattern}`);
+    } catch (error) {
+      console.error('Error applying saved terrain:', error);
+      // Fallback to flat terrain
+      this.generateFlatTerrain();
+    }
+  }
+
+  private generateFlatTerrain(parameters?: any): void {
+    const meshObject = this.terrain.getMesh();
+    const mesh = meshObject as THREE.Mesh;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array;
+    
+    for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const z = vertices[i + 2];
+      
+      // Gentle undulations for flat terrain - using CLAUDE.md standards
+      const smallVariation = this.smoothNoise(x * 0.02, z * 0.02) * 0.5; // 0.5 yards variation
+      const fineDetail = this.smoothNoise(x * 0.05, z * 0.05) * 0.25; // 0.25 yards detail
+      
+      const terrainHeight = smallVariation + fineDetail;
+      vertices[i + 1] = Math.max(-1, Math.min(1, terrainHeight)); // Clamp to ±1 yards
+    }
+    
+    (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    this.terrain.updateTerrainColors();
+  }
+
+  private generateGentleSlopeTerrain(parameters?: any): void {
+    const meshObject = this.terrain.getMesh();
+    const mesh = meshObject as THREE.Mesh;
+    const vertices = (mesh.geometry.attributes.position as THREE.BufferAttribute).array;
+    
+    for (let i = 0; i < vertices.length; i += 3) {
+      const x = vertices[i];
+      const z = vertices[i + 2];
+      
+      // Gentle slope with drainage patterns - using CLAUDE.md standards
+      const primarySlope = (x * 0.015) + (z * 0.01); // Overall slope
+      const drainagePattern = Math.sin(x * 0.025) * 0.3; // Drainage channels
+      const variation = this.smoothNoise(x * 0.03, z * 0.03) * 0.5; // Natural variation
+      
+      const terrainHeight = primarySlope + drainagePattern + variation;
+      vertices[i + 1] = Math.max(-3, Math.min(3, terrainHeight)); // Clamp to ±3 yards
     }
     
     (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
@@ -1490,9 +1612,16 @@ export class AssignmentManager {
   // Level progression methods
   public async getUnlockedLevels(userId: string): Promise<number[]> {
     try {
+      // Check for developer mode (unlock all levels)
+      const devMode = localStorage.getItem('cutfill_dev_mode') === 'true';
+      if (devMode) {
+        const maxLevel = this.getMaxLevelNumber();
+        return Array.from({length: maxLevel}, (_, i) => i + 1);
+      }
+
       if (userId === 'guest' || userId.startsWith('guest_')) {
-        // Guest users only have level 1 unlocked
-        return [1];
+        // Guest users have access to first 3 levels for better demo experience
+        return [1, 2, 3];
       }
 
       const { data, error } = await supabase
@@ -1502,14 +1631,14 @@ export class AssignmentManager {
         .single();
 
       if (error || !data) {
-        console.log('No user progress found, defaulting to level 1');
-        return [1];
+        console.log('No user progress found, defaulting to first 3 levels');
+        return [1, 2, 3];
       }
 
-      return data.unlocked_levels || [1];
+      return data.unlocked_levels || [1, 2, 3];
     } catch (error) {
       console.error('Error getting unlocked levels:', error);
-      return [1];
+      return [1, 2, 3];
     }
   }
 
@@ -1565,6 +1694,124 @@ export class AssignmentManager {
   private getMaxLevelNumber(): number {
     const assignments = this.getAssignmentTemplates();
     return Math.max(...assignments.map(a => a.levelNumber || 1));
+  }
+
+  // Developer/Testing Methods
+  public enableDeveloperMode(): void {
+    localStorage.setItem('cutfill_dev_mode', 'true');
+    console.log('🔧 Developer mode enabled - all levels unlocked');
+  }
+
+  public disableDeveloperMode(): void {
+    localStorage.removeItem('cutfill_dev_mode');
+    console.log('🔒 Developer mode disabled - normal progression restored');
+  }
+
+  public isDeveloperMode(): boolean {
+    return localStorage.getItem('cutfill_dev_mode') === 'true';
+  }
+
+  // Easy level progression methods
+  public async unlockLevel(userId: string, levelNumber: number): Promise<boolean> {
+    try {
+      if (userId === 'guest' || userId.startsWith('guest_')) {
+        console.log('Guest users cannot unlock levels permanently');
+        return false;
+      }
+
+      const unlockedLevels = await this.getUnlockedLevels(userId);
+      
+      if (unlockedLevels.includes(levelNumber)) {
+        console.log(`Level ${levelNumber} already unlocked`);
+        return true;
+      }
+
+      const updatedLevels = [...unlockedLevels, levelNumber].sort((a, b) => a - b);
+
+      const { error } = await supabase
+        .from('user_progress')
+        .update({ unlocked_levels: updatedLevels })
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error unlocking level:', error);
+        return false;
+      }
+
+      console.log(`✅ Level ${levelNumber} unlocked for user ${userId}`);
+      return true;
+    } catch (error) {
+      console.error('Error in unlockLevel:', error);
+      return false;
+    }
+  }
+
+  public async unlockAllLevels(userId: string): Promise<boolean> {
+    try {
+      if (userId === 'guest' || userId.startsWith('guest_')) {
+        console.log('Guest users cannot unlock levels permanently');
+        return false;
+      }
+
+      const maxLevel = this.getMaxLevelNumber();
+      const allLevels = Array.from({length: maxLevel}, (_, i) => i + 1);
+
+      const { error } = await supabase
+        .from('user_progress')
+        .update({ unlocked_levels: allLevels })
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error unlocking all levels:', error);
+        return false;
+      }
+
+      console.log(`🎉 All levels (1-${maxLevel}) unlocked for user ${userId}`);
+      return true;
+    } catch (error) {
+      console.error('Error in unlockAllLevels:', error);
+      return false;
+    }
+  }
+
+  // Simplified level progression - lower minimum score requirement
+  public async completeAssignmentWithEasyProgression(): Promise<void> {
+    if (!this.progress || !this.currentAssignment) return;
+
+    this.progress.completed = true;
+    this.progress.endTime = new Date();
+    
+    // Stop monitoring
+    if (this.updateInterval) {
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+    }
+
+    // Save progress to database
+    try {
+      await this.saveProgress();
+    } catch (error) {
+      console.error('Failed to save assignment progress:', error);
+    }
+
+    // Unlock next level with easier requirements (50% instead of minimum score)
+    const easyProgressionScore = 50;
+    if (this.progress.currentScore >= easyProgressionScore) {
+      try {
+        const levelNumber = this.currentAssignment.levelNumber || 1;
+        const unlocked = await this.unlockNextLevel(this.progress.userId, levelNumber);
+        if (unlocked) {
+          console.log(`🎉 Level ${levelNumber + 1} unlocked! (Easy progression at ${this.progress.currentScore.toFixed(1)}%)`);
+        }
+      } catch (error) {
+        console.error('Error unlocking next level:', error);
+      }
+    }
+
+    // Trigger completion callback
+    if (this.callbacks.onAssignmentComplete) {
+      this.callbacks.onAssignmentComplete(this.progress);
+    }
   }
 
   // Age scaling methods
@@ -1911,9 +2158,9 @@ export class AssignmentManager {
       const x = vertices[i];
       const z = vertices[i + 2];
       
-      // Mostly flat with very gentle undulation
-      const flatNoise = this.smoothNoise(x * 0.02, z * 0.02) * 0.5; // Gentle ±0.5 yards
-      const flatDetail = this.smoothNoise(x * 0.05, z * 0.05) * 0.17; // Fine detail ±0.17 yards
+      // Mostly flat with very gentle undulation - updated to CLAUDE.md standards
+      const flatNoise = this.smoothNoise(x * 0.02, z * 0.02) * 1.0; // ±1 yards variation
+      const flatDetail = this.smoothNoise(x * 0.05, z * 0.05) * 0.5; // ±0.5 yards detail
       vertices[i + 1] = flatNoise + flatDetail;
     }
     
@@ -1931,14 +2178,14 @@ export class AssignmentManager {
       const x = vertices[i];
       const z = vertices[i + 2];
       
-      // Gentle slope with natural variation
+      // Gentle slope with natural variation - updated to CLAUDE.md standards
       const slopeDirection = Math.PI * 0.3;
       const slopeStrength = 0.01; // Adjusted for yards
       let terrainHeight = (x * Math.cos(slopeDirection) + z * Math.sin(slopeDirection)) * slopeStrength;
-      terrainHeight += this.smoothNoise(x * 0.02, z * 0.02) * 0.83; // ±0.83 yards variation
-      terrainHeight += this.smoothNoise(x * 0.04, z * 0.04) * 0.33; // ±0.33 yards detail
+      terrainHeight += this.smoothNoise(x * 0.02, z * 0.02) * 1.0; // ±1 yards variation
+      terrainHeight += this.smoothNoise(x * 0.04, z * 0.04) * 0.5; // ±0.5 yards detail
       
-      vertices[i + 1] = Math.max(-2.67, Math.min(2.67, terrainHeight)); // Clamp to ±2.67 yards
+      vertices[i + 1] = Math.max(-3, Math.min(3, terrainHeight)); // Clamp to ±3 yards
     }
     
     (mesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
