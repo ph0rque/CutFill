@@ -22,6 +22,10 @@ export interface AssignmentConfig {
   difficulty: 1 | 2 | 3 | 4 | 5;
   category: 'foundation' | 'drainage' | 'grading' | 'excavation' | 'road_construction';
   estimatedTime: number; // minutes
+  levelNumber: number; // Sequential level (1, 2, 3...)
+  idealOperations: number; // Hand-authored par count for operations efficiency
+  levelVersion: number; // Version for future level updates
+  isCompetitive: boolean; // Whether this level has competitive multiplayer mode
   objectives: AssignmentObjective[];
   terrainConfig: {
     width: number;
@@ -44,6 +48,8 @@ export interface AssignmentProgress {
   startTime: Date;
   endTime?: Date;
   currentScore: number;
+  operationCount: number; // Each cut/fill modification
+  operationsEfficiencyScore: number; // (idealOps / actualOps) * 100
   objectives: AssignmentObjective[];
   volumeData: {
     totalCut: number;
@@ -84,6 +90,10 @@ export class AssignmentManager {
         difficulty: 1,
         category: 'foundation',
         estimatedTime: 10,
+        levelNumber: 1,
+        idealOperations: 15,
+        levelVersion: 1,
+        isCompetitive: false,
         objectives: [
           {
             id: 'level_pad',
@@ -130,6 +140,10 @@ export class AssignmentManager {
         difficulty: 2,
         category: 'drainage',
         estimatedTime: 15,
+        levelNumber: 2,
+        idealOperations: 25,
+        levelVersion: 1,
+        isCompetitive: false,
         objectives: [
           {
             id: 'channel_path',
@@ -182,6 +196,10 @@ export class AssignmentManager {
         difficulty: 3,
         category: 'road_construction',
         estimatedTime: 25,
+        levelNumber: 3,
+        idealOperations: 40,
+        levelVersion: 1,
+        isCompetitive: false,
         objectives: [
           {
             id: 'road_grade',
@@ -238,6 +256,10 @@ export class AssignmentManager {
         difficulty: 4,
         category: 'grading',
         estimatedTime: 40,
+        levelNumber: 4,
+        idealOperations: 60,
+        levelVersion: 1,
+        isCompetitive: false,
         objectives: [
           {
             id: 'building_pad_1',
@@ -304,6 +326,10 @@ export class AssignmentManager {
         difficulty: 5,
         category: 'excavation',
         estimatedTime: 60,
+        levelNumber: 5,
+        idealOperations: 80,
+        levelVersion: 1,
+        isCompetitive: false,
         objectives: [
           {
             id: 'cut_accuracy',
@@ -372,6 +398,10 @@ export class AssignmentManager {
         difficulty: 2,
         category: 'foundation',
         estimatedTime: 8,
+        levelNumber: 6,
+        idealOperations: 20,
+        levelVersion: 1,
+        isCompetitive: true,
         objectives: [
           {
             id: 'level_speed_pad',
@@ -870,6 +900,8 @@ export class AssignmentManager {
       userId,
       startTime: new Date(),
       currentScore: 0,
+      operationCount: 0,
+      operationsEfficiencyScore: 100,
       objectives: assignment.objectives.map(obj => ({ ...obj })),
       volumeData: {
         totalCut: 0,
@@ -994,7 +1026,7 @@ export class AssignmentManager {
     };
 
     // Check each objective
-    let totalScore = 0;
+    let objectivesScore = 0;
     let completedObjectives = 0;
 
     for (const objective of this.progress.objectives) {
@@ -1002,7 +1034,7 @@ export class AssignmentManager {
       objective.score = score;
       objective.completed = score >= 80; // 80% threshold for completion
       
-      totalScore += score * objective.weight;
+      objectivesScore += score * objective.weight;
       if (objective.completed) {
         completedObjectives++;
         
@@ -1013,7 +1045,19 @@ export class AssignmentManager {
       }
     }
 
-    this.progress.currentScore = totalScore;
+    // Calculate net-zero balance score (30% weight)
+    const netVolumeYards = Math.abs(this.progress.volumeData.netMovement);
+    const netZeroScore = Math.max(0, 100 - (netVolumeYards * 10)); // Lose 10 points per cubic yard imbalance
+    
+    // Operations efficiency score (20% weight) - already calculated in addToolUsage
+    const operationsScore = this.progress.operationsEfficiencyScore;
+    
+    // Enhanced scoring: 50% objectives, 30% net-zero, 20% operations
+    this.progress.currentScore = (objectivesScore * 0.5) + (netZeroScore * 0.3) + (operationsScore * 0.2);
+    
+    console.log(`Scoring breakdown: Objectives=${objectivesScore.toFixed(1)} (50%), Net-Zero=${netZeroScore.toFixed(1)} (30%), Operations=${operationsScore.toFixed(1)} (20%), Total=${this.progress.currentScore.toFixed(1)}`);
+
+    
 
     // Check if assignment is complete
     if (completedObjectives === this.progress.objectives.length) {
@@ -1203,6 +1247,18 @@ export class AssignmentManager {
       console.error('Failed to save assignment progress:', error);
     }
 
+    // Unlock next level if assignment passed
+    if (this.progress.currentScore >= this.currentAssignment.successCriteria.minimumScore) {
+      try {
+        const unlocked = await this.unlockNextLevel(this.progress.userId, this.currentAssignment.levelNumber);
+        if (unlocked) {
+          console.log(`🎉 Level ${this.currentAssignment.levelNumber + 1} unlocked!`);
+        }
+      } catch (error) {
+        console.error('Error unlocking next level:', error);
+      }
+    }
+
     // Trigger completion callback
     if (this.callbacks.onAssignmentComplete) {
       this.callbacks.onAssignmentComplete(this.progress);
@@ -1344,9 +1400,104 @@ export class AssignmentManager {
   }
 
   public addToolUsage(toolName: string): void {
-    if (this.progress && !this.progress.toolsUsed.includes(toolName)) {
-      this.progress.toolsUsed.push(toolName);
+    if (this.progress) {
+      // Track unique tools used
+      if (!this.progress.toolsUsed.includes(toolName)) {
+        this.progress.toolsUsed.push(toolName);
+      }
+      
+      // Increment operation count for each terrain modification
+      this.progress.operationCount++;
+      
+      // Calculate operations efficiency score
+      if (this.currentAssignment) {
+        this.progress.operationsEfficiencyScore = Math.min(100, 
+          (this.currentAssignment.idealOperations / this.progress.operationCount) * 100
+        );
+      }
+      
+      console.log(`Operation ${this.progress.operationCount} recorded. Efficiency: ${this.progress.operationsEfficiencyScore.toFixed(1)}%`);
     }
+  }
+
+  // Level progression methods
+  public async getUnlockedLevels(userId: string): Promise<number[]> {
+    try {
+      if (userId === 'guest' || userId.startsWith('guest_')) {
+        // Guest users only have level 1 unlocked
+        return [1];
+      }
+
+      const { data, error } = await supabase
+        .from('user_progress')
+        .select('unlocked_levels')
+        .eq('user_id', userId)
+        .single();
+
+      if (error || !data) {
+        console.log('No user progress found, defaulting to level 1');
+        return [1];
+      }
+
+      return data.unlocked_levels || [1];
+    } catch (error) {
+      console.error('Error getting unlocked levels:', error);
+      return [1];
+    }
+  }
+
+  public async unlockNextLevel(userId: string, completedLevel: number): Promise<boolean> {
+    try {
+      if (userId === 'guest' || userId.startsWith('guest_')) {
+        console.log('Guest users cannot unlock levels permanently');
+        return false;
+      }
+
+      const unlockedLevels = await this.getUnlockedLevels(userId);
+      const nextLevel = completedLevel + 1;
+      
+      // Check if next level is already unlocked or if it's the logical next level
+      if (unlockedLevels.includes(nextLevel) || nextLevel > this.getMaxLevelNumber()) {
+        return false;
+      }
+
+      // Add next level to unlocked levels
+      const updatedLevels = [...unlockedLevels, nextLevel].sort((a, b) => a - b);
+
+      const { error } = await supabase
+        .from('user_progress')
+        .update({ unlocked_levels: updatedLevels })
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error unlocking next level:', error);
+        return false;
+      }
+
+      console.log(`Level ${nextLevel} unlocked for user ${userId}`);
+      return true;
+    } catch (error) {
+      console.error('Error in unlockNextLevel:', error);
+      return false;
+    }
+  }
+
+  public getAvailableLevelsForUser(userUnlockedLevels: number[]): AssignmentConfig[] {
+    const allAssignments = this.getAssignmentTemplates();
+    
+    // Sort assignments by level number to create sequential progression
+    return allAssignments
+      .filter(assignment => userUnlockedLevels.includes(assignment.levelNumber))
+      .sort((a, b) => a.levelNumber - b.levelNumber);
+  }
+
+  public isLevelUnlocked(levelNumber: number, userUnlockedLevels: number[]): boolean {
+    return userUnlockedLevels.includes(levelNumber);
+  }
+
+  private getMaxLevelNumber(): number {
+    const assignments = this.getAssignmentTemplates();
+    return Math.max(...assignments.map(a => a.levelNumber));
   }
 
   // Age scaling methods
