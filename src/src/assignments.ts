@@ -1064,6 +1064,9 @@ export class AssignmentManager {
       this.completeAssignment();
     }
 
+    // Update competitive multiplayer scores if in competitive mode
+    this.updateCompetitiveScores();
+
     // Trigger progress update callback
     if (this.callbacks.onProgressUpdate) {
       this.callbacks.onProgressUpdate(this.progress);
@@ -1417,6 +1420,19 @@ export class AssignmentManager {
       }
       
       console.log(`Operation ${this.progress.operationCount} recorded. Efficiency: ${this.progress.operationsEfficiencyScore.toFixed(1)}%`);
+    }
+  }
+
+  // Competitive scoring integration
+  private updateCompetitiveScores(): void {
+    if (!this.progress || !this.currentAssignment?.isCompetitive) return;
+
+    // Check if multiplayer manager is available globally
+    if (typeof (window as any).multiplayerManager === 'object' && (window as any).multiplayerManager) {
+      const multiplayerManager = (window as any).multiplayerManager;
+      if (multiplayerManager.updateLiveScore && typeof multiplayerManager.updateLiveScore === 'function') {
+        multiplayerManager.updateLiveScore(this.progress.userId, this.progress);
+      }
     }
   }
 

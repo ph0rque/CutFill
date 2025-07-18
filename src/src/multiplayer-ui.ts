@@ -1,4 +1,5 @@
-import { EnhancedMultiplayerManager, GameSession, PlayerData, ChatMessage } from './multiplayer-enhanced';
+import { EnhancedMultiplayerManager } from './multiplayer-enhanced';
+import type { GameSession, PlayerData, ChatMessage } from './multiplayer-enhanced';
 
 export class MultiplayerUI {
   private multiplayerManager: EnhancedMultiplayerManager;
@@ -64,19 +65,43 @@ export class MultiplayerUI {
     controlsSection.innerHTML = `
       <div style="margin-bottom: 15px; border-bottom: 1px solid #555; padding-bottom: 10px;">
         <h3 style="margin: 0 0 10px 0;">Session Controls</h3>
-        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-          <button id="create-session-btn" style="padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Create Session</button>
+        
+        <!-- Level Selection -->
+        <div style="margin-bottom: 10px;">
+          <label style="display: block; margin-bottom: 5px; font-size: 12px; color: #ccc;">Select Level:</label>
+          <select id="level-select" style="width: 100%; padding: 5px; background: rgba(255,255,255,0.1); color: white; border: 1px solid #555; border-radius: 4px;">
+            <option value="">Select a level...</option>
+          </select>
+        </div>
+
+        <!-- Session Actions -->
+        <div style="display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap;">
+          <button id="quick-match-btn" style="padding: 5px 10px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer;">🚀 Quick Match</button>
+          <button id="create-competitive-btn" style="padding: 5px 10px; background: #9C27B0; color: white; border: none; border-radius: 4px; cursor: pointer;">🏆 Create Competitive</button>
+          <button id="create-session-btn" style="padding: 5px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Create Practice</button>
+        </div>
+        
+        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
           <button id="join-session-btn" style="padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Join Session</button>
+          <button id="spectate-btn" style="padding: 5px 10px; background: #607D8B; color: white; border: none; border-radius: 4px; cursor: pointer;">👁️ Spectate</button>
           <button id="leave-session-btn" style="padding: 5px 10px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">Leave Session</button>
         </div>
+
         <div id="session-info" style="font-size: 12px; color: #ccc;">
           Not in session
+        </div>
+        
+        <!-- Competitive Match Status -->
+        <div id="competitive-status" style="display: none; margin-top: 10px; padding: 8px; background: rgba(156, 39, 176, 0.2); border-radius: 4px; border-left: 3px solid #9C27B0;">
+          <div style="font-weight: bold; color: #E1BEE7;">🏆 Competitive Match</div>
+          <div id="competitive-info" style="font-size: 11px; color: #ccc; margin-top: 2px;"></div>
         </div>
       </div>
     `;
 
     this.uiContainer.appendChild(controlsSection);
     this.setupSessionControlEvents();
+    this.populateLevelSelect();
   }
 
   private createChatSystem(): void {
@@ -466,5 +491,95 @@ export class MultiplayerUI {
     if (modal && document.body.contains(modal)) {
       document.body.removeChild(modal);
     }
+  }
+
+  // Enhanced lobby methods
+  private populateLevelSelect(): void {
+    const levelSelect = document.getElementById('level-select') as HTMLSelectElement;
+    if (!levelSelect) return;
+
+    // Get available competitive levels (this would come from AssignmentManager)
+    const competitiveLevels = [
+      { id: 'speed_foundation_race', name: '⚡ Speed Foundation Race', levelNumber: 6 },
+      { id: 'drainage_duel', name: '🌊 Drainage Channel Duel', levelNumber: 7 },
+      { id: 'precision_showdown', name: '🎯 Precision Earthworks Showdown', levelNumber: 8 }
+    ];
+
+    // Clear existing options except the first one
+    levelSelect.innerHTML = '<option value="">Select a level...</option>';
+
+    // Add competitive levels
+    competitiveLevels.forEach(level => {
+      const option = document.createElement('option');
+      option.value = level.id;
+      option.textContent = `Level ${level.levelNumber}: ${level.name}`;
+      levelSelect.appendChild(option);
+    });
+  }
+
+  private setupEnhancedSessionEvents(): void {
+    // Quick Match functionality
+    const quickMatchBtn = document.getElementById('quick-match-btn');
+    if (quickMatchBtn) {
+      quickMatchBtn.addEventListener('click', () => {
+        const levelSelect = document.getElementById('level-select') as HTMLSelectElement;
+        if (!levelSelect.value) {
+          this.showNotification('Please select a level first', 'error');
+          return;
+        }
+        this.startQuickMatch(levelSelect.value);
+      });
+    }
+
+    // Create Competitive Match
+    const createCompetitiveBtn = document.getElementById('create-competitive-btn');
+    if (createCompetitiveBtn) {
+      createCompetitiveBtn.addEventListener('click', () => {
+        const levelSelect = document.getElementById('level-select') as HTMLSelectElement;
+        if (!levelSelect.value) {
+          this.showNotification('Please select a level first', 'error');
+          return;
+        }
+        this.createCompetitiveSession(levelSelect.value);
+      });
+    }
+
+    // Spectate functionality
+    const spectateBtn = document.getElementById('spectate-btn');
+    if (spectateBtn) {
+      spectateBtn.addEventListener('click', () => {
+        this.showSpectatorLobby();
+      });
+    }
+  }
+
+  private startQuickMatch(levelId: string): void {
+    this.showNotification('🔍 Looking for opponents...', 'info');
+    
+    // Emit quick match request to server
+    this.multiplayerManager.socket.emit('quick-match', {
+      levelId,
+      playerId: this.multiplayerManager.socket.id
+    });
+  }
+
+  private createCompetitiveSession(levelId: string): void {
+    this.showNotification('🏆 Creating competitive session...', 'info');
+    
+    // Create a competitive session with the selected level
+    this.multiplayerManager.createSession(`Competitive: ${levelId}`, {
+      isCompetitive: true,
+      levelId,
+      minPlayers: 2,
+      maxPlayers: 4
+    });
+  }
+
+  private showSpectatorLobby(): void {
+    this.showNotification('👁️ Showing active competitive matches...', 'info');
+    
+    // This would show a list of ongoing competitive matches
+    // For now, just emit a spectator request
+    this.multiplayerManager.socket.emit('request-spectator-sessions');
   }
 } 

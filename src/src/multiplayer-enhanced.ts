@@ -49,6 +49,8 @@ export interface GameSession {
   maxPlayers: number;
   isPublic: boolean;
   currentAssignment: string | null;
+  currentLevel: number | null;
+  liveScores: Map<string, CompetitiveScore>;
   terrainModifications: TerrainModification[];
   sharedObjectives: SharedObjective[];
   sessionState: SessionState;
@@ -57,6 +59,16 @@ export interface GameSession {
   startedAt: number | null;
   endedAt: number | null;
   spectators: Map<string, SpectatorData>;
+}
+
+export interface CompetitiveScore {
+  playerId: string;
+  totalScore: number;
+  objectiveScore: number;
+  netZeroScore: number;
+  operationsScore: number;
+  operationCount: number;
+  lastUpdated: number;
 }
 
 export interface SharedObjective {
@@ -555,6 +567,81 @@ export class EnhancedMultiplayerManager {
 
   public setCallbacks(callbacks: MultiplayerCallbacks): void {
     this.callbacks = callbacks;
+  }
+
+  // Competitive scoring methods
+  public updateLiveScore(playerId: string, assignmentProgress: any): void {
+    if (!this.currentSession || !this.currentSession.liveScores) return;
+
+    const competitiveScore: CompetitiveScore = {
+      playerId,
+      totalScore: assignmentProgress.currentScore,
+      objectiveScore: this.calculateObjectiveScore(assignmentProgress),
+      netZeroScore: this.calculateNetZeroScore(assignmentProgress),
+      operationsScore: assignmentProgress.operationsEfficiencyScore || 0,
+      operationCount: assignmentProgress.operationCount || 0,
+      lastUpdated: Date.now()
+    };
+
+    this.currentSession.liveScores.set(playerId, competitiveScore);
+    
+    // Broadcast score update to all players
+    this.socket.emit('live-score-update', {
+      sessionId: this.currentSession.id,
+      scores: Object.fromEntries(this.currentSession.liveScores)
+    });
+
+    console.log(`Live score updated for ${playerId}: ${competitiveScore.totalScore.toFixed(1)}`);
+  }
+
+  public getLeaderboard(): CompetitiveScore[] {
+    if (!this.currentSession?.liveScores) return [];
+    
+    return Array.from(this.currentSession.liveScores.values())
+      .sort((a, b) => b.totalScore - a.totalScore);
+  }
+
+  public startCompetitiveLevel(levelId: string): void {
+    if (this.currentSession) {
+      this.currentSession.currentLevel = parseInt(levelId.replace(/\D/g, '')) || 1;
+      this.currentSession.liveScores = new Map();
+      
+      // Initialize scores for all players
+      this.currentSession.players.forEach((player, playerId) => {
+        this.currentSession!.liveScores.set(playerId, {
+          playerId,
+          totalScore: 0,
+          objectiveScore: 0,
+          netZeroScore: 100, // Start with perfect net-zero
+          operationsScore: 100, // Start with perfect efficiency
+          operationCount: 0,
+          lastUpdated: Date.now()
+        });
+      });
+
+      console.log(`Started competitive level ${this.currentSession.currentLevel} with ${this.currentSession.players.size} players`);
+    }
+  }
+
+  private calculateObjectiveScore(progress: any): number {
+    if (!progress.objectives) return 0;
+    
+    let totalScore = 0;
+    let totalWeight = 0;
+    
+    for (const objective of progress.objectives) {
+      totalScore += (objective.score || 0) * (objective.weight || 1);
+      totalWeight += objective.weight || 1;
+    }
+    
+    return totalWeight > 0 ? totalScore / totalWeight : 0;
+  }
+
+  private calculateNetZeroScore(progress: any): number {
+    if (!progress.volumeData) return 100;
+    
+    const netVolumeYards = Math.abs(progress.volumeData.netMovement || 0);
+    return Math.max(0, 100 - (netVolumeYards * 10)); // Lose 10 points per cubic yard imbalance
   }
 
   public cleanup(): void {
