@@ -2083,8 +2083,8 @@ export class Terrain {
         const vertexIndex = (row * (blockWidthSegments + 1) + col) * 3;
         
         // Sample terrain height at this low-res position
-        const worldX = (col / blockWidthSegments) * 100; // terrain width
-        const worldZ = (row / blockHeightSegments) * 100; // terrain height
+        const worldX = (col / blockWidthSegments) * this.geometry.parameters.width; // terrain width
+        const worldZ = (row / blockHeightSegments) * this.geometry.parameters.height; // terrain height
         const terrainHeight = this.getHeightAtPosition(worldX, worldZ);
         
         // Update all layers for this column
