@@ -1198,73 +1198,51 @@ export class AssignmentUI {
 
     this.persistentProgressPanel = document.createElement('div');
     this.persistentProgressPanel.id = 'assignment-progress-panel';
-    // Calculate safe position below precision tools panel
-    const precisionPanel = document.getElementById('precision-tools-ui');
-    const mainPanel = document.getElementById('main-ui-panel');
-
-    let topPosition = 380; // Default fallback
-    let leftPosition = 10; // Default left position
-
-    // Check if precision tools panel exists and calculate position below it
-    if (precisionPanel) {
-      const precisionRect = precisionPanel.getBoundingClientRect();
-      topPosition = precisionRect.bottom + 10;
-    }
-    // Fallback to main panel if precision panel doesn't exist
-    else if (mainPanel) {
-      const mainRect = mainPanel.getBoundingClientRect();
-      topPosition = mainRect.bottom + 10;
-    }
-
+    
     // Responsive positioning and sizing based on screen size
     const screenWidth = window.innerWidth;
     const screenHeight = window.innerHeight;
 
-    // Initialize responsive properties
-    let panelWidth = '350px';
+    // Position on the right side to avoid left-side UI conflicts
+    let rightPosition = 20; // Distance from right edge
+    let topPosition = 20;   // Distance from top
+    let panelWidth = '320px';
     let panelPadding = '15px';
 
     // Mobile devices (width < 768px)
     if (screenWidth < 768) {
-      leftPosition = 10;
-      topPosition = Math.min(topPosition, screenHeight - 250); // Ensure it fits
-      panelWidth = `${Math.min(screenWidth - 20, 350)}px`;
+      rightPosition = 10;
+      topPosition = 10;
+      panelWidth = `${Math.min(screenWidth - 40, 300)}px`;
       panelPadding = '12px';
     }
     // Tablet devices (width < 1024px)
     else if (screenWidth < 1024) {
-      // Ensure we don't go off-screen vertically
-      const maxHeight = screenHeight - 200;
-      if (topPosition > maxHeight) {
-        leftPosition = 380; // Position to the right
-        topPosition = 60;
-      }
-      panelWidth = '320px';
+      rightPosition = 15;
+      topPosition = 15;
+      panelWidth = '300px';
       panelPadding = '14px';
     }
-    // Desktop devices
+    // Desktop and wide screens
     else {
-      // Ensure we don't go off-screen
-      const maxHeight = screenHeight - 200;
-      if (topPosition > maxHeight) {
-        // If it would go off-screen, position to the right instead
-        leftPosition = 420;
-        topPosition = 60; // Align with precision tools
-      }
+      rightPosition = 20;
+      topPosition = 20;
+      panelWidth = '320px';
+      panelPadding = '15px';
     }
 
     this.persistentProgressPanel.style.cssText = `
       position: fixed;
       top: ${topPosition}px;
-      left: ${leftPosition}px;
+      right: ${rightPosition}px;
       background: rgba(0,0,0,0.9);
       color: white;
       padding: ${panelPadding};
       border-radius: 8px;
       font-family: Arial, sans-serif;
       width: ${panelWidth};
-      max-width: 400px;
-      z-index: 1001;
+      max-width: 350px;
+      z-index: 1002;
       pointer-events: auto;
       border: 2px solid #4CAF50;
       box-shadow: 0 4px 12px rgba(0,0,0,0.3);

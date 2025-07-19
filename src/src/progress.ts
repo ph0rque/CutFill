@@ -47,6 +47,7 @@ export interface UserProgress {
   longestStreak: number;
   achievements: string[];
   unlockedLevels: number[];
+  completedBrackets: string[]; // Age brackets completed (kids, teens, adults)
   lastActiveDate: Date;
   preferences: UserPreferences;
 }
@@ -361,6 +362,7 @@ export class ProgressTracker {
         longestStreak: data.longest_streak || 0,
         achievements: data.achievements || [],
         unlockedLevels: data.unlocked_levels || [1],
+        completedBrackets: data.completed_brackets || [],
         lastActiveDate: new Date(data.last_active_date || Date.now()),
         preferences: data.preferences || this.getDefaultPreferences(),
       };
@@ -387,6 +389,7 @@ export class ProgressTracker {
       longestStreak: 0,
       achievements: [],
       unlockedLevels: [1],
+      completedBrackets: [],
       lastActiveDate: new Date(),
       preferences: this.getDefaultPreferences(),
     };
@@ -740,5 +743,35 @@ export class ProgressTracker {
 
   public getCurrentSession(): SessionActivity | null {
     return this.currentSession;
+  }
+
+  // Track bracket completion for progression system
+  public async markBracketComplete(bracket: 'kids' | 'teens' | 'adults'): Promise<void> {
+    if (!this.userProgress) return;
+
+    if (!this.userProgress.completedBrackets.includes(bracket)) {
+      this.userProgress.completedBrackets.push(bracket);
+      console.log(`🎉 Age bracket '${bracket}' completed!`);
+      
+      // Save to database
+      await this.saveUserProgress();
+      
+      // Check for achievement
+      if (this.userProgress.completedBrackets.length === 3) {
+        this.checkAchievements(); // Will check all achievements including bracket completion
+      }
+    }
+  }
+
+  // Check if a specific bracket is completed
+  public isBracketCompleted(bracket: 'kids' | 'teens' | 'adults'): boolean {
+    return this.userProgress?.completedBrackets.includes(bracket) || false;
+  }
+
+  // Get progress within a specific age bracket
+  public getBracketProgress(bracket: 'kids' | 'teens' | 'adults'): { completed: number; total: number } {
+    // Always 3 levels per bracket
+    // This would need to be connected to level completion data from supabase
+    return { completed: 0, total: 3 }; // Placeholder
   }
 }

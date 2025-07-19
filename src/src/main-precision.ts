@@ -795,15 +795,6 @@ window.addEventListener('resize', () => {
 
 // Initialize when page loads
 window.addEventListener('load', async () => {
-  // ALWAYS clear any existing Supabase session to ensure clean state
-  // This handles incognito mode and proper logout behavior
-  try {
-    await supabase.auth.signOut();
-    console.log('Cleared any existing Supabase session');
-  } catch (error) {
-    console.log('No existing session to clear:', error);
-  }
-
   const hasVisited = localStorage.getItem('hasVisited');
   const guestData = localStorage.getItem('guestData');
   
@@ -897,22 +888,23 @@ document.addEventListener('DOMContentLoaded', () => {
   instructionsDiv.style.cssText = `
     position: fixed;
     top: 10px;
-    right: 10px;
+    left: 10px;
     background: rgba(0,0,0,0.8);
     color: white;
-    padding: 15px;
+    padding: 10px;
     border-radius: 4px;
     font-family: Arial, sans-serif;
-    font-size: 12px;
-    z-index: 1000;
-    max-width: 250px;
+    font-size: 11px;
+    z-index: 999;
+    max-width: 200px;
+    min-width: 180px;
   `;
   instructionsDiv.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-      <h3 style="margin: 0; color: #4CAF50;">🏗️ Precision Tools</h3>
-      <button id="precision-labels-toggle" onclick="precisionUI.toggleLabels()" style="padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🏷️ Labels</button>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <h3 style="margin: 0; color: #4CAF50; font-size: 14px;">🏗️ Precision Tools</h3>
+      <button id="precision-labels-toggle" onclick="precisionUI.toggleLabels()" style="padding: 3px 6px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">🏷️ Labels</button>
     </div>
-    <div style="line-height: 1.4;">
+    <div style="line-height: 1.3; font-size: 10px;">
       <strong>Camera:</strong><br>
       • Left-drag: Rotate view<br>
       • Shift+drag: Pan camera (works in top-down mode)<br>

@@ -37,6 +37,7 @@ export interface AssignmentConfig {
   idealOperations?: number; // Hand-authored par count for operations efficiency
   levelVersion?: number; // Version for future level updates
   isCompetitive?: boolean; // Whether this level has competitive multiplayer mode
+  ageBracket?: 'kids' | 'teens' | 'adults'; // Age bracket categorization
   objectives: AssignmentObjective[];
   terrainConfig: {
     width: number;
@@ -70,6 +71,7 @@ export interface AssignmentProgress {
   };
   toolsUsed: string[];
   completed: boolean;
+  passed?: boolean; // Pass/fail determination based on objectives
   attempts: number;
 }
 
@@ -95,39 +97,169 @@ export class AssignmentManager {
     this.ageScaling = new AgeScalingSystem();
   }
 
-  // Assignment Templates
-  private getAssignmentTemplates(): AssignmentConfig[] {
+  // Assignment Templates - 3 levels per age bracket
+  public getAssignmentTemplates(): AssignmentConfig[] {
     return [
+      // KIDS BRACKET (Ages 8-12) - Simple, fun tasks with forgiving tolerances
       {
-        id: 'foundation_prep_1',
-        name: 'Foundation Preparation - Level 1',
-        description:
-          'Prepare a level foundation pad for a small residential building',
+        id: 'kids_level_1',
+        name: '🏠 Build a Sandbox',
+        description: 'Level the ground to create a perfect sandbox for kids to play!',
         difficulty: 1,
         category: 'foundation',
-        estimatedTime: 10,
+        estimatedTime: 8,
         levelNumber: 1,
+        idealOperations: 8,
+        levelVersion: 1,
+        isCompetitive: false,
+        ageBracket: 'kids',
+        objectives: [
+          {
+            id: 'level_sandbox',
+            type: 'level_area',
+            description: 'Make a flat 10×10 yard area for the sandbox',
+            target: { x: 0, z: 0, width: 30, height: 30, elevation: 0 }, // 30 feet = 10 yards
+            tolerance: 1.5, // Very forgiving - 1.5 feet = 0.5 yards
+            weight: 1.0,
+            completed: false,
+            score: 0,
+          },
+        ],
+        terrainConfig: {
+          width: 40,
+          height: 40,
+          initialTerrain: 'flat',
+        },
+        tools: ['cut', 'fill'],
+        hints: [
+          '🎯 Use the cut tool to lower high spots',
+          '🏔️ Use the fill tool to raise low spots',
+          '🎨 Try to make it as flat as possible!',
+        ],
+        successCriteria: {
+          minimumScore: 60,
+          timeBonus: false,
+          volumeEfficiency: false,
+        },
+      },
+      {
+        id: 'kids_level_2',
+        name: '🌊 Make a Small Creek',
+        description: 'Dig a gentle creek that water can flow through!',
+        difficulty: 2,
+        category: 'drainage',
+        estimatedTime: 12,
+        levelNumber: 2,
         idealOperations: 15,
         levelVersion: 1,
         isCompetitive: false,
+        ageBracket: 'kids',
         objectives: [
           {
-            id: 'level_pad',
+            id: 'dig_creek',
+            type: 'create_channel',
+            description: 'Dig a creek 10 yards long, 0.67 yards wide, 0.33 yards deep',
+            target: {
+              startPoint: { x: -15, z: 0 }, // -5 yards
+              endPoint: { x: 15, z: 0 },   // +5 yards
+              width: 2,    // 2 feet
+              depth: 1,    // 1 foot
+              slope: 0.02,
+            },
+            tolerance: 1.5, // Very forgiving - 0.5 yards
+            weight: 1.0,
+            completed: false,
+            score: 0,
+          },
+        ],
+        terrainConfig: {
+          width: 40,
+          height: 30,
+          initialTerrain: 'rolling',
+        },
+        tools: ['cut', 'fill'],
+        hints: [
+          '🌊 Start at the high end and dig downhill',
+          '⛏️ Make the creek about 0.67 yards wide',
+          '🏞️ Water likes to flow downhill!',
+        ],
+        successCriteria: {
+          minimumScore: 65,
+          timeBonus: false,
+          volumeEfficiency: false,
+        },
+      },
+      {
+        id: 'kids_level_3',
+        name: '🛤️ Build a Fun Path',
+        description: 'Create a smooth path that connects two areas!',
+        difficulty: 3,
+        category: 'grading',
+        estimatedTime: 15,
+        levelNumber: 3,
+        idealOperations: 20,
+        levelVersion: 1,
+        isCompetitive: false,
+        ageBracket: 'kids',
+        objectives: [
+          {
+            id: 'build_path',
+            type: 'grade_road',
+            description: 'Make a smooth 2.67-yard wide path (13 yards long)',
+            target: { width: 8, maxGrade: 0.1, length: 40 }, // 8 feet wide, 40 feet = 13 yards long
+            tolerance: 1.5, // 0.5 yards
+            weight: 1.0,
+            completed: false,
+            score: 0,
+          },
+        ],
+        terrainConfig: {
+          width: 50,
+          height: 40,
+          initialTerrain: 'rolling',
+        },
+        tools: ['cut', 'fill'],
+        hints: [
+          '🛤️ Make the path 2.67 yards wide',
+          '📏 Keep it not too steep for walking',
+          '✨ Smooth and even is best!',
+        ],
+        successCriteria: {
+          minimumScore: 70,
+          timeBonus: false,
+          volumeEfficiency: false,
+        },
+      },
+
+      // TEENS BRACKET (Ages 13-25) - STEM focused with moderate complexity
+      {
+        id: 'teens_level_1',
+        name: '🏗️ Foundation Engineering',
+        description: 'Engineer a precise foundation pad using real construction tolerances',
+        difficulty: 2,
+        category: 'foundation',
+        estimatedTime: 15,
+        levelNumber: 1,
+        idealOperations: 25,
+        levelVersion: 1,
+        isCompetitive: false,
+        ageBracket: 'teens',
+        objectives: [
+          {
+            id: 'foundation_pad',
             type: 'level_area',
-            description:
-              '🌍 FUTURE ENGINEERS: Level a 50x50 ft area within 2-inch elevation variance for building foundation',
-            target: { x: 0, z: 0, width: 50, height: 50, elevation: 0 },
-            tolerance: 0.17,
+            description: 'Create a level 13×13 yard foundation within ±3 inch tolerance',
+            target: { x: 0, z: 0, width: 40, height: 40, elevation: 0 }, // 40 feet = 13.3 yards
+            tolerance: 0.25, // 3 inches - realistic construction tolerance
             weight: 0.8,
             completed: false,
             score: 0,
           },
           {
-            id: 'volume_efficiency',
+            id: 'material_efficiency',
             type: 'volume_target',
-            description:
-              'Minimize material waste (net movement < 50 cubic yards)',
-            target: { maxNetMovement: 50 },
+            description: 'Minimize waste - keep net volume under 20 cubic yards',
+            target: { maxNetMovement: 20 },
             tolerance: 0.1,
             weight: 0.2,
             completed: false,
@@ -141,37 +273,38 @@ export class AssignmentManager {
         },
         tools: ['cut', 'fill'],
         hints: [
-          'Use the cut tool to remove high spots',
-          'Use the fill tool to build up low areas',
-          'Balance cut and fill volumes for efficiency',
+          '📐 Construction requires precise leveling',
+          '♻️ Balance cut and fill to minimize waste',
+          '🎯 Use surveying principles for accuracy',
         ],
         successCriteria: {
-          minimumScore: 70,
+          minimumScore: 75,
           timeBonus: true,
           volumeEfficiency: true,
         },
       },
       {
-        id: 'drainage_channel_1',
-        name: 'Drainage Channel Construction',
-        description: 'Create a water drainage channel with proper slope',
-        difficulty: 2,
+        id: 'teens_level_2',
+        name: '🌊 Hydraulic Engineering',
+        description: 'Design a drainage system with proper hydraulic principles',
+        difficulty: 3,
         category: 'drainage',
-        estimatedTime: 15,
+        estimatedTime: 20,
         levelNumber: 2,
-        idealOperations: 25,
+        idealOperations: 35,
         levelVersion: 1,
         isCompetitive: false,
+        ageBracket: 'teens',
         objectives: [
           {
-            id: 'channel_path',
+            id: 'drainage_channel',
             type: 'create_channel',
-            description: 'Dig channel along marked path with 2% slope',
+            description: 'Create 13-yard channel with 2% grade for optimal water flow',
             target: {
-              startPoint: { x: -20, z: 0 },
-              endPoint: { x: 20, z: 0 },
-              width: 3,
-              depth: 1.5,
+              startPoint: { x: -20, z: 0 }, // Start at -6.7 yards
+              endPoint: { x: 20, z: 0 },   // End at +6.7 yards (13.3 yards total)
+              width: 4,  // 4 feet wide
+              depth: 2,  // 2 feet deep
               slope: 0.02,
             },
             tolerance: 0.15,
@@ -180,11 +313,11 @@ export class AssignmentManager {
             score: 0,
           },
           {
-            id: 'side_slopes',
+            id: 'side_stability',
             type: 'grade_road',
-            description: 'Create stable side slopes (3:1 ratio)',
+            description: 'Engineer stable 3:1 side slopes to prevent erosion',
             target: { slopeRatio: 3 },
-            tolerance: 0.5,
+            tolerance: 0.3,
             weight: 0.3,
             completed: false,
             score: 0,
@@ -197,35 +330,35 @@ export class AssignmentManager {
         },
         tools: ['cut', 'fill'],
         hints: [
-          'Start cutting at the high end',
-          'Maintain consistent slope throughout',
-          'Use fill tool to shape side slopes',
+          '📊 2% grade = 2 feet drop per 100 feet',
+          '⚖️ Stable slopes prevent landslides',
+          '🔬 Apply hydraulic engineering principles',
         ],
         successCriteria: {
-          minimumScore: 75,
+          minimumScore: 80,
           timeBonus: true,
-          volumeEfficiency: false,
+          volumeEfficiency: true,
         },
       },
       {
-        id: 'road_grading_1',
-        name: 'Road Grading - Highway Section',
-        description:
-          'Grade a 650 ft highway section with proper crown and drainage',
-        difficulty: 3,
+        id: 'teens_level_3',
+        name: '🛣️ Transportation Engineering',
+        description: 'Design a road section meeting transportation standards',
+        difficulty: 4,
         category: 'road_construction',
         estimatedTime: 25,
         levelNumber: 3,
-        idealOperations: 40,
+        idealOperations: 45,
         levelVersion: 1,
         isCompetitive: false,
+        ageBracket: 'teens',
         objectives: [
           {
             id: 'road_grade',
             type: 'grade_road',
-            description: 'Achieve 3% maximum grade along centerline',
-            target: { maxGrade: 0.03, length: 200 },
-            tolerance: 0.005,
+            description: 'Maintain max 6% grade for safe vehicle travel (27-yard road)',
+            target: { maxGrade: 0.06, length: 80 }, // 80 feet = 26.7 yards
+            tolerance: 0.01,
             weight: 0.4,
             completed: false,
             score: 0,
@@ -233,17 +366,17 @@ export class AssignmentManager {
           {
             id: 'road_crown',
             type: 'level_area',
-            description: 'Create 2% crown for drainage',
-            target: { crownPercent: 0.02, width: 12 },
-            tolerance: 0.003,
+            description: 'Create 2% crown for water drainage (4-yard width)',
+            target: { crownPercent: 0.02, width: 12 }, // 12 feet = 4 yards
+            tolerance: 0.005,
             weight: 0.3,
             completed: false,
             score: 0,
           },
           {
-            id: 'cut_fill_balance',
+            id: 'volume_balance',
             type: 'volume_target',
-            description: 'Balance cut and fill volumes (±10%)',
+            description: 'Balance cut/fill to minimize truck hauling costs',
             target: { balanceTolerance: 0.1 },
             tolerance: 0.05,
             weight: 0.3,
@@ -252,86 +385,15 @@ export class AssignmentManager {
           },
         ],
         terrainConfig: {
-          width: 220,
+          width: 100,
           height: 30,
           initialTerrain: 'rolling',
         },
         tools: ['cut', 'fill'],
         hints: [
-          'Plan cut/fill sections to balance volumes',
-          'Use grader for precise crown formation',
-          'Maintain smooth transitions between grades',
-        ],
-        successCriteria: {
-          minimumScore: 80,
-          timeBonus: true,
-          volumeEfficiency: true,
-        },
-      },
-      {
-        id: 'site_development_1',
-        name: 'Multi-Building Site Development',
-        description:
-          'Prepare a commercial site with multiple building pads and access roads',
-        difficulty: 4,
-        category: 'grading',
-        estimatedTime: 40,
-        levelNumber: 4,
-        idealOperations: 60,
-        levelVersion: 1,
-        isCompetitive: false,
-        objectives: [
-          {
-            id: 'building_pad_1',
-            type: 'level_area',
-            description: 'Main building pad: 40x30m at elevation 100.5m',
-            target: { x: -20, z: -15, width: 40, height: 30, elevation: 100.5 },
-            tolerance: 0.03,
-            weight: 0.3,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'building_pad_2',
-            type: 'level_area',
-            description: 'Secondary building pad: 20x20m at elevation 100.2m',
-            target: { x: 25, z: 20, width: 20, height: 20, elevation: 100.2 },
-            tolerance: 0.03,
-            weight: 0.2,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'access_road',
-            type: 'grade_road',
-            description: 'Connect buildings with 6m wide access road',
-            target: { width: 6, maxGrade: 0.08 },
-            tolerance: 0.01,
-            weight: 0.3,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'site_drainage',
-            type: 'drainage_system',
-            description: 'Ensure positive drainage away from buildings',
-            target: { minSlope: 0.02 },
-            tolerance: 0.005,
-            weight: 0.2,
-            completed: false,
-            score: 0,
-          },
-        ],
-        terrainConfig: {
-          width: 100,
-          height: 80,
-          initialTerrain: 'rough',
-        },
-        tools: ['cut', 'fill'],
-        hints: [
-          'Plan the overall site layout first',
-          'Establish benchmark elevations',
-          'Work from high to low areas for drainage',
+          '🚗 Roads steeper than 6% are unsafe',
+          '🌧️ Crown sheds water to prevent flooding',
+          '💰 Balanced earthwork saves money',
         ],
         successCriteria: {
           minimumScore: 85,
@@ -339,184 +401,47 @@ export class AssignmentManager {
           volumeEfficiency: true,
         },
       },
+
+      // ADULTS BRACKET (Ages 26+) - Professional grade challenges
       {
-        id: 'earthwork_mastery',
-        name: 'Earthwork Mastery Challenge',
-        description: 'Complex earthwork project combining all skills',
-        difficulty: 5,
-        category: 'excavation',
-        estimatedTime: 60,
-        levelNumber: 5,
-        idealOperations: 80,
+        id: 'adults_level_1',
+        name: '🏢 Commercial Foundation',
+        description: 'Execute precision foundation work to professional construction standards',
+        difficulty: 3,
+        category: 'foundation',
+        estimatedTime: 20,
+        levelNumber: 1,
+        idealOperations: 40,
         levelVersion: 1,
         isCompetitive: false,
+        ageBracket: 'adults',
         objectives: [
           {
-            id: 'cut_accuracy',
-            type: 'volume_target',
-            description: 'Achieve precise cut volumes (±2%)',
-            target: { volumeAccuracy: 0.02 },
-            tolerance: 0.005,
-            weight: 0.25,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'fill_efficiency',
-            type: 'volume_target',
-            description: 'Minimize fill material waste',
-            target: { fillEfficiency: 0.95 },
-            tolerance: 0.02,
-            weight: 0.25,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'grade_precision',
-            type: 'grade_road',
-            description: 'Maintain precise grades throughout',
-            target: { gradeAccuracy: 0.001 },
-            tolerance: 0.0005,
-            weight: 0.25,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'time_efficiency',
-            type: 'volume_target',
-            description: 'Complete the excavation efficiently',
-            target: { timeLimit: 45 },
-            tolerance: 0.1,
-            weight: 0.25,
-            completed: false,
-            score: 0,
-          },
-        ],
-        terrainConfig: {
-          width: 120,
-          height: 100,
-          initialTerrain: 'custom',
-        },
-        tools: ['cut', 'fill'],
-        hints: [
-          'Plan your approach carefully',
-          'Use the right tool for each task',
-          'Monitor progress continuously',
-        ],
-        successCriteria: {
-          minimumScore: 90,
-          timeBonus: true,
-          volumeEfficiency: true,
-        },
-      },
-
-      // COMPETITIVE MULTIPLAYER ASSIGNMENTS
-      {
-        id: 'speed_foundation_race',
-        name: '⚡ Speed Foundation Race',
-        description:
-          'COMPETITIVE: Race against other players to level a foundation pad the fastest with highest accuracy',
-        difficulty: 2,
-        category: 'foundation',
-        estimatedTime: 8,
-        levelNumber: 6,
-        idealOperations: 20,
-        levelVersion: 1,
-        isCompetitive: true,
-        objectives: [
-          {
-            id: 'level_speed_pad',
+            id: 'precision_foundation',
             type: 'level_area',
-            description:
-              'Level a 40x40 ft foundation pad within ±4 inch tolerance',
-            target: { x: 0, z: 0, width: 40, height: 40, elevation: 0 },
-            tolerance: 0.33,
+            description: 'Level 17×10 yard foundation to ±1 inch tolerance',
+            target: { x: 0, z: 0, width: 50, height: 30, elevation: 0 }, // 50×30 feet = 17×10 yards
+            tolerance: 0.083, // 1 inch - professional tolerance
             weight: 0.6,
             completed: false,
             score: 0,
           },
           {
-            id: 'speed_bonus',
+            id: 'elevation_control',
+            type: 'level_area',
+            description: 'Maintain precise elevation control across entire pad',
+            target: { elevationVariance: 0.05 },
+            tolerance: 0.02,
+            weight: 0.2,
+            completed: false,
+            score: 0,
+          },
+          {
+            id: 'material_optimization',
             type: 'volume_target',
-            description: 'Completion speed bonus (faster = higher score)',
-            target: { timeTarget: 300 }, // 5 minutes target
-            tolerance: 0.1,
-            weight: 0.3,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'efficiency_race',
-            type: 'volume_target',
-            description: 'Minimize material waste for efficiency bonus',
-            target: { maxNetMovement: 30 },
-            tolerance: 0.1,
-            weight: 0.1,
-            completed: false,
-            score: 0,
-          },
-        ],
-        terrainConfig: {
-          width: 50,
-          height: 50,
-          initialTerrain: 'rolling',
-        },
-        tools: ['cut', 'fill'],
-        hints: [
-          '🏁 COMPETITIVE MODE: Fastest completion wins!',
-          'Balance speed with accuracy for maximum score',
-          'Use efficient cut/fill patterns to save time',
-          "Watch other players' progress in real-time",
-        ],
-        successCriteria: {
-          minimumScore: 60,
-          timeBonus: true,
-          volumeEfficiency: true,
-        },
-      },
-
-      {
-        id: 'drainage_duel',
-        name: '🌊 Drainage Channel Duel',
-        description:
-          'COMPETITIVE: Head-to-head challenge to create the most efficient drainage channel',
-        difficulty: 3,
-        category: 'drainage',
-        estimatedTime: 12,
-        objectives: [
-          {
-            id: 'channel_speed',
-            type: 'create_channel',
-            description: 'Dig drainage channel from point A to B with 2% slope',
-            target: {
-              startPoint: { x: -15, z: 0 },
-              endPoint: { x: 15, z: 0 },
-              width: 3,
-              depth: 1.8,
-              slope: 0.02,
-            },
-            tolerance: 0.15,
-            weight: 0.5,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'flow_efficiency',
-            type: 'grade_road',
-            description:
-              'Create optimal water flow with smooth grade transitions',
-            target: { slopeConsistency: 0.95 },
-            tolerance: 0.1,
-            weight: 0.3,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'construction_speed',
-            type: 'volume_target',
-            description: 'Complete construction faster than opponents',
-            target: { timeTarget: 600 }, // 10 minutes target
-            tolerance: 0.1,
+            description: 'Optimize material usage - net movement under 10 cubic yards',
+            target: { maxNetMovement: 10 },
+            tolerance: 0.05,
             weight: 0.2,
             completed: false,
             score: 0,
@@ -525,96 +450,13 @@ export class AssignmentManager {
         terrainConfig: {
           width: 60,
           height: 40,
-          initialTerrain: 'rough',
-        },
-        tools: ['cut', 'fill'],
-        hints: [
-          '🏁 COMPETITIVE MODE: Best drainage wins!',
-          'Maintain consistent 2% slope for optimal flow',
-          'Smooth transitions prevent erosion',
-          'Speed matters - but accuracy wins!',
-        ],
-        successCriteria: {
-          minimumScore: 70,
-          timeBonus: true,
-          volumeEfficiency: true,
-        },
-      },
-
-      {
-        id: 'precision_showdown',
-        name: '🎯 Precision Earthworks Showdown',
-        description:
-          'COMPETITIVE: Ultimate precision challenge with multiple objectives and leaderboard scoring',
-        difficulty: 4,
-        category: 'grading',
-        estimatedTime: 15,
-        levelNumber: 9,
-        idealOperations: 40,
-        levelVersion: 1,
-        isCompetitive: true,
-        objectives: [
-          {
-            id: 'multi_pad_precision',
-            type: 'level_area',
-            description:
-              'Create 3 precise building pads at different elevations',
-            target: {
-              pads: [
-                { x: -15, z: -10, width: 8, height: 8, elevation: 1.0 },
-                { x: 15, z: -10, width: 8, height: 8, elevation: 0.5 },
-                { x: 0, z: 15, width: 10, height: 6, elevation: 1.5 },
-              ],
-            },
-            tolerance: 0.05,
-            weight: 0.4,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'connecting_road',
-            type: 'grade_road',
-            description:
-              'Build connecting road between all pads with max 5% grade',
-            target: { maxGrade: 0.05, connectAll: true },
-            tolerance: 0.01,
-            weight: 0.3,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'volume_mastery',
-            type: 'volume_target',
-            description: 'Achieve perfect cut/fill balance (±3%)',
-            target: { balanceTolerance: 0.03 },
-            tolerance: 0.01,
-            weight: 0.2,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'championship_time',
-            type: 'volume_target',
-            description: 'Demonstrate mastery with precision work',
-            target: { timeTarget: 900 },
-            tolerance: 0.1,
-            weight: 0.1,
-            completed: false,
-            score: 0,
-          },
-        ],
-        terrainConfig: {
-          width: 80,
-          height: 60,
           initialTerrain: 'rolling',
         },
         tools: ['cut', 'fill'],
         hints: [
-          '🏆 CHAMPIONSHIP MODE: Ultimate precision test!',
-          'Plan pad elevations for optimal road connections',
-          'Balance speed with surgical precision',
-          'Perfect volume balance earns championship points',
-          'Every second counts in the final leaderboard!',
+          '📏 Professional construction requires ±1 inch accuracy',
+          '🎯 Use grid methodology for consistent elevation',
+          '💼 Minimize material costs through planning',
         ],
         successCriteria: {
           minimumScore: 85,
@@ -622,60 +464,52 @@ export class AssignmentManager {
           volumeEfficiency: true,
         },
       },
-
-      // ADDITIONAL DIVERSE ASSIGNMENT TEMPLATES
       {
-        id: 'residential_site_prep',
-        name: '🏠 Residential Site Preparation',
-        description:
-          'Prepare a residential building site with proper drainage, grading, and utility access',
-        difficulty: 3,
-        category: 'grading',
-        estimatedTime: 20,
+        id: 'adults_level_2',
+        name: '🌊 Stormwater Management',
+        description: 'Design complex drainage system meeting municipal standards',
+        difficulty: 4,
+        category: 'drainage',
+        estimatedTime: 30,
+        levelNumber: 2,
+        idealOperations: 60,
+        levelVersion: 1,
+        isCompetitive: false,
+        ageBracket: 'adults',
         objectives: [
           {
-            id: 'house_pad_level',
-            type: 'level_area',
-            description: 'Create level building pad (30x40ft) at 2ft elevation',
-            target: { x: 0, z: 0, width: 30, height: 40, elevation: 2.0 },
-            tolerance: 0.15,
-            weight: 0.35,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'driveway_grade',
-            type: 'grade_road',
-            description: 'Grade driveway access with max 8% slope to street',
+            id: 'primary_channel',
+            type: 'create_channel',
+            description: 'Main channel: 20-yard long, 6 ft wide, 3 ft deep, 1.5% grade',
             target: {
-              startPoint: { x: 15, z: 20 },
-              endPoint: { x: 25, z: 40 },
-              maxGrade: 0.08,
+              startPoint: { x: -30, z: 0 }, // -10 yards
+              endPoint: { x: 30, z: 0 },   // +10 yards (20 yards total)
+              width: 6,  // 6 feet wide
+              depth: 3,  // 3 feet deep
+              slope: 0.015,
             },
-            tolerance: 0.02,
-            weight: 0.25,
+            tolerance: 0.05, // Tight professional tolerance
+            weight: 0.4,
             completed: false,
             score: 0,
           },
           {
-            id: 'drainage_swales',
-            type: 'create_channel',
-            description:
-              'Create drainage swales to direct water away from house',
-            target: { depth: 0.5, width: 2, slopeToOutlet: true },
+            id: 'detention_basin',
+            type: 'level_area',
+            description: 'Create detention basin for flood control (7×5 yards)',
+            target: { x: 15, z: -20, width: 20, height: 15, depth: 4 }, // 20×15 feet = 7×5 yards
             tolerance: 0.1,
-            weight: 0.25,
+            weight: 0.3,
             completed: false,
             score: 0,
           },
           {
-            id: 'utility_trenches',
-            type: 'create_channel',
-            description:
-              'Excavate utility trenches for water, sewer, and electric',
-            target: { depth: 1.2, width: 1.5, straightLines: true },
-            tolerance: 0.15,
-            weight: 0.15,
+            id: 'side_slopes',
+            type: 'grade_road',
+            description: 'Engineer 4:1 slopes for maintenance access',
+            target: { slopeRatio: 4 },
+            tolerance: 0.2,
+            weight: 0.3,
             completed: false,
             score: 0,
           },
@@ -683,48 +517,49 @@ export class AssignmentManager {
         terrainConfig: {
           width: 80,
           height: 60,
-          initialTerrain: 'rolling',
+          initialTerrain: 'rough',
         },
         tools: ['cut', 'fill'],
         hints: [
-          'Start with the building pad - it sets the reference elevation',
-          'Ensure positive drainage away from the house foundation',
-          'Keep driveway grade under 8% for vehicle safety',
-          'Plan utility routes to avoid conflicts with foundation',
+          '🏛️ Municipal standards require precise grading',
+          '🌊 Detention basins prevent downstream flooding',
+          '🚜 Slopes must allow maintenance equipment access',
         ],
         successCriteria: {
-          minimumScore: 75,
+          minimumScore: 90,
           timeBonus: true,
           volumeEfficiency: true,
         },
       },
-
       {
-        id: 'highway_grading',
-        name: '🛣️ Highway Construction Grading',
-        description:
-          'Grade a section of highway with proper banking, drainage, and cut/fill balance',
-        difficulty: 4,
-        category: 'grading',
-        estimatedTime: 25,
+        id: 'adults_level_3',
+        name: '🛣️ Highway Construction',
+        description: 'Execute complex highway grading to DOT specifications',
+        difficulty: 5,
+        category: 'road_construction',
+        estimatedTime: 40,
+        levelNumber: 3,
+        idealOperations: 80,
+        levelVersion: 1,
+        isCompetitive: false,
+        ageBracket: 'adults',
         objectives: [
           {
-            id: 'roadway_profile',
+            id: 'mainline_profile',
             type: 'grade_road',
-            description:
-              'Establish highway profile with 2% crown and max 6% grades',
-            target: { length: 200, crown: 0.02, maxGrade: 0.06 },
-            tolerance: 0.01,
-            weight: 0.4,
+            description: 'Highway profile: max 4% grade, 2% crown (40-yard section)',
+            target: { maxGrade: 0.04, crownPercent: 0.02, length: 120 }, // 120 feet = 40 yards
+            tolerance: 0.002, // Very tight tolerance
+            weight: 0.3,
             completed: false,
             score: 0,
           },
           {
             id: 'cut_slopes',
             type: 'grade_road',
-            description: 'Create stable cut slopes at 2:1 ratio for safety',
-            target: { slopeRatio: 0.5, stability: true },
-            tolerance: 0.05,
+            description: 'Cut slopes: 2:1 ratio for rock, 3:1 for soil',
+            target: { cutSlopeRatio: 2, soilSlopeRatio: 3 },
+            tolerance: 0.1,
             weight: 0.25,
             completed: false,
             score: 0,
@@ -732,150 +567,84 @@ export class AssignmentManager {
           {
             id: 'fill_slopes',
             type: 'grade_road',
-            description:
-              'Build engineered fill slopes with proper compaction zones',
-            target: { slopeRatio: 0.67, engineered: true },
-            tolerance: 0.05,
+            description: 'Fill slopes: 3:1 ratio with proper compaction zones',
+            target: { fillSlopeRatio: 3, compactionZones: true },
+            tolerance: 0.1,
             weight: 0.25,
             completed: false,
             score: 0,
           },
           {
-            id: 'balance_earthwork',
+            id: 'earthwork_balance',
             type: 'volume_target',
-            description:
-              'Balance cut and fill to minimize haul distance and cost',
-            target: { balanceTolerance: 0.05, haulDistance: 'minimal' },
-            tolerance: 0.02,
-            weight: 0.1,
+            description: 'Achieve optimal cut/fill balance (±2%)',
+            target: { balanceTolerance: 0.02 },
+            tolerance: 0.01,
+            weight: 0.2,
             completed: false,
             score: 0,
           },
         ],
         terrainConfig: {
-          width: 100,
+          width: 140,
           height: 40,
           initialTerrain: 'rolling',
         },
         tools: ['cut', 'fill'],
         hints: [
-          'Highway safety requires consistent grades and smooth transitions',
-          'Cut slopes must be stable - 2:1 ratio prevents erosion',
-          'Balance cut and fill to minimize expensive truck hauls',
-          'Proper crown sheds water to prevent hydroplaning',
+          '🛣️ DOT specifications are non-negotiable',
+          '⛰️ Different materials require different slope ratios',
+          '💰 Earthwork balance minimizes project costs',
+          '📊 Maintain precise cross-sectional geometry',
         ],
         successCriteria: {
-          minimumScore: 80,
+          minimumScore: 95,
           timeBonus: true,
           volumeEfficiency: true,
-        },
-      },
-
-      {
-        id: 'environmental_restoration',
-        name: '🌿 Environmental Land Restoration',
-        description:
-          'Restore degraded land to natural contours while creating wildlife habitat features',
-        difficulty: 3,
-        category: 'grading',
-        estimatedTime: 18,
-        objectives: [
-          {
-            id: 'natural_contours',
-            type: 'level_area',
-            description:
-              'Restore natural-looking rolling contours (no straight lines)',
-            target: { naturalContours: true, smoothTransitions: true },
-            tolerance: 0.2,
-            weight: 0.3,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'wildlife_pond',
-            type: 'create_channel',
-            description: 'Create a wildlife pond with gradual slopes',
-            target: { depth: 2.5, width: 15, gradualSlopes: true },
-            tolerance: 0.3,
-            weight: 0.2,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'vegetation_zones',
-            type: 'level_area',
-            description: 'Create terraced zones for different vegetation types',
-            target: { terraces: 3, elevationDifference: 1.5 },
-            tolerance: 0.25,
-            weight: 0.2,
-            completed: false,
-            score: 0,
-          },
-          {
-            id: 'soil_conservation',
-            type: 'volume_target',
-            description: 'Minimize soil disturbance and erosion',
-            target: { maxDisturbance: 0.15 },
-            tolerance: 0.05,
-            weight: 0.3,
-            completed: false,
-            score: 0,
-          },
-        ],
-        terrainConfig: {
-          width: 70,
-          height: 70,
-          initialTerrain: 'rough',
-        },
-        tools: ['cut', 'fill'],
-        hints: [
-          'Nature rarely creates straight lines - vary your contours',
-          'Wildlife ponds need shallow areas for drinking and nesting',
-          'Small habitat mounds provide cover and nesting sites',
-          'Gentle slopes prevent erosion and allow vegetation growth',
-        ],
-        successCriteria: {
-          minimumScore: 70,
-          timeBonus: false,
-          volumeEfficiency: false,
         },
       },
     ];
   }
 
   public async getAvailableAssignments(): Promise<AssignmentConfig[]> {
-    // Get assignments from database, fall back to templates
-    try {
-      const { data, error } = await supabase
-        .from('assignments')
-        .select('*')
-        .order('difficulty_level', { ascending: true });
-
-      if (error) {
-        console.warn('Failed to load assignments from database:', error);
-        return this.getAssignmentTemplates();
-      }
-
-      if (data && data.length > 0) {
-        console.log(`Loaded ${data.length} assignments from database`);
-        return data
-          .map(this.convertDatabaseToConfig)
-          .map(assignment => this.ageScaling.scaleAssignment(assignment));
+    // Use progression system templates (with 9 assignments) and filter by user's age bracket
+    console.log('Using progression system assignments (9 total: 3 per age bracket)');
+    
+    // Determine user's age bracket
+    let ageBracket: 'kids' | 'teens' | 'adults' = 'teens'; // default
+    
+    // For guests, get their age bracket from localStorage
+    const userId = await this.getCurrentUserId();
+    console.log(`Current user ID: ${userId}`);
+    if (userId === 'guest' || userId?.startsWith('guest_')) {
+      const guestData = localStorage.getItem('guestData');
+      console.log(`Guest data from localStorage: ${guestData}`);
+      if (guestData) {
+        const parsedGuestData = JSON.parse(guestData);
+        console.log(`Parsed guest data:`, parsedGuestData);
+        console.log(`Age range from data: ${parsedGuestData.ageRange}`);
+        ageBracket = this.getAgeBracketFromRange(parsedGuestData.ageRange || '13-25');
+        console.log(`Age bracket result: ${ageBracket} (from range: ${parsedGuestData.ageRange})`);
+        
+        // Important: Set the age scaling system to match the user's bracket
+        this.ageScaling.setAgeGroup(ageBracket);
+        console.log(`Age scaling system updated to: ${ageBracket}`);
       } else {
-        console.log('No assignments found in database, using templates');
-        return this.getAssignmentTemplates().map(assignment =>
-          this.ageScaling.scaleAssignment(assignment)
-        );
+        console.log('No guest data found in localStorage');
       }
-    } catch (error) {
-      console.warn(
-        'Database connection failed, using local assignment templates:',
-        error
-      );
-      return this.getAssignmentTemplates().map(assignment =>
-        this.ageScaling.scaleAssignment(assignment)
-      );
+    } else {
+      console.log(`Not a guest user, userId: ${userId}`);
     }
+    
+    // Get assignments for the user's age bracket
+    const allAssignments = this.getAssignmentTemplates();
+    const filteredAssignments = allAssignments.filter(assignment => assignment.ageBracket === ageBracket);
+    
+    console.log(`Filtered to ${filteredAssignments.length} assignments for ${ageBracket} bracket`);
+    
+    return filteredAssignments.map(assignment =>
+      this.ageScaling.scaleAssignment(assignment)
+    );
   }
 
   private convertDatabaseToConfig(dbAssignment: any): AssignmentConfig {
@@ -1005,11 +774,14 @@ export class AssignmentManager {
     this.terrain.reset();
 
     // Try to load saved terrain from database
-    const savedTerrain = await this.loadSavedTerrain(assignment.levelNumber);
+    const savedTerrain = await this.loadSavedTerrain(assignment.levelNumber, assignment.name);
 
     if (savedTerrain) {
       console.log(`Loading saved terrain for level ${assignment.levelNumber}`);
-      this.applySavedTerrain(savedTerrain);
+      // Small delay to ensure terrain mesh is ready after reset
+      setTimeout(() => {
+        this.applySavedTerrain(savedTerrain);
+      }, 100);
     } else {
       console.log(
         `No saved terrain found, using fallback generation for level ${assignment.levelNumber}`
@@ -1038,11 +810,10 @@ export class AssignmentManager {
 
   // Update existing rolling terrain method to match the pattern
   private generateRollingTerrain(): void {
-    const meshObject = this.terrain.getMesh();
-    const mesh = meshObject as THREE.Mesh;
-    const vertices = (
-      mesh.geometry.attributes.position as THREE.BufferAttribute
-    ).array;
+    const result = this.getValidatedMeshAndVertices();
+    if (!result) return;
+    
+    const { mesh, vertices } = result;
 
     for (let i = 0; i < vertices.length; i += 3) {
       const x = vertices[i];
@@ -1065,11 +836,10 @@ export class AssignmentManager {
   }
 
   private generateRoughTerrain(): void {
-    const meshObject = this.terrain.getMesh();
-    const mesh = meshObject as THREE.Mesh;
-    const vertices = (
-      mesh.geometry.attributes.position as THREE.BufferAttribute
-    ).array;
+    const result = this.getValidatedMeshAndVertices();
+    if (!result) return;
+    
+    const { mesh, vertices } = result;
 
     for (let i = 0; i < vertices.length; i += 3) {
       const x = vertices[i];
@@ -1109,7 +879,8 @@ export class AssignmentManager {
 
   // New methods for terrain persistence
   private async loadSavedTerrain(
-    levelNumber: number | undefined
+    levelNumber: number | undefined,
+    assignmentId?: string
   ): Promise<any> {
     if (!levelNumber) {
       console.log('No level number provided, cannot load saved terrain');
@@ -1117,9 +888,11 @@ export class AssignmentManager {
     }
 
     try {
-      const response = await fetch(
-        `http://localhost:3001/api/terrain/${levelNumber}`
-      );
+      const url = assignmentId 
+        ? `http://localhost:3001/api/terrain/${levelNumber}?assignmentId=${assignmentId}`
+        : `http://localhost:3001/api/terrain/${levelNumber}`;
+      
+      const response = await fetch(url);
 
       if (!response.ok) {
         console.log(
@@ -1148,50 +921,88 @@ export class AssignmentManager {
     }
   }
 
-  private applySavedTerrain(savedTerrain: any): void {
+  private async applySavedTerrain(terrainConfig: any): Promise<void> {
+    console.log('Applying saved terrain configuration');
+    
+    // Wait longer for mesh to be ready and retry validation
+    const maxRetries = 5;
+    let validation = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, attempt * 200)); // Progressive delay: 200ms, 400ms, 600ms, 800ms, 1000ms
+      
+      validation = this.getValidatedMeshAndVertices();
+      if (validation) {
+        console.log(`Mesh validation succeeded on attempt ${attempt}`);
+        break;
+      } else {
+        console.log(`Mesh validation failed on attempt ${attempt}/${maxRetries}`);
+      }
+    }
+    
+    if (!validation) {
+      console.error('Mesh validation failed after all retries - cannot apply saved terrain');
+      return;
+    }
+    
     try {
-      const terrainData = savedTerrain.terrain_data;
-
-      if (!terrainData || !terrainData.parameters) {
-        console.error('Invalid terrain data structure:', terrainData);
-        return;
+      // Apply terrain pattern
+      if (terrainConfig.pattern === 'flat') {
+        this.generateFlatTerrain();
+      } else if (terrainConfig.pattern === 'rolling') {
+        this.generateRollingTerrain();
+      } else if (terrainConfig.pattern === 'rough') {
+        this.generateRoughTerrain();
+      } else if (terrainConfig.pattern === 'gentle') {
+        this.generateGentleSlopeTerrain();
       }
-
-      // Apply the saved terrain pattern
-      switch (terrainData.pattern) {
-        case 'flat':
-          this.generateFlatTerrain(terrainData.parameters);
-          break;
-        case 'gentle_slope':
-          this.generateGentleSlopeTerrain(terrainData.parameters);
-          break;
-        case 'rolling':
-          this.generateRollingTerrain();
-          break;
-        case 'rough':
-          this.generateRoughTerrain();
-          break;
-        default:
-          console.log(
-            `Unknown terrain pattern: ${terrainData.pattern}, using flat`
-          );
-          this.generateFlatTerrain(terrainData.parameters);
-      }
-
-      console.log(`Applied saved terrain pattern: ${terrainData.pattern}`);
+      
+      console.log(`Applied saved terrain pattern: ${terrainConfig.pattern}`);
     } catch (error) {
-      console.error('Error applying saved terrain:', error);
-      // Fallback to flat terrain
-      this.generateFlatTerrain();
+      console.error('Error applying terrain pattern:', error);
     }
   }
 
-  private generateFlatTerrain(parameters?: any): void {
+  private getValidatedMeshAndVertices(): { mesh: THREE.Mesh; vertices: Float32Array } | null {
     const meshObject = this.terrain.getMesh();
+    
+    // Multiple validation checks for robustness
+    if (!meshObject) {
+      console.warn('No mesh available');
+      return null;
+    }
+    
     const mesh = meshObject as THREE.Mesh;
-    const vertices = (
-      mesh.geometry.attributes.position as THREE.BufferAttribute
-    ).array;
+    if (!mesh.geometry) {
+      console.warn('Mesh has no geometry');
+      return null;
+    }
+    
+    if (!mesh.geometry.attributes) {
+      console.warn('Mesh geometry has no attributes');
+      return null;
+    }
+    
+    if (!mesh.geometry.attributes.position) {
+      console.warn('Mesh geometry has no position attribute');
+      return null;
+    }
+    
+    const vertices = mesh.geometry.attributes.position.array as Float32Array;
+    if (!vertices || vertices.length === 0) {
+      console.warn('Position array is empty or invalid');
+      return null;
+    }
+    
+    console.log(`Mesh validation passed - vertices: ${vertices.length}`);
+    return { mesh, vertices };
+  }
+
+  private generateFlatTerrain(parameters?: any): void {
+    const result = this.getValidatedMeshAndVertices();
+    if (!result) return;
+    
+    const { mesh, vertices } = result;
 
     for (let i = 0; i < vertices.length; i += 3) {
       const x = vertices[i];
@@ -1212,11 +1023,10 @@ export class AssignmentManager {
   }
 
   private generateGentleSlopeTerrain(parameters?: any): void {
-    const meshObject = this.terrain.getMesh();
-    const mesh = meshObject as THREE.Mesh;
-    const vertices = (
-      mesh.geometry.attributes.position as THREE.BufferAttribute
-    ).array;
+    const result = this.getValidatedMeshAndVertices();
+    if (!result) return;
+    
+    const { mesh, vertices } = result;
 
     for (let i = 0; i < vertices.length; i += 3) {
       const x = vertices[i];
@@ -1279,20 +1089,36 @@ export class AssignmentManager {
       }
     }
 
-    // Calculate net-zero balance score (30% weight)
-    const netVolumeYards = Math.abs(this.progress.volumeData.netMovement);
-    const netZeroScore = Math.max(0, 100 - netVolumeYards * 10); // Lose 10 points per cubic yard imbalance
+    // Phase 2: Implement Pass/Fail Logic
+    // Pass/Fail determination: Must complete ALL objectives to pass
+    const allObjectivesMet = this.progress.objectives.every(obj => obj.completed);
+    this.progress.passed = allObjectivesMet;
 
-    // Operations efficiency score (20% weight) - already calculated in addToolUsage
-    const operationsScore = this.progress.operationsEfficiencyScore;
+    if (allObjectivesMet) {
+      // Calculate enhanced scoring only if passed (50% Net-Zero + 50% Operations Efficiency)
+      const netVolumeYards = Math.abs(this.progress.volumeData.netMovement);
+      
+      // Apply age-adjusted tolerance for net-zero scoring
+      const ageGroup = this.ageScaling.getCurrentAgeGroup();
+      const toleranceFactor = ageGroup.toleranceMultiplier;
+      const netZeroScore = Math.max(0, 100 - (netVolumeYards * (10 / toleranceFactor))); // Adjusted for age
+      
+      // Operations efficiency score (already calculated in addToolUsage)
+      const operationsScore = this.progress.operationsEfficiencyScore;
+      
+      // New scoring: 50% Net-Zero Closeness + 50% Operations Efficiency (no objectives component since pass/fail is separate)
+      this.progress.currentScore = (netZeroScore * 0.5) + (operationsScore * 0.5);
+    } else {
+      // Failed - score is 0
+      this.progress.currentScore = 0;
+    }
 
-    // Enhanced scoring: 50% objectives, 30% net-zero, 20% operations
-    this.progress.currentScore =
-      objectivesScore * 0.5 + netZeroScore * 0.3 + operationsScore * 0.2;
-
-    console.log(
-      `Scoring breakdown: Objectives=${objectivesScore.toFixed(1)} (50%), Net-Zero=${netZeroScore.toFixed(1)} (30%), Operations=${operationsScore.toFixed(1)} (20%), Total=${this.progress.currentScore.toFixed(1)}`
-    );
+    // Only log when there are actual operations or score changes
+    if (this.progress.operationCount > 0 || this.progress.currentScore > 0) {
+      console.log(
+        `Pass/Fail: ${this.progress.passed ? 'PASSED' : 'FAILED'}, Score: ${this.progress.currentScore.toFixed(1)}/100, Operations Count: ${this.progress.operationCount}`
+      );
+    }
 
     // Check if assignment is complete
     if (completedObjectives === this.progress.objectives.length) {
@@ -1399,13 +1225,14 @@ export class AssignmentManager {
     // Debug logging (only log every 10 evaluations to avoid spam)
     if (Math.random() < 0.1) {
       const status = pointsWithinTolerance === pointsInArea ? '✓' : '✗';
-      console.log(`Level Area Evaluation:
-      Target: ${(target.width / 3).toFixed(1)}x${(target.height / 3).toFixed(1)} yd at (${(target.x / 3).toFixed(1)}, ${(target.z / 3).toFixed(1)}), elevation ${(target.elevation / 3).toFixed(1)} yd
-      Tolerance: ±${(tolerance / 3).toFixed(2)} yd
+      console.log(`🎯 Level Area Evaluation:
+      Target: ${(target.width / 3).toFixed(1)}×${(target.height / 3).toFixed(1)} yards at (${(target.x / 3).toFixed(1)}, ${(target.z / 3).toFixed(1)}) yards
+      Target elevation: ${(target.elevation / 3).toFixed(1)} yards
+      Tolerance: ±${(tolerance / 3).toFixed(2)} yards
       
-      Status: ${status}
-      Height range in area: ${(minHeight / 3).toFixed(2)} to ${(maxHeight / 3).toFixed(2)} yd
-        Current score: ${score.toFixed(1)}%`);
+      Status: ${status} (${pointsWithinTolerance}/${pointsInArea} points within tolerance)
+      Height range in area: ${(minHeight / 3).toFixed(2)} to ${(maxHeight / 3).toFixed(2)} yards
+      Current score: ${score.toFixed(1)}%`);
     }
 
     return score;
@@ -1540,11 +1367,8 @@ export class AssignmentManager {
       console.error('Failed to save assignment progress:', error);
     }
 
-    // Unlock next level if assignment passed
-    if (
-      this.progress.currentScore >=
-      this.currentAssignment.successCriteria.minimumScore
-    ) {
+    // Unlock next level if assignment passed (new system: check passed flag)
+    if (this.progress.passed) {
       try {
         const levelNumber = this.currentAssignment.levelNumber || 1;
         const unlocked = await this.unlockNextLevel(
@@ -1760,6 +1584,19 @@ export class AssignmentManager {
   }
 
   // Level progression methods
+  // Get all levels for a specific age bracket (always unlocked per requirement)
+  public getUnlockedLevelsForAgeBracket(ageBracket: 'kids' | 'teens' | 'adults'): number[] {
+    // Always return all three levels for the specified age bracket
+    return [1, 2, 3];
+  }
+
+  // Get assignments filtered by age bracket
+  public getAssignmentsByAgeBracket(ageBracket: 'kids' | 'teens' | 'adults'): AssignmentConfig[] {
+    return this.getAssignmentTemplates()
+      .filter(assignment => assignment.ageBracket === ageBracket)
+      .sort((a, b) => (a.levelNumber || 1) - (b.levelNumber || 1));
+  }
+
   public async getUnlockedLevels(userId: string): Promise<number[]> {
     try {
       // Check for developer mode (unlock all levels)
@@ -1770,18 +1607,19 @@ export class AssignmentManager {
       }
 
       if (userId === 'guest' || userId.startsWith('guest_')) {
-        // Check if guest is in solo mode - if so, unlock all levels for practice
+        // For guests, get their age bracket and return appropriate levels
         const guestData = localStorage.getItem('guestData');
         if (guestData) {
           const parsedGuestData = JSON.parse(guestData);
+          const ageBracket = this.getAgeBracketFromRange(parsedGuestData.ageRange || '13-25');
+          
           if (parsedGuestData.mode === 'solo') {
-            console.log('Solo mode detected - unlocking all levels for practice');
-            const maxLevel = this.getMaxLevelNumber();
-            return Array.from({ length: maxLevel }, (_, i) => i + 1);
+            console.log(`Solo mode detected - unlocking all levels for ${ageBracket} bracket`);
+            return this.getUnlockedLevelsForAgeBracket(ageBracket);
           }
         }
-        // Competition mode or no mode data - limited levels for demo
-        return [1, 2, 3];
+        // Competition mode or no age data - default to teens bracket
+        return this.getUnlockedLevelsForAgeBracket('teens');
       }
 
       const { data, error } = await supabase
@@ -1791,15 +1629,23 @@ export class AssignmentManager {
         .single();
 
       if (error || !data) {
-        console.log('No user progress found, defaulting to first 3 levels');
-        return [1, 2, 3];
+        console.log('No user progress found, defaulting to teens bracket');
+        return this.getUnlockedLevelsForAgeBracket('teens');
       }
 
-      return data.unlocked_levels || [1, 2, 3];
+      return data.unlocked_levels || this.getUnlockedLevelsForAgeBracket('teens');
     } catch (error) {
       console.error('Error getting unlocked levels:', error);
-      return [1, 2, 3];
+      return this.getUnlockedLevelsForAgeBracket('teens');
     }
+  }
+
+  // Helper method to determine age bracket from age range string
+  private getAgeBracketFromRange(ageRange: string): 'kids' | 'teens' | 'adults' {
+    if (ageRange.includes('8-12')) return 'kids';
+    if (ageRange.includes('13-25')) return 'teens';
+    if (ageRange.includes('26+')) return 'adults';
+    return 'teens'; // Default fallback
   }
 
   public async unlockNextLevel(
@@ -2254,11 +2100,20 @@ export class AssignmentManager {
   }
 
   /**
-   * Get current authenticated user ID
+   * Get current authenticated user ID (including guest users)
    */
   private async getCurrentUserId(): Promise<string | null> {
     try {
-      // Import supabase client
+      // Check for guest user in localStorage first
+      const guestData = localStorage.getItem('guestData');
+      if (guestData) {
+        const parsedGuestData = JSON.parse(guestData);
+        if (parsedGuestData.tempGuestId) {
+          return parsedGuestData.tempGuestId;
+        }
+      }
+      
+      // Fallback to Supabase authenticated user
       const { supabase } = await import('./supabase');
       const {
         data: { user },
@@ -2488,5 +2343,87 @@ export class AssignmentManager {
         Math.sin(y * 1.9 + Math.cos(x * 2.3))) *
       0.5
     );
+  }
+
+  // Test method for new progression system
+  public testProgressionSystem(): void {
+    console.log('🧪 Testing New Progression System:');
+    
+    // Test age bracket assignments
+    const kidsAssignments = this.getAssignmentsByAgeBracket('kids');
+    const teensAssignments = this.getAssignmentsByAgeBracket('teens');
+    const adultsAssignments = this.getAssignmentsByAgeBracket('adults');
+    
+    console.log(`Kids bracket: ${kidsAssignments.length} levels`);
+    console.log(`Teens bracket: ${teensAssignments.length} levels`);
+    console.log(`Adults bracket: ${adultsAssignments.length} levels`);
+    
+    // Test unlocked levels for each bracket
+    const kidsLevels = this.getUnlockedLevelsForAgeBracket('kids');
+    const teensLevels = this.getUnlockedLevelsForAgeBracket('teens');
+    const adultsLevels = this.getUnlockedLevelsForAgeBracket('adults');
+    
+    console.log(`Kids unlocked levels: [${kidsLevels.join(', ')}]`);
+    console.log(`Teens unlocked levels: [${teensLevels.join(', ')}]`);
+    console.log(`Adults unlocked levels: [${adultsLevels.join(', ')}]`);
+    
+    // Show sample assignments
+    console.log('\nSample Assignments:');
+    kidsAssignments.forEach(assignment => {
+      console.log(`  Kids L${assignment.levelNumber}: ${assignment.name} (${assignment.idealOperations} ideal ops)`);
+    });
+    teensAssignments.forEach(assignment => {
+      console.log(`  Teens L${assignment.levelNumber}: ${assignment.name} (${assignment.idealOperations} ideal ops)`);
+    });
+    adultsAssignments.forEach(assignment => {
+      console.log(`  Adults L${assignment.levelNumber}: ${assignment.name} (${assignment.idealOperations} ideal ops)`);
+    });
+    
+    console.log('✅ Progression System Test Complete');
+  }
+
+  // Debug function to help visualize objective areas
+  public debugCurrentObjective(): void {
+    const assignment = this.currentAssignment;
+    const progress = this.progress;
+    
+    if (!assignment || !progress) {
+      console.log('❌ No active assignment');
+      return;
+    }
+    
+    console.log(`🎯 Debugging Assignment: ${assignment.name}`);
+    console.log(`📍 Terrain dimensions: 120×120 feet (40×40 yards)`);
+    console.log(`📍 Terrain coordinates: X: 0 to 120, Z: 0 to 120 (feet)`);
+    console.log(`📍 Terrain center: (60, 60) feet = (20, 20) yards`);
+    
+    progress.objectives.forEach((obj, i) => {
+      console.log(`\n🎯 Objective ${i + 1}: ${obj.description}`);
+      console.log(`   Type: ${obj.type}`);
+      console.log(`   Current Score: ${obj.score.toFixed(1)}% (Need 80%+ to complete)`);
+      console.log(`   Completed: ${obj.completed ? '✅' : '❌'}`);
+      
+      if (obj.type === 'level_area' && obj.target) {
+        const t = obj.target;
+        console.log(`   📐 Target Area Details:`);
+        console.log(`      Position: (${t.x}, ${t.z}) feet = (${(t.x/3).toFixed(1)}, ${(t.z/3).toFixed(1)}) yards - CENTER POINT`);
+        console.log(`      Size: ${t.width}×${t.height} feet = ${(t.width/3).toFixed(1)}×${(t.height/3).toFixed(1)} yards`);
+        console.log(`      Target Elevation: ${t.elevation} feet = ${(t.elevation/3).toFixed(1)} yards`);
+        console.log(`      Tolerance: ±${obj.tolerance} feet = ±${(obj.tolerance/3).toFixed(2)} yards`);
+        console.log(`   📏 Area Bounds (in feet):`);
+        console.log(`      X: ${t.x - t.width/2} to ${t.x + t.width/2}`);
+        console.log(`      Z: ${t.z - t.height/2} to ${t.z + t.height/2}`);
+        console.log(`   📏 Area Bounds (in yards):`);
+        console.log(`      X: ${((t.x - t.width/2)/3).toFixed(1)} to ${((t.x + t.width/2)/3).toFixed(1)}`);
+        console.log(`      Z: ${((t.z - t.height/2)/3).toFixed(1)} to ${((t.z + t.height/2)/3).toFixed(1)}`);
+        console.log(`   💡 To complete: Level the area within these bounds to ${t.elevation}±${obj.tolerance} feet`);
+      }
+    });
+    
+    console.log(`\n📊 Current Progress:`);
+    console.log(`   Overall Score: ${progress.currentScore.toFixed(1)}%`);
+    console.log(`   Passed: ${progress.passed ? '✅' : '❌'}`);
+    console.log(`   Operations: ${progress.operationCount}`);
+    console.log(`   Volume Data:`, progress.volumeData);
   }
 }

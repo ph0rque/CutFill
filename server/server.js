@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -770,39 +771,61 @@ function validateScore(submittedScore, serverCalculatedScore, tolerance = 5) {
   };
 }
 
-// Enhanced server-side scoring calculation
-function calculateServerScore(volumeData, operationCount, idealOperations) {
-  // Calculate objective score (50% weight)
+// Enhanced server-side scoring calculation for new progression system
+function calculateServerScore(volumeData, operationCount, idealOperations, objectivesPassed = false, ageBracket = 'teens') {
   const cutVolume = Math.abs(volumeData.cut || 0);
   const fillVolume = Math.abs(volumeData.fill || 0);
   const netVolume = Math.abs(cutVolume - fillVolume);
   
-  // Net-zero score (30% weight) - perfect balance = 100 points
-  const netZeroScore = Math.max(0, 100 - (netVolume * 2)); // 2 points per cubic yard deviation
+  // If objectives not passed, score is 0
+  if (!objectivesPassed) {
+    return {
+      finalScore: 0,
+      objectiveScore: 0, // Not used in new system but kept for compatibility
+      netZeroScore: 0,
+      operationsScore: 0,
+      passed: false,
+      breakdown: {
+        cutVolume,
+        fillVolume,
+        netVolume,
+        operationCount,
+        idealOperations
+      }
+    };
+  }
   
-  // Operations efficiency score (20% weight)
+  // Age-adjusted tolerance factors
+  const toleranceFactors = {
+    'kids': 3.0,     // Very forgiving
+    'teens': 1.5,    // Moderate
+    'adults': 1.0    // Professional standard
+  };
+  const toleranceFactor = toleranceFactors[ageBracket] || 1.5;
+  
+  // Net-zero score (50% weight) - adjusted for age bracket
+  const netZeroScore = Math.max(0, 100 - (netVolume * (10 / toleranceFactor)));
+  
+  // Operations efficiency score (50% weight)
   const operationsScore = operationCount > 0 ? Math.min(100, (idealOperations / operationCount) * 100) : 0;
   
-  // Volume objective score (simplified - would be more complex based on specific objectives)
-  const targetVolume = Math.max(cutVolume, fillVolume);
-  const objectiveScore = targetVolume > 0 ? Math.min(100, (targetVolume / (targetVolume + netVolume)) * 100) : 0;
-  
-  // Combined final score
-  const finalScore = Math.round(
-    (objectiveScore * 0.5) + (netZeroScore * 0.3) + (operationsScore * 0.2)
-  );
+  // New scoring: 50% Net-Zero Closeness + 50% Operations Efficiency
+  const finalScore = Math.round((netZeroScore * 0.5) + (operationsScore * 0.5));
   
   return {
     finalScore,
-    objectiveScore: Math.round(objectiveScore),
+    objectiveScore: 100, // Passed objectives = 100, kept for compatibility
     netZeroScore: Math.round(netZeroScore),
     operationsScore: Math.round(operationsScore),
+    passed: true,
     breakdown: {
       cutVolume,
       fillVolume,
       netVolume,
       operationCount,
-      idealOperations
+      idealOperations,
+      ageBracket,
+      toleranceFactor
     }
   };
 }
@@ -819,7 +842,9 @@ app.post('/api/submit-level-attempt', async (req, res) => {
       idealOperations,
       volumeData, 
       durationSeconds,
-      isPractice = true 
+      isPractice = true,
+      objectivesPassed = false,
+      ageBracket = 'teens'
     } = req.body;
 
     // Validate required fields
@@ -830,8 +855,8 @@ app.post('/api/submit-level-attempt', async (req, res) => {
       });
     }
 
-    // Server-side score calculation for validation
-    const serverScoring = calculateServerScore(volumeData, operationCount, idealOperations || 30);
+    // Server-side score calculation for validation with new progression system
+    const serverScoring = calculateServerScore(volumeData, operationCount, idealOperations || 30, objectivesPassed, ageBracket);
     
     // Validate client score against server calculation (allow 5% tolerance)
     const scoreValidation = validateScore(clientScore, serverScoring.finalScore, 5);
@@ -844,7 +869,7 @@ app.post('/api/submit-level-attempt', async (req, res) => {
     // Use server-calculated score for database storage
     const validatedScore = serverScoring.finalScore;
 
-    // Save to Supabase database
+    // Save to Supabase database with new progression fields
     const { data, error } = await supabase
       .from('level_attempts')
       .insert({
@@ -860,7 +885,9 @@ app.post('/api/submit-level-attempt', async (req, res) => {
         net_volume: serverScoring.breakdown.netVolume,
         duration_seconds: durationSeconds,
         is_practice: isPractice,
-        server_validated: true
+        server_validated: true,
+        passed: serverScoring.passed,
+        age_bracket: ageBracket
       })
       .select()
       .single();
@@ -986,7 +1013,20 @@ app.get('/api/terrain/:levelId', async (req, res) => {
 
     // If assignment ID provided, filter by it, otherwise get default
     if (assignmentId) {
-      query = query.eq('assignment_id', assignmentId);
+      // First try to find by assignment_id (UUID)
+      const { data: assignmentData, error: assignmentError } = await supabase
+        .from('assignments')
+        .select('id')
+        .eq('name', assignmentId)
+        .single();
+      
+      if (assignmentData && !assignmentError) {
+        // Found assignment by name, use its UUID
+        query = query.eq('assignment_id', assignmentData.id);
+      } else {
+        // Assume it's already a UUID and filter directly
+        query = query.eq('assignment_id', assignmentId);
+      }
     } else {
       query = query.eq('is_default', true);
     }

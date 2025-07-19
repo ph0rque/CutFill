@@ -3478,3 +3478,26 @@ if (!localStorage.getItem('hasVisited')) {
   // Normal auth flow
   // ... existing auth init code ...
 }
+
+// Global test function for new progression system
+(window as any).testProgressionSystem = () => {
+  if (assignmentManager) {
+    assignmentManager.testProgressionSystem();
+  } else {
+    console.log('❌ AssignmentManager not available');
+  }
+};
+
+// Global debug function for current assignment
+(window as any).debugAssignment = () => {
+  if (assignmentManager) {
+    assignmentManager.debugCurrentObjective();
+  } else {
+    console.log('❌ AssignmentManager not available');
+  }
+};
+
+// Log available test functions
+console.log('🧪 Available test functions:');
+console.log('  - testProgressionSystem() - Test the new progression system');
+console.log('  - debugAssignment() - Debug current assignment objective');
