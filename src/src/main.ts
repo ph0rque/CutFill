@@ -553,15 +553,13 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   markerGroup.add(createTextMarker('Y', cornerX - 4, axisY + zAxisLength + 3, cornerZ, '#0000ff'));
 }
 
-// Force initialize game if authentication is taking too long
+// Show authentication immediately on startup
 setTimeout(() => {
   if (!isGameReady) {
-    isGameReady = true;
-    initializeGame();
-    // Set up guest user
-    updateUserInfo({ email: 'guest@example.com', user_metadata: { username: 'Guest' } });
+    console.log('🔐 Waiting for user authentication...');
+    authUI.show();
   }
-}, 1000); // 1 second timeout (reduced from 3)
+}, 500); // Show auth UI after 500ms if not already authenticated
 
 // Start basic animation loop immediately
 function animate() {
@@ -687,7 +685,7 @@ const multiplayerManager = new MultiplayerManager(terrain);
 
 // Create precision tool manager and UI
 const precisionToolManager = new PrecisionToolManager(terrain, scene, camera);
-const precisionUI = new PrecisionUI(precisionToolManager);
+const precisionUI = new PrecisionUI(precisionToolManager, authService);
 
 // Create view controls
 const viewControls = new ViewControls(camera, scene);
@@ -827,28 +825,21 @@ try {
       // Enable auto-save
       terrain.setAutoSave(true);
     } else {
-      // User is not authenticated, but keep game UI visible
-      // Only show auth UI if game isn't ready yet
-      if (!isGameReady) {
-        authUI.show();
-      } else {
-        // Game is ready, just update user info for guest
-        updateUserInfo({ email: 'guest@example.com', user_metadata: { username: 'Guest' } });
-        // Make sure auth UI is hidden
-        authUI.hide();
-        
-        // Set guest user ID for terrain system
-        terrain.setUserId('guest_' + Date.now());
+      // User is not authenticated - show login UI
+      isGameReady = false; // Ensure game doesn't start without authentication
+      authUI.show();
+      
+      // Hide main game UI until authenticated
+      const appElement = document.querySelector('#app');
+      if (appElement) {
+        (appElement as HTMLElement).style.display = 'none';
       }
     }
   });
 } catch (error) {
   console.error('Authentication error:', error);
-  // Fallback: Initialize game without authentication
-  if (!isGameReady) {
-    isGameReady = true;
-    initializeGame();
-  }
+  // Show auth UI on error instead of proceeding without authentication
+  authUI.show();
 }
 
 // Function to initialize the game after authentication
@@ -1760,6 +1751,39 @@ function setupGameControls() {
     });
   }
 
+  // Logout button
+  const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      // Sign out the user
+      authService.signOut();
+      
+      // Show a logout notification
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #4CAF50;
+        color: white;
+        padding: 15px;
+        border-radius: 4px;
+        z-index: 1001;
+        font-size: 14px;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      `;
+      notification.textContent = '👋 Logged out successfully';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 3000);
+    });
+  }
+
   // Performance control event listeners
   const qualitySelector = document.getElementById('quality-selector') as HTMLSelectElement;
   const autoOptimizeCheckbox = document.getElementById('auto-optimize') as HTMLInputElement;
@@ -1842,7 +1866,12 @@ function setupUI() {
       </div>
       
       <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">
-          <strong>User:</strong> <span id="user-info">Loading...</span><br>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div>
+              <strong>User:</strong> <span id="user-info">Loading...</span>
+            </div>
+            <button id="logout-btn" style="padding: 5px 10px; background: #F44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🚪 Logout</button>
+          </div>
           <strong>Connection:</strong> <span id="connection-status">Connecting...</span><br>
           <strong>Session:</strong> <span id="session-status">Not in session</span><br>
           <strong>Players:</strong> <span id="player-list">No players</span>

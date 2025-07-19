@@ -144,16 +144,24 @@ export class AuthUI {
           </div>
         </form>
         
-        <div style="text-align: center; margin-top: 1rem;">
-          <button id="guest-btn" style="
-            background: #666;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9rem;
-          ">Continue as Guest</button>
+        <div style="text-align: center; margin-top: 1rem; color: #666; font-size: 0.9rem;">
+          Create an account to save your progress and join multiplayer sessions!
+        </div>
+        
+        <button id="guest-login" style="
+          width: 100%;
+          padding: 0.75rem;
+          background: #FF9800;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 1rem;
+          margin-top: 1rem;
+        ">🎮 Continue as Guest</button>
+        
+        <div style="text-align: center; margin-top: 0.5rem; color: #666; font-size: 0.8rem;">
+          Guest mode: Progress won't be saved
         </div>
         
         <div id="auth-loading" style="
@@ -181,10 +189,12 @@ export class AuthUI {
 
     loginTab.addEventListener('click', () => {
       this.switchTab('login');
+      this.clearError();
     });
 
     signupTab.addEventListener('click', () => {
       this.switchTab('signup');
+      this.clearError();
     });
 
     // Form submission
@@ -204,13 +214,14 @@ export class AuthUI {
       }
     });
 
-    // Guest button
+    // Guest login
     const guestBtn = this.container.querySelector(
-      '#guest-btn'
+      '#guest-login'
     ) as HTMLButtonElement;
     guestBtn.addEventListener('click', () => {
       this.handleGuestLogin();
     });
+
   }
 
   private switchTab(tab: 'login' | 'signup'): void {
@@ -299,10 +310,14 @@ export class AuthUI {
       this.showError(error.message);
     } else {
       this.showError(
-        'Account created! Please check your email for verification.',
+        'Account created successfully! You can now sign in.',
         'success'
       );
-      setTimeout(() => this.hide(), 3000);
+      // Auto-switch to login tab after successful signup
+      setTimeout(() => {
+        this.switchTab('login');
+        this.clearError();
+      }, 2000);
     }
   }
 
@@ -317,6 +332,7 @@ export class AuthUI {
       this.hide();
     }
   }
+
 
   private showError(
     message: string,
@@ -335,6 +351,12 @@ export class AuthUI {
     }
   }
 
+  private clearError(): void {
+    const errorDiv = this.container.querySelector('#auth-error') as HTMLElement;
+    errorDiv.style.display = 'none';
+    errorDiv.textContent = '';
+  }
+
   private showLoading(show: boolean): void {
     const loadingDiv = this.container.querySelector(
       '#auth-loading'
@@ -342,13 +364,8 @@ export class AuthUI {
     const submitBtns = this.container.querySelectorAll(
       'button[type="submit"]'
     ) as NodeListOf<HTMLButtonElement>;
-    const guestBtn = this.container.querySelector(
-      '#guest-btn'
-    ) as HTMLButtonElement;
-
     loadingDiv.style.display = show ? 'block' : 'none';
     submitBtns.forEach(btn => (btn.disabled = show));
-    guestBtn.disabled = show;
   }
 
   public show(): void {

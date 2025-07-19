@@ -1,5 +1,6 @@
 import { PrecisionToolManager } from './precision-tools';
 import type { WorkflowState, CrossSectionConfig } from './precision-tools';
+import { AuthService } from './auth';
 
 export class PrecisionUI {
   private container: HTMLElement;
@@ -7,10 +8,15 @@ export class PrecisionUI {
   private currentState: WorkflowState;
   private labelsVisible: boolean = true;
   private currentThickness: number = 5; // Default thickness value
+  private authService?: AuthService;
 
-  constructor(toolManager: PrecisionToolManager) {
+  constructor(toolManager: PrecisionToolManager, authService?: AuthService) {
     this.toolManager = toolManager;
+    this.authService = authService;
     this.currentState = toolManager.getWorkflowState();
+    
+    // Debug: log authService status
+    console.log('PrecisionUI: authService passed:', !!authService, authService);
     
     // Create main container
     this.container = document.createElement('div');
@@ -165,7 +171,7 @@ export class PrecisionUI {
         <h3>Step 2: Set ${directionText}</h3>
         <div style="padding: 10px; background: rgba(${direction === 'cut' ? '255,68,68' : '33,150,243'}, 0.2); border-radius: 4px; margin-bottom: 10px;">
           <div style="color: ${directionColor}; font-weight: bold; margin-bottom: 5px;">
-            ${directionIcon} ${direction?.toUpperCase()} Operation
+            ${directionIcon} ${direction!.toUpperCase()} Operation
           </div>
           <div style="font-size: 12px;">
             ${direction === 'cut' ? 'How deep to excavate from the highest point' : 'How high to build from the lowest point'}
@@ -184,9 +190,9 @@ export class PrecisionUI {
             <button onclick="precisionUI.setMagnitudePreset(5)" style="padding: 8px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">1.67 yd</button>
             <button onclick="precisionUI.setMagnitudePreset(10)" style="padding: 8px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">3.33 yd</button>
           </div>
-          <button onclick="precisionUI.setMagnitude(parseFloat(document.getElementById('magnitude-slider').value))" 
+          <button id="continue-button" onclick="precisionUI.setMagnitude(parseFloat(document.getElementById('magnitude-slider').value))" 
                   style="width: 100%; padding: 10px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; margin-top: 10px;">
-            Continue with ${(parseFloat(document.getElementById('magnitude-value')?.textContent?.replace(' yd', '') || '1.0')).toFixed(1)} yd ➤
+            Continue with 1.0 yd ➤
           </button>
         </div>
       </div>
@@ -202,7 +208,7 @@ export class PrecisionUI {
         <h3>Step 3: Choose Area Shape</h3>
         <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-bottom: 15px;">
           <div style="color: ${directionColor}; font-weight: bold; margin-bottom: 5px;">
-            ${this.currentState.direction?.toUpperCase()} - ${(this.currentState.magnitude / 3).toFixed(1)} yd - ${this.currentState.areaMode?.toUpperCase()}
+            ${this.currentState.direction!.toUpperCase()} - ${(this.currentState.magnitude! / 3).toFixed(1)} yd - ${this.currentState.areaMode?.toUpperCase()}
           </div>
         </div>
         
@@ -290,7 +296,7 @@ export class PrecisionUI {
         <h3>Step 4: Draw ${areaMode === 'polygon' ? 'Polygon' : 'Polyline'}</h3>
         <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-bottom: 15px;">
           <div style="color: ${directionColor}; font-weight: bold; margin-bottom: 5px;">
-            ${this.currentState.direction?.toUpperCase()} - ${(this.currentState.magnitude / 3).toFixed(1)} yd - ${areaMode?.toUpperCase()}
+            ${this.currentState.direction!.toUpperCase()} - ${(this.currentState.magnitude! / 3).toFixed(1)} yd - ${areaMode!.toUpperCase()}
           </div>
           <div style="font-size: 12px; color: #ccc;">${progressInfo}</div>
         </div>
@@ -363,7 +369,7 @@ export class PrecisionUI {
         <h3>Step 5: Configure Cross-Section</h3>
         <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-bottom: 15px;">
           <div style="color: ${directionColor}; font-weight: bold; margin-bottom: 5px;">
-            ${this.currentState.direction?.toUpperCase()} - ${(this.currentState.magnitude / 3).toFixed(1)} yd - ${this.currentState.areaMode?.toUpperCase()}
+            ${this.currentState.direction!.toUpperCase()} - ${(this.currentState.magnitude! / 3).toFixed(1)} yd - ${this.currentState.areaMode?.toUpperCase()}
           </div>
         </div>
         
@@ -418,7 +424,7 @@ export class PrecisionUI {
         <h3>Step 6: Position ${direction === 'cut' ? 'Deepest' : 'Highest'} Point</h3>
         <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-bottom: 15px;">
           <div style="color: ${directionColor}; font-weight: bold; margin-bottom: 5px;">
-            ${this.currentState.direction?.toUpperCase()} - ${(this.currentState.magnitude / 3).toFixed(1)} yd - ${this.currentState.areaMode?.toUpperCase()}
+            ${this.currentState.direction!.toUpperCase()} - ${(this.currentState.magnitude! / 3).toFixed(1)} yd - ${this.currentState.areaMode?.toUpperCase()}
           </div>
           <div style="font-size: 12px; color: #ccc;">Cross-section: ${wallType} walls</div>
         </div>
@@ -428,7 +434,7 @@ export class PrecisionUI {
           <div style="font-size: 12px; line-height: 1.6;">
             Click on the terrain within your drawn area to specify where the maximum ${direction === 'cut' ? 'excavation depth' : 'fill height'} should occur.
             <br><br>
-            <strong>${direction === 'cut' ? 'For cuts:' : 'For fills:'}</strong> The ${(this.currentState.magnitude / 3).toFixed(1)} yd ${direction === 'cut' ? 'depth' : 'height'} will be applied at this point, with the cross-section shape determining how it transitions outward.
+            <strong>${direction === 'cut' ? 'For cuts:' : 'For fills:'}</strong> The ${(this.currentState.magnitude! / 3).toFixed(1)} yd ${direction === 'cut' ? 'depth' : 'height'} will be applied at this point, with the cross-section shape determining how it transitions outward.
           </div>
         </div>
         
@@ -436,10 +442,10 @@ export class PrecisionUI {
           <div style="font-weight: bold; margin-bottom: 8px; color: ${directionColor};">💡 Cross-Section Effect:</div>
           <div style="font-size: 11px; line-height: 1.5;">
             ${wallType === 'straight' ? 
-              `<strong>Straight walls:</strong> Full ${(this.currentState.magnitude / 3).toFixed(1)} yd ${direction === 'cut' ? 'depth' : 'height'} throughout the entire area.` :
+              `<strong>Straight walls:</strong> Full ${(this.currentState.magnitude! / 3).toFixed(1)} yd ${direction === 'cut' ? 'depth' : 'height'} throughout the entire area.` :
               wallType === 'curved' ?
-              `<strong>Curved walls:</strong> Maximum ${(this.currentState.magnitude / 3).toFixed(1)} yd at this point, smoothly tapering with a cosine curve toward the edges.` :
-              `<strong>Angled walls:</strong> Maximum ${(this.currentState.magnitude / 3).toFixed(1)} yd at this point, with 45° linear slopes extending outward.`
+              `<strong>Curved walls:</strong> Maximum ${(this.currentState.magnitude! / 3).toFixed(1)} yd at this point, smoothly tapering with a cosine curve toward the edges.` :
+              `<strong>Angled walls:</strong> Maximum ${(this.currentState.magnitude! / 3).toFixed(1)} yd at this point, with 45° linear slopes extending outward.`
             }
           </div>
         </div>
@@ -456,7 +462,7 @@ export class PrecisionUI {
         <h3>Step 6: Preview & Execute</h3>
         <div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-bottom: 15px;">
           <div style="color: ${directionColor}; font-weight: bold; margin-bottom: 5px;">
-            ${this.currentState.direction?.toUpperCase()} - ${(this.currentState.magnitude / 3).toFixed(1)} yd - ${this.currentState.areaMode?.toUpperCase()}
+            ${this.currentState.direction!.toUpperCase()} - ${(this.currentState.magnitude! / 3).toFixed(1)} yd - ${this.currentState.areaMode!.toUpperCase()}
           </div>
           <div style="font-size: 12px; color: #ccc;">
             Wall Type: ${this.currentState.crossSection?.wallType || 'Not set'}
@@ -509,6 +515,10 @@ export class PrecisionUI {
     if (display) {
       display.textContent = `${(parseFloat(value) / 3).toFixed(1)} yd`;
     }
+    const button = document.getElementById('continue-button');
+    if (button) {
+      button.textContent = `Continue with ${(parseFloat(value) / 3).toFixed(1)} yd ➤`;
+    }
   }
 
   setMagnitudePreset(value: number): void {
@@ -517,9 +527,14 @@ export class PrecisionUI {
     
     if (slider && display) {
       slider.value = value.toString();
+      this.updateMagnitudeDisplay(slider.value);
       display.textContent = `${(value / 3).toFixed(1)} yd`;
       this.toolManager.setMagnitude(value);
     }
+  }
+
+  setMagnitude(value: number): void {
+    this.toolManager.setMagnitude(value);
   }
 
   setAreaMode(mode: 'polygon' | 'polyline'): void {
@@ -719,7 +734,10 @@ export class PrecisionUI {
 
       <!-- User Progress -->
       <div style="background: rgba(76,175,80,0.2); padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4CAF50;">
-        <h3 style="margin: 0 0 10px 0; color: #4CAF50;">🏆 Progress & Profile</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h3 style="margin: 0; color: #4CAF50;">🏆 Progress & Profile</h3>
+          <button onclick="precisionUI.logout()" style="padding: 6px 12px; background: #F44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;">🚪 Logout</button>
+        </div>
         <div style="font-size: 14px; line-height: 1.6;">
           <div><strong>User:</strong> <span id="popover-user-info">Loading...</span></div>
           <div><strong>Level:</strong> <span id="popover-user-level">🌱 Level 1 - Apprentice</span></div>
@@ -998,7 +1016,7 @@ export class PrecisionUI {
     }
   }
 
-  public setThickness(value: number): void {
+public setThickness(value: number): void {
     this.currentThickness = value;
     const slider = document.getElementById('thickness-slider') as HTMLInputElement;
     const display = document.getElementById('thickness-value');
@@ -1010,5 +1028,32 @@ export class PrecisionUI {
     if (display) {
       display.textContent = `${(value / 3).toFixed(1)} yd`;
     }
+  }
+
+  public logout(): void {
+    console.log('PrecisionUI.logout() called');
+    console.log('this.authService:', this.authService);
+    
+    if (!this.authService) {
+      console.error('AuthService is null or undefined');
+      this.showNotification('Auth service not available', '#F44336');
+      return;
+    }
+
+    console.log('Calling authService.signOut()');
+    // Call the signOut method from the auth service
+    this.authService.signOut()
+      .then(() => {
+        this.showNotification('👋 You have been logged out.', '#4CAF50');
+        document.getElementById('game-info-popover')?.remove();
+        // Small delay to show the notification before reloading
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      })
+      .catch((error) => {
+        console.error('Logout error:', error);
+        this.showNotification('❌ Logout failed', '#F44336');
+      });
   }
 } 

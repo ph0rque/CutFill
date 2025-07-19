@@ -6,6 +6,8 @@ import { PrecisionUI } from './precision-ui';
 import { ViewControls } from './view-controls';
 import { AssignmentManager } from './assignments';
 import { AssignmentUI } from './assignment-ui';
+import { AuthService } from './auth';
+import { AuthUI } from './auth-ui';
 
 // Global variables
 let isGameReady = false;
@@ -100,7 +102,11 @@ function initializeGame(): void {
     
     // Create precision tools
     precisionToolManager = new PrecisionToolManager(terrain, scene, camera);
-    precisionUI = new PrecisionUI(precisionToolManager);
+    
+    // Create auth service
+    const authService = new AuthService();
+    
+    precisionUI = new PrecisionUI(precisionToolManager, authService);
     
     // Create view controls
     viewControls = new ViewControls(camera, scene);
