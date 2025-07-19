@@ -224,6 +224,42 @@ export class GuestUI {
       this.onComplete();
     });
 
+    this.multiplayer.on('competitive-lobby-joined', (data: any) => {
+      console.log('Competitive lobby joined:', data);
+      this.hideLoading();
+      this.showLobby(data.lobby);
+    });
+
+    this.multiplayer.on('lobby-updated', (data: any) => {
+      console.log('Lobby updated:', data);
+      this.updateLobby(data.lobby);
+    });
+
+    this.multiplayer.on('lobby-player-joined', (data: any) => {
+      console.log('Player joined lobby:', data.playerName);
+    });
+
+    this.multiplayer.on('lobby-player-left', (data: any) => {
+      console.log('Player left lobby:', data.playerName);
+    });
+
+    this.multiplayer.on('match-starting', (data: any) => {
+      console.log('Match starting countdown');
+      this.startMatchCountdown(data.countdown);
+    });
+
+    this.multiplayer.on('match-started', (data: any) => {
+      console.log('Match started!');
+      this.hideLoading();
+      this.hide();
+      this.onComplete();
+    });
+
+    this.multiplayer.on('competitive-lobby-left', () => {
+      console.log('Left competitive lobby');
+      this.returnToSetup();
+    });
+
     this.multiplayer.on('error', (data: any) => {
       this.showError(data.message || 'Connection error occurred');
       this.hideLoading();
@@ -261,23 +297,19 @@ export class GuestUI {
     
     localStorage.setItem('guestData', JSON.stringify(guestData));
     
-    // Simulate loading and then proceed
     this.showLoading();
-    setTimeout(() => {
-      this.hideLoading();
       
       if (mode === 'competition') {
-        // For now, just show solo mode - competitive lobby will be implemented later
-        this.showError('Competition mode not yet available. Playing solo mode.');
+      // Join competitive lobby using Supabase
+      this.joinCompetitiveLobby(guestData);
+    } else {
+      // Solo mode - proceed directly to game
         setTimeout(() => {
-          this.hide();
-          this.onComplete();
-        }, 2000);
-      } else {
+        this.hideLoading();
         this.hide();
         this.onComplete();
+      }, 1000);
       }
-    }, 1000);
   }
 
   private showError(message: string): void {
@@ -324,10 +356,16 @@ export class GuestUI {
     this.multiplayer.disconnect();
   }
 
-  private joinCompetitiveLobby(guestData: any): void {
-    // TODO: Implement competitive lobby with Supabase
+  private async joinCompetitiveLobby(guestData: any): Promise<void> {
+    try {
     console.log('Joining competitive lobby:', guestData);
-    this.showError('Competition mode not yet available');
+      await this.multiplayer.joinCompetitiveLobby(guestData.username, guestData.ageRange);
+      // Success will be handled by event handlers
+    } catch (error) {
+      console.error('Failed to join competitive lobby:', error);
+      this.hideLoading();
+      this.showError('Failed to join competitive lobby. Please try again.');
+    }
   }
 
   private showLobby(lobbyData: any): void {
@@ -352,53 +390,76 @@ export class GuestUI {
     const lobbyStatusElement = this.container.querySelector('#lobby-status') as HTMLElement;
 
     lobbyIdElement.textContent = lobbyData.lobbyId || this.currentLobbyId || '-';
-    playerCountElement.textContent = lobbyData.playerCount || '1';
+    playerCountElement.textContent = `${lobbyData.currentPlayers || lobbyData.players?.length || 1}`;
 
     // Update players list
     if (lobbyData.players && playersListElement) {
       playersListElement.innerHTML = lobbyData.players.map((player: any) => 
         `<div style="padding: 0.25rem 0; border-bottom: 1px solid #eee;">
-          <span style="font-weight: bold;">${player.username}</span>
-          <span style="color: #666; font-size: 0.9rem;"> (${player.ageRange})</span>
-          ${player.ready ? '<span style="color: #4CAF50; margin-left: 0.5rem;">✓ Ready</span>' : ''}
+          <span style="font-weight: bold;">${player.playerName}</span>
+          ${player.isReady ? '<span style="color: #4CAF50; margin-left: 0.5rem;">✓ Ready</span>' : '<span style="color: #999; margin-left: 0.5rem;">⏳ Not Ready</span>'}
         </div>`
       ).join('');
     }
 
-    // Update status
+    // Update status and ready button visibility
     if (lobbyStatusElement) {
       const readyBtn = this.container.querySelector('#ready-btn') as HTMLElement;
+      const playerCount = lobbyData.currentPlayers || lobbyData.players?.length || 1;
       
-      if (lobbyData.playerCount >= 2) {
-        lobbyStatusElement.innerHTML = '🎮 Ready to start! Players can ready up.';
-        lobbyStatusElement.style.background = '#e8f5e8';
-        lobbyStatusElement.style.color = '#2e7d32';
+      if (playerCount >= 2) {
+        const readyCount = lobbyData.players?.filter((p: any) => p.isReady).length || 0;
         
-        // Show ready button
+        if (lobbyData.status === 'starting') {
+          lobbyStatusElement.innerHTML = '🚀 Match starting soon!';
+          lobbyStatusElement.style.background = '#fff3cd';
+          lobbyStatusElement.style.color = '#856404';
+          readyBtn.style.display = 'none';
+        } else if (readyCount === playerCount) {
+          lobbyStatusElement.innerHTML = '✅ All players ready! Starting match...';
+          lobbyStatusElement.style.background = '#d4edda';
+          lobbyStatusElement.style.color = '#155724';
+          readyBtn.style.display = 'none';
+        } else {
+          lobbyStatusElement.innerHTML = `🎮 ${readyCount}/${playerCount} players ready. Click Ready when prepared!`;
+          lobbyStatusElement.style.background = '#e8f5e8';
+          lobbyStatusElement.style.color = '#2e7d32';
         readyBtn.style.display = 'block';
+        }
       } else {
-        lobbyStatusElement.innerHTML = '⏳ Waiting for more players...';
+        lobbyStatusElement.innerHTML = '⏳ Waiting for more players... (minimum 2)';
         lobbyStatusElement.style.background = '#e3f2fd';
         lobbyStatusElement.style.color = '#1976d2';
-        
-        // Hide ready button
         readyBtn.style.display = 'none';
       }
     }
   }
 
-  private leaveLobby(): void {
+  private async leaveLobby(): Promise<void> {
     if (this.currentLobbyId) {
-      // TODO: Implement leave lobby with Supabase
       console.log('Leaving lobby:', this.currentLobbyId);
+      try {
+        await this.multiplayer.leaveLobby();
+        // Success will be handled by event handlers (competitive-lobby-left)
+      } catch (error) {
+        console.error('Error leaving lobby:', error);
+        this.returnToSetup(); // Fallback
+      }
+    } else {
+      this.returnToSetup();
     }
-    this.returnToSetup();
   }
 
-  private toggleReady(): void {
+  private async toggleReady(): Promise<void> {
     if (this.currentLobbyId) {
-      // TODO: Implement toggle ready with Supabase
       console.log('Toggling ready state for lobby:', this.currentLobbyId);
+      try {
+        await this.multiplayer.toggleReady();
+        // Updates will be handled by lobby-updated event
+      } catch (error) {
+        console.error('Error toggling ready state:', error);
+        this.showError('Failed to update ready state');
+      }
     }
   }
 

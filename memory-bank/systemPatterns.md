@@ -58,11 +58,11 @@ Object Pool → Active Objects → Cleanup Queue → Garbage Collection
 - **Visual Feedback**: Color overlays and transparency for cut/fill visualization
 - **Performance Optimization**: Level-of-detail rendering for complex scenes
 
-### Multiplayer Synchronization
-- **Server Authority**: Centralized state management prevents conflicts
-- **Delta Compression**: Send only changes to minimize bandwidth
-- **Prediction System**: Client-side prediction with server reconciliation
-- **Conflict Resolution**: Last-write-wins for concurrent operations
+### Multiplayer Synchronization (Serverless)
+- **Database Authority**: Supabase database serves as single source of truth
+- **Real-time Subscriptions**: Supabase realtime for live updates across clients
+- **Event-Driven Architecture**: Database changes trigger real-time events
+- **Optimistic Updates**: Client-side updates with database reconciliation
 
 ### Educational Integration
 - **Metrics Engine**: Real-time calculation of educational KPIs

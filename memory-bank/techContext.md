@@ -11,10 +11,9 @@
 - **CSS3**: Responsive styling and animations (✅ Accessibility compliant)
 
 ### Backend Technologies
-- **Node.js**: Server runtime environment (✅ Production-ready)
-- **Socket.io**: WebSocket abstraction for multiplayer (✅ 4-player sessions)
-- **Express.js**: HTTP server for static assets and API endpoints (✅ Deployed)
-- **Supabase**: PostgreSQL database with authentication and real-time (✅ Full integration)
+- **Supabase**: PostgreSQL database with authentication, real-time, and edge functions (✅ Serverless architecture)
+- **Vercel**: Serverless hosting platform for frontend and edge functions (✅ Production deployment)
+- **Edge Functions**: Server-side logic execution without traditional server (✅ Scalable)
 
 ### Performance Optimization (NEW)
 - **Custom Performance Framework**: 7-tier adaptive quality system (✅ 121 FPS achieved)
