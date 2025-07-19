@@ -389,14 +389,16 @@ export class GuestUI {
 
   private leaveLobby(): void {
     if (this.currentLobbyId) {
-      this.socket.emit('leave-competitive-lobby', { lobbyId: this.currentLobbyId });
+      // TODO: Implement leave lobby with Supabase
+      console.log('Leaving lobby:', this.currentLobbyId);
     }
     this.returnToSetup();
   }
 
   private toggleReady(): void {
     if (this.currentLobbyId) {
-      this.socket.emit('toggle-ready', { lobbyId: this.currentLobbyId });
+      // TODO: Implement toggle ready with Supabase
+      console.log('Toggling ready state for lobby:', this.currentLobbyId);
     }
   }
 
