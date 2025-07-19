@@ -151,46 +151,7 @@ export class AuthService {
     }
   }
 
-  public async signInAsGuest(): Promise<{ error: AuthError | null }> {
-    try {
-      this.updateAuthState({ isLoading: true, error: null });
 
-      // Generate a random guest email and password
-      const guestId = Math.random().toString(36).substring(2, 15);
-      const guestEmail = `guest_${guestId}@cutfill.local`;
-      const guestPassword = Math.random().toString(36).substring(2, 15);
-      const guestUsername = `Guest_${guestId}`;
-
-      const { data, error } = await supabase.auth.signUp({
-        email: guestEmail,
-        password: guestPassword,
-        options: {
-          data: {
-            username: guestUsername,
-            is_guest: true,
-          },
-        },
-      });
-
-      if (error) {
-        this.updateAuthState({ error: error.message, isLoading: false });
-        return { error };
-      }
-
-      // Create guest user profile
-      if (data.user) {
-        await this.createUserProfile(data.user.id, guestEmail, guestUsername);
-      }
-
-      this.updateAuthState({ user: data.user, isLoading: false });
-      return { error: null };
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Guest sign in failed';
-      this.updateAuthState({ error: message, isLoading: false });
-      return { error: { message } as AuthError };
-    }
-  }
 
   private async createUserProfile(
     userId: string,

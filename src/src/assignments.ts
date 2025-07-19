@@ -1614,8 +1614,9 @@ export class AssignmentManager {
           const ageBracket = this.getAgeBracketFromRange(parsedGuestData.ageRange || '13-25');
           
           if (parsedGuestData.mode === 'solo') {
-            console.log(`Solo mode detected - unlocking all levels for ${ageBracket} bracket`);
-            return this.getUnlockedLevelsForAgeBracket(ageBracket);
+            console.log('Solo mode detected - unlocking all levels for practice');
+            const maxLevel = this.getMaxLevelNumber();
+            return Array.from({ length: maxLevel }, (_, i) => i + 1);
           }
         }
         // Competition mode or no age data - default to teens bracket
