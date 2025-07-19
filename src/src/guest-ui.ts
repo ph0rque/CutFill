@@ -1,24 +1,19 @@
-import { io } from 'socket.io-client';
+import { SupabaseMultiplayer } from './supabase-multiplayer';
+import { Terrain } from './terrain';
 
 export class GuestUI {
   private container: HTMLElement;
-  private socket: any;
+  private multiplayer: SupabaseMultiplayer;
   private onComplete: () => void;
   private currentLobbyId: string | null = null;
   private isInLobby = false;
 
   constructor(onComplete: () => void) {
     this.onComplete = onComplete;
-    const serverUrl = import.meta.env.VITE_MULTIPLAYER_SERVER_URL || 'http://localhost:3001';
-    
-    // Configure Socket.io for production environment
-    const socketOptions = serverUrl.includes('vercel.app') ? {
-      transports: ['polling'], // Force polling for Vercel
-      timeout: 60000,
-      forceNew: true
-    } : {};
-    
-    this.socket = io(serverUrl, socketOptions);
+    // Create a placeholder terrain for the multiplayer client
+    // This will be replaced with the actual terrain when joining a session
+    const placeholderTerrain = {} as Terrain;
+    this.multiplayer = new SupabaseMultiplayer(placeholderTerrain);
     this.container = this.createContainer();
     this.setupEventHandlers();
   }
@@ -217,64 +212,21 @@ export class GuestUI {
       this.toggleReady();
     });
 
-    // Socket event handlers
-    this.socket.on('username-taken', (data: { suggestedUsername: string }) => {
-      this.showError(`Username taken. Suggested: ${data.suggestedUsername}`);
-      const usernameInput = this.container.querySelector(
-        '#guest-username'
-      ) as HTMLInputElement;
-      usernameInput.value = data.suggestedUsername;
+    // Multiplayer event handlers using Supabase
+    this.multiplayer.on('session-created', (data: any) => {
+      console.log('Session created:', data);
     });
 
-    this.socket.on(
-      'guest-registered',
-      (data: {
-        username: string;
-        tempGuestId: string;
-        ageRange: string;
-        mode: string;
-      }) => {
-        localStorage.setItem(
-          'guestData',
-          JSON.stringify({
-            username: data.username,
-            tempGuestId: data.tempGuestId,
-            ageRange: data.ageRange,
-            mode: data.mode,
-          })
-        );
-        
-        // If competition mode, join competitive lobby
-        if (data.mode === 'competition') {
-          this.joinCompetitiveLobby(data);
-        } else {
-          // Solo mode - proceed directly to game
-          this.hide();
-          this.onComplete();
-        }
-      }
-    );
-
-    // Competitive lobby events
-    this.socket.on('competitive-lobby-joined', (data: any) => {
-      this.showLobby(data);
-    });
-
-    this.socket.on('lobby-updated', (data: any) => {
-      this.updateLobby(data);
-    });
-
-    this.socket.on('match-starting', (data: any) => {
-      this.startMatchCountdown(data.countdown || 3);
-    });
-
-    this.socket.on('match-started', (data: any) => {
+    this.multiplayer.on('session-joined', (data: any) => {
+      console.log('Session joined:', data);
+      this.hideLoading();
       this.hide();
       this.onComplete();
     });
 
-    this.socket.on('lobby-error', (data: any) => {
-      this.showError(data.message || 'Lobby error occurred');
+    this.multiplayer.on('error', (data: any) => {
+      this.showError(data.message || 'Connection error occurred');
+      this.hideLoading();
     });
   }
 
@@ -298,8 +250,34 @@ export class GuestUI {
       return;
     }
 
+    // Generate guest data locally instead of using server
+    const tempGuestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const guestData = {
+      username,
+      tempGuestId,
+      ageRange,
+      mode
+    };
+    
+    localStorage.setItem('guestData', JSON.stringify(guestData));
+    
+    // Simulate loading and then proceed
     this.showLoading();
-    this.socket.emit('register-guest', { desiredUsername: username, ageRange, mode });
+    setTimeout(() => {
+      this.hideLoading();
+      
+      if (mode === 'competition') {
+        // For now, just show solo mode - competitive lobby will be implemented later
+        this.showError('Competition mode not yet available. Playing solo mode.');
+        setTimeout(() => {
+          this.hide();
+          this.onComplete();
+        }, 2000);
+      } else {
+        this.hide();
+        this.onComplete();
+      }
+    }, 1000);
   }
 
   private showError(message: string): void {
@@ -342,15 +320,14 @@ export class GuestUI {
     if (this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
-    this.socket.disconnect();
+    // Cleanup multiplayer connection
+    this.multiplayer.disconnect();
   }
 
   private joinCompetitiveLobby(guestData: any): void {
-    this.socket.emit('join-competitive-lobby', {
-      username: guestData.username,
-      ageRange: guestData.ageRange,
-      tempGuestId: guestData.tempGuestId
-    });
+    // TODO: Implement competitive lobby with Supabase
+    console.log('Joining competitive lobby:', guestData);
+    this.showError('Competition mode not yet available');
   }
 
   private showLobby(lobbyData: any): void {
