@@ -19,7 +19,13 @@ const io = socketIo(server, {
       : "http://localhost:5173",
     methods: ["GET", "POST"],
     credentials: true
-  }
+  },
+  // Configure for Vercel serverless environment
+  transports: process.env.NODE_ENV === 'production' ? ['polling'] : ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  upgradeTimeout: 30000,
+  allowUpgrades: process.env.NODE_ENV !== 'production'
 });
 
 // Enable CORS and JSON parsing

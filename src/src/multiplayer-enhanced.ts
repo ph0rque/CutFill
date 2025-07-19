@@ -152,7 +152,15 @@ export class EnhancedMultiplayerManager {
   constructor(terrain: Terrain) {
     this.terrain = terrain;
     const serverUrl = import.meta.env.VITE_MULTIPLAYER_SERVER_URL || 'http://localhost:3001';
-    this.socket = io(serverUrl);
+    
+    // Configure Socket.io for production environment
+    const socketOptions = serverUrl.includes('vercel.app') ? {
+      transports: ['polling'], // Force polling for Vercel
+      timeout: 60000,
+      forceNew: true
+    } : {};
+    
+    this.socket = io(serverUrl, socketOptions);
     this.setupEventHandlers();
     this.startCursorUpdates();
   }
