@@ -33,7 +33,7 @@ export class Terrain {
     size: 3,
     strength: 0.5,
     shape: 'circle',
-    falloff: 'smooth'
+    falloff: 'smooth',
   };
 
   // 3D terrain enhancement properties
@@ -51,11 +51,14 @@ export class Terrain {
   private fillOverlays: THREE.Mesh[] = [];
   private showOriginalTerrainOverlay: boolean = false;
   private showFillVolumeOverlay: boolean = false;
-  private modificationAreas: Map<string, {
-    bounds: { minX: number, maxX: number, minZ: number, maxZ: number },
-    type: 'cut' | 'fill',
-    overlay?: THREE.Mesh
-  }> = new Map();
+  private modificationAreas: Map<
+    string,
+    {
+      bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+      type: 'cut' | 'fill';
+      overlay?: THREE.Mesh;
+    }
+  > = new Map();
 
   // Add elevation zone properties
   private targetElevation: number = 0; // Target grade elevation
@@ -67,8 +70,16 @@ export class Terrain {
   };
 
   // Enhanced accessibility properties
-  private accessibilityMode: 'normal' | 'colorBlind' | 'highContrast' | 'patterns' = 'normal';
-  private colorBlindType: 'protanopia' | 'deuteranopia' | 'tritanopia' | 'normal' = 'normal';
+  private accessibilityMode:
+    | 'normal'
+    | 'colorBlind'
+    | 'highContrast'
+    | 'patterns' = 'normal';
+  private colorBlindType:
+    | 'protanopia'
+    | 'deuteranopia'
+    | 'tritanopia'
+    | 'normal' = 'normal';
 
   // Camera reference for zoom-independent arrow scaling
   private camera: THREE.Camera | null = null;
@@ -94,24 +105,36 @@ export class Terrain {
   private autoSaveEnabled: boolean = true;
   private lastSaveTime: number = 0;
   private saveThrottleMs: number = 30000; // Save every 30 seconds at most
-  private pendingModifications: Array<{x: number, z: number, heightChange: number, tool: string}> = [];
+  private pendingModifications: Array<{
+    x: number;
+    z: number;
+    heightChange: number;
+    tool: string;
+  }> = [];
 
   // Planning mode properties
   private planningMode: boolean = true; // plan-first workflow enabled by default
-  private plannedStrokes: Array<{ x:number; z:number; radius:number; heightChange:number; type:'cut'|'fill'; boundary: {x:number; z:number}[] }> = [];
+  private plannedStrokes: Array<{
+    x: number;
+    z: number;
+    radius: number;
+    heightChange: number;
+    type: 'cut' | 'fill';
+    boundary: { x: number; z: number }[];
+  }> = [];
 
   // add property
   private suppressOverlays: boolean = false;
 
   constructor(
-    width: number = 120,  // 120 feet = 40 yards
-    height: number = 120, // 120 feet = 40 yards  
-    widthSegments: number = 32,  // Higher resolution for better cut/fill visualization
-    heightSegments: number = 32  // Higher resolution for better cut/fill visualization
+    width: number = 120, // 120 feet = 40 yards
+    height: number = 120, // 120 feet = 40 yards
+    widthSegments: number = 32, // Higher resolution for better cut/fill visualization
+    heightSegments: number = 32 // Higher resolution for better cut/fill visualization
   ) {
     // Create main group for all terrain parts
     this.terrainGroup = new THREE.Group();
-    
+
     // Initialize material layers
     this.initializeMaterialLayers();
 
@@ -130,7 +153,7 @@ export class Terrain {
     this.geometry.rotateX(-Math.PI / 2);
 
     // Translate so origin is at corner (terrain spans from 0,0 to width,height)
-    this.geometry.translate(width/2, 0, height/2);
+    this.geometry.translate(width / 2, 0, height / 2);
 
     // Store original vertices for future modifications
     this.originalVertices = new Float32Array(
@@ -139,7 +162,7 @@ export class Terrain {
 
     // Create surface material with flat shading (no lighting)
     this.material = new THREE.MeshBasicMaterial({
-      color: 0xE6C2A6, // Much lighter brown to match topsoil
+      color: 0xe6c2a6, // Much lighter brown to match topsoil
       wireframe: false,
       vertexColors: true, // Enable vertex colors for layered effects
     });
@@ -156,21 +179,21 @@ export class Terrain {
 
     // Generate initial terrain
     this.regenerateTerrain();
-    
+
     // Force color update to ensure new depth-based gradient is applied
     this.updateTerrainColors();
-    
+
     // Generate initial contour lines with dynamic adjustment
     this.generateContourLines();
-    
+
     // Ensure contour labels are initially visible
     this.contourLabelsVisible = true;
-    
+
     // Set up initial dynamic contour calculation
     if (this.camera) {
       this.updateContoursForZoom();
     }
-    
+
     // Save initial state
     this.saveState();
   }
@@ -178,7 +201,7 @@ export class Terrain {
   /**
    * Initialize realistic material layers with consistent depth-based color gradient
    * Updated to match CLAUDE.md standardized values
-   * 
+   *
    * Depth Ranges:
    * - 0.0 to 0.3 feet: Green topsoil (0.1 yards)
    * - 0.3 to 3.0 feet: Yellow subsoil (0.9 yards)
@@ -190,34 +213,34 @@ export class Terrain {
     this.materialLayers = [
       {
         name: 'Topsoil',
-        color: new THREE.Color(0x228B22), // Green topsoil (Forest Green)
+        color: new THREE.Color(0x228b22), // Green topsoil (Forest Green)
         depth: 0.3, // 0.1 yards = 0.3 feet
-        hardness: 0.2
+        hardness: 0.2,
       },
       {
-        name: 'Subsoil', 
-        color: new THREE.Color(0xFFD700), // Yellow subsoil (Gold)
+        name: 'Subsoil',
+        color: new THREE.Color(0xffd700), // Yellow subsoil (Gold)
         depth: 2.7, // 0.9 yards = 2.7 feet
-        hardness: 0.4
+        hardness: 0.4,
       },
       {
         name: 'Clay',
-        color: new THREE.Color(0x8B4513), // Mud-red-brown clay (Saddle Brown)
+        color: new THREE.Color(0x8b4513), // Mud-red-brown clay (Saddle Brown)
         depth: 9, // 3 yards = 9 feet
-        hardness: 0.6
+        hardness: 0.6,
       },
       {
         name: 'Deep Soil',
         color: new THREE.Color(0x654321), // Darker brown deeper soil (Dark Brown)
         depth: 9, // 3 yards = 9 feet
-        hardness: 0.8
+        hardness: 0.8,
       },
       {
         name: 'Rock',
         color: new THREE.Color(0x808080), // Gray rock/bedrock (Gray)
         depth: 9, // 3 yards = 9 feet
-        hardness: 1.0
-      }
+        hardness: 1.0,
+      },
     ];
   }
 
@@ -226,22 +249,26 @@ export class Terrain {
    */
   private initializeElevationZones(): void {
     this.elevationZones = {
-      high: { 
-        min: 2, max: Infinity, 
-        color: new THREE.Color(0x4CAF50) // Green for high fill areas
+      high: {
+        min: 2,
+        max: Infinity,
+        color: new THREE.Color(0x4caf50), // Green for high fill areas
       },
-      medium: { 
-        min: 0.5, max: 2, 
-        color: new THREE.Color(0xFF9800) // Orange for medium fill
+      medium: {
+        min: 0.5,
+        max: 2,
+        color: new THREE.Color(0xff9800), // Orange for medium fill
       },
-      low: { 
-        min: -0.5, max: 0.5, 
-        color: new THREE.Color(0xFFF59D) // Light yellow for near target
+      low: {
+        min: -0.5,
+        max: 0.5,
+        color: new THREE.Color(0xfff59d), // Light yellow for near target
       },
-      cut: { 
-        min: -Infinity, max: -0.5, 
-        color: new THREE.Color(0x2196F3) // Blue for cut areas
-      }
+      cut: {
+        min: -Infinity,
+        max: -0.5,
+        color: new THREE.Color(0x2196f3), // Blue for cut areas
+      },
     };
   }
 
@@ -263,17 +290,37 @@ export class Terrain {
   /**
    * Get elevation zone for a given height relative to target
    */
-  private getElevationZone(height: number): { name: string; color: THREE.Color; fillType: 'cut' | 'fill' | 'target' } {
+  private getElevationZone(height: number): {
+    name: string;
+    color: THREE.Color;
+    fillType: 'cut' | 'fill' | 'target';
+  } {
     const relativeHeight = height - this.targetElevation;
-    
+
     if (relativeHeight >= this.elevationZones.high.min) {
-      return { name: 'high', color: this.elevationZones.high.color, fillType: 'fill' };
+      return {
+        name: 'high',
+        color: this.elevationZones.high.color,
+        fillType: 'fill',
+      };
     } else if (relativeHeight >= this.elevationZones.medium.min) {
-      return { name: 'medium', color: this.elevationZones.medium.color, fillType: 'fill' };
+      return {
+        name: 'medium',
+        color: this.elevationZones.medium.color,
+        fillType: 'fill',
+      };
     } else if (relativeHeight >= this.elevationZones.low.min) {
-      return { name: 'low', color: this.elevationZones.low.color, fillType: 'target' };
+      return {
+        name: 'low',
+        color: this.elevationZones.low.color,
+        fillType: 'target',
+      };
     } else {
-      return { name: 'cut', color: this.elevationZones.cut.color, fillType: 'cut' };
+      return {
+        name: 'cut',
+        color: this.elevationZones.cut.color,
+        fillType: 'cut',
+      };
     }
   }
 
@@ -283,35 +330,38 @@ export class Terrain {
   private create3DTerrainBlockOptimized(width: number, height: number): void {
     // PERFORMANCE OPTIMIZATION: Use much lower resolution for 3D block
     // Surface remains high-res (32x32), but block uses only 8x8 for massive performance gain
-    const blockWidthSegments = 8;  // Reduced from 32 to 8 
+    const blockWidthSegments = 8; // Reduced from 32 to 8
     const blockHeightSegments = 8; // Reduced from 32 to 8
-    const verticalLayers = 4;      // Reduced from 33 to 4 layers (every 8 feet instead of 1 foot)
+    const verticalLayers = 4; // Reduced from 33 to 4 layers (every 8 feet instead of 1 foot)
 
     // Create low-resolution geometry for the 3D block
     const blockGeometry = new THREE.BufferGeometry();
-    
+
     // Sample terrain heights at lower resolution for block
-    const levelVertexCount = (blockWidthSegments + 1) * (blockHeightSegments + 1);
+    const levelVertexCount =
+      (blockWidthSegments + 1) * (blockHeightSegments + 1);
     const totalVertices = (verticalLayers + 1) * levelVertexCount;
     const positions = new Float32Array(totalVertices * 3);
     const indices = [];
-    
+
     // Create vertices for each vertical level
     for (let layer = 0; layer <= verticalLayers; layer++) {
       const layerDepth = -(this.blockDepth * (layer / verticalLayers));
-      
+
       for (let row = 0; row <= blockHeightSegments; row++) {
         for (let col = 0; col <= blockWidthSegments; col++) {
-          const vertexIndex = (layer * levelVertexCount + row * (blockWidthSegments + 1) + col) * 3;
-          
+          const vertexIndex =
+            (layer * levelVertexCount + row * (blockWidthSegments + 1) + col) *
+            3;
+
           // Sample terrain height at this low-res position
           const worldX = (col / blockWidthSegments) * width;
           const worldZ = (row / blockHeightSegments) * height;
           const terrainHeight = this.getHeightAtPosition(worldX, worldZ);
-          
-          positions[vertexIndex] = worldX;     // x
+
+          positions[vertexIndex] = worldX; // x
           positions[vertexIndex + 2] = worldZ; // z
-          
+
           if (layer === 0) {
             // Top layer: follows terrain surface
             positions[vertexIndex + 1] = terrainHeight - 0.005;
@@ -324,89 +374,99 @@ export class Terrain {
         }
       }
     }
-    
+
     // Create simplified wall faces (only outer perimeter)
     for (let layer = 0; layer < verticalLayers; layer++) {
       const topOffset = layer * levelVertexCount;
       const bottomOffset = (layer + 1) * levelVertexCount;
-      
+
       // Front edge
       for (let col = 0; col < blockWidthSegments; col++) {
-        const topLeft = topOffset + (blockHeightSegments * (blockWidthSegments + 1) + col);
+        const topLeft =
+          topOffset + (blockHeightSegments * (blockWidthSegments + 1) + col);
         const topRight = topLeft + 1;
-        const bottomLeft = bottomOffset + (blockHeightSegments * (blockWidthSegments + 1) + col);
+        const bottomLeft =
+          bottomOffset + (blockHeightSegments * (blockWidthSegments + 1) + col);
         const bottomRight = bottomLeft + 1;
-        
+
         indices.push(topLeft, bottomLeft, topRight);
         indices.push(topRight, bottomLeft, bottomRight);
       }
-      
+
       // Back edge
       for (let col = 0; col < blockWidthSegments; col++) {
         const topLeft = topOffset + col;
         const topRight = topLeft + 1;
         const bottomLeft = bottomOffset + col;
         const bottomRight = bottomLeft + 1;
-        
+
         indices.push(topRight, bottomLeft, topLeft);
         indices.push(bottomRight, bottomLeft, topRight);
       }
-      
+
       // Left and right edges
       for (let row = 0; row < blockHeightSegments; row++) {
         // Left edge
-        const leftTopTop = topOffset + (row * (blockWidthSegments + 1));
+        const leftTopTop = topOffset + row * (blockWidthSegments + 1);
         const leftTopBottom = leftTopTop + (blockWidthSegments + 1);
-        const leftBottomTop = bottomOffset + (row * (blockWidthSegments + 1));
+        const leftBottomTop = bottomOffset + row * (blockWidthSegments + 1);
         const leftBottomBottom = leftBottomTop + (blockWidthSegments + 1);
-        
+
         indices.push(leftTopTop, leftBottomTop, leftTopBottom);
         indices.push(leftTopBottom, leftBottomTop, leftBottomBottom);
-        
+
         // Right edge
-        const rightTopTop = topOffset + (row * (blockWidthSegments + 1) + blockWidthSegments);
+        const rightTopTop =
+          topOffset + (row * (blockWidthSegments + 1) + blockWidthSegments);
         const rightTopBottom = rightTopTop + (blockWidthSegments + 1);
-        const rightBottomTop = bottomOffset + (row * (blockWidthSegments + 1) + blockWidthSegments);
+        const rightBottomTop =
+          bottomOffset + (row * (blockWidthSegments + 1) + blockWidthSegments);
         const rightBottomBottom = rightBottomTop + (blockWidthSegments + 1);
-        
+
         indices.push(rightTopBottom, rightBottomTop, rightTopTop);
         indices.push(rightBottomBottom, rightBottomTop, rightTopBottom);
       }
     }
-    
+
     // Create bottom face
     const bottomLevelOffset = verticalLayers * levelVertexCount;
     for (let row = 0; row < blockHeightSegments; row++) {
       for (let col = 0; col < blockWidthSegments; col++) {
-        const topLeft = bottomLevelOffset + (row * (blockWidthSegments + 1) + col);
+        const topLeft =
+          bottomLevelOffset + (row * (blockWidthSegments + 1) + col);
         const topRight = topLeft + 1;
         const bottomLeft = topLeft + (blockWidthSegments + 1);
         const bottomRight = bottomLeft + 1;
-        
+
         indices.push(bottomLeft, topRight, topLeft);
         indices.push(bottomLeft, bottomRight, topRight);
       }
     }
-    
-    blockGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    blockGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(positions, 3)
+    );
     blockGeometry.setIndex(indices);
-    
+
     // Use faster normal calculation
     blockGeometry.computeVertexNormals();
-    
+
     // Simplified material without vertex colors for better performance
     const earthMaterial = new THREE.MeshLambertMaterial({
-      color: 0x8B5A2B,
-      side: THREE.DoubleSide
+      color: 0x8b5a2b,
+      side: THREE.DoubleSide,
     });
-    
+
     const terrainBlock = new THREE.Mesh(blockGeometry, earthMaterial);
-    
+
     this.wallMeshes = [terrainBlock];
     this.terrainGroup.add(terrainBlock);
     this.surfaceMesh.position.y = 0;
-    
-    console.log(`🚀 Optimized 3D terrain: ${totalVertices} vertices (vs ${(32+1)*(32+1)*(33+1)} in old version)`);
+
+    console.log(
+      `🚀 Optimized 3D terrain: ${totalVertices} vertices (vs ${(32 + 1) * (32 + 1) * (33 + 1)} in old version)`
+    );
   }
 
   /**
@@ -415,12 +475,12 @@ export class Terrain {
   public setPerformanceMode(enabled: boolean): void {
     this.performanceMode = enabled;
     this.skipExpensiveOperations = enabled;
-    
+
     // When disabling performance mode, force a complete update
     if (!enabled) {
       this.forceCompleteUpdate();
     }
-    
+
     console.log(`🚀 Performance mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
   }
 
@@ -440,8 +500,8 @@ export class Terrain {
    */
   private createWallMaterial(): THREE.MeshBasicMaterial {
     return new THREE.MeshBasicMaterial({
-      color: 0x8B5A2B, // Rich topsoil brown - same as surface
-      side: THREE.DoubleSide
+      color: 0x8b5a2b, // Rich topsoil brown - same as surface
+      side: THREE.DoubleSide,
     });
   }
 
@@ -474,14 +534,14 @@ export class Terrain {
   private getColorAtElevation(elevation: number): THREE.Color {
     if (elevation >= 0) {
       // Surface elevations - use a surface color that gets lighter at higher elevations
-      const surfaceColor = new THREE.Color(0x8B4513); // Base brown surface color
-      
+      const surfaceColor = new THREE.Color(0x8b4513); // Base brown surface color
+
       // Make higher elevations lighter (more exposed, sandy)
       const lightnessFactor = Math.min(elevation / 10, 0.3); // Cap at 30% lighter
       surfaceColor.r = Math.min(1.0, surfaceColor.r + lightnessFactor);
       surfaceColor.g = Math.min(1.0, surfaceColor.g + lightnessFactor * 0.8);
       surfaceColor.b = Math.min(1.0, surfaceColor.b + lightnessFactor * 0.6);
-      
+
       return surfaceColor;
     } else {
       // Below surface - use depth-based material colors
@@ -497,13 +557,19 @@ export class Terrain {
     const vertices = this.geometry.attributes.position.array;
     const width = this.geometry.parameters.width;
     const height = this.geometry.parameters.height;
-    
+
     // Randomly select a terrain pattern
     const patterns = ['flat', 'gentle_slope', 'valley', 'hill', 'rolling'];
-    const selectedPattern = patterns[Math.floor(Math.random() * patterns.length)];
-    
+    const selectedPattern =
+      patterns[Math.floor(Math.random() * patterns.length)];
+
     // Generate terrain based on selected pattern
-    this.generateTerrainPattern(vertices as Float32Array, width, height, selectedPattern);
+    this.generateTerrainPattern(
+      vertices as Float32Array,
+      width,
+      height,
+      selectedPattern
+    );
 
     // Update original vertices to match the new terrain for accurate volume calculations
     this.originalVertices = new Float32Array(vertices);
@@ -518,7 +584,12 @@ export class Terrain {
   /**
    * Generate realistic terrain patterns with larger variation
    */
-  private generateTerrainPattern(vertices: Float32Array, width: number, height: number, pattern: string): void {
+  private generateTerrainPattern(
+    vertices: Float32Array,
+    width: number,
+    height: number,
+    pattern: string
+  ): void {
     const centerX = width / 2; // Adjust for corner positioning
     const centerZ = height / 2; // Adjust for corner positioning
     const maxRadius = Math.max(width, height) / 2;
@@ -526,11 +597,13 @@ export class Terrain {
     for (let i = 0; i < vertices.length; i += 3) {
       const x = vertices[i];
       const z = vertices[i + 2];
-      
+
       // Distance from center for radial effects (adjusted for corner positioning)
-      const distanceFromCenter = Math.sqrt((x - centerX) ** 2 + (z - centerZ) ** 2);
+      const distanceFromCenter = Math.sqrt(
+        (x - centerX) ** 2 + (z - centerZ) ** 2
+      );
       const normalizedDistance = Math.min(distanceFromCenter / maxRadius, 1);
-      
+
       let terrainHeight = 0;
 
       switch (pattern) {
@@ -543,9 +616,13 @@ export class Terrain {
 
         case 'gentle_slope':
           // Broad gentle slope with natural variation
-          const slopeDirection = Math.PI * 0.3 + this.smoothNoise(x * 0.005, z * 0.005) * 0.3; // Slightly varying direction
-          const slopeStrength = 0.04 + this.smoothNoise(x * 0.008, z * 0.008) * 0.02; // Variable slope strength
-          terrainHeight = (x * Math.cos(slopeDirection) + z * Math.sin(slopeDirection)) * slopeStrength;
+          const slopeDirection =
+            Math.PI * 0.3 + this.smoothNoise(x * 0.005, z * 0.005) * 0.3; // Slightly varying direction
+          const slopeStrength =
+            0.04 + this.smoothNoise(x * 0.008, z * 0.008) * 0.02; // Variable slope strength
+          terrainHeight =
+            (x * Math.cos(slopeDirection) + z * Math.sin(slopeDirection)) *
+            slopeStrength;
           // Add broader undulations with some variation
           terrainHeight += this.smoothNoise(x * 0.02, z * 0.02) * 4; // ±4 feet broad variations
           terrainHeight += this.smoothNoise(x * 0.04, z * 0.04) * 1.5; // ±1.5 feet detail
@@ -554,8 +631,11 @@ export class Terrain {
         case 'valley':
           // Broad valley with natural variation
           const valleyDepth = 6 + this.smoothNoise(x * 0.01, z * 0.01) * 3; // 3-9 feet deep, varying
-          const valleyWidth = 0.6 + this.smoothNoise(x * 0.008, z * 0.008) * 0.2; // Variable width
-          const valleyFactor = Math.exp(-Math.pow(normalizedDistance / valleyWidth, 2));
+          const valleyWidth =
+            0.6 + this.smoothNoise(x * 0.008, z * 0.008) * 0.2; // Variable width
+          const valleyFactor = Math.exp(
+            -Math.pow(normalizedDistance / valleyWidth, 2)
+          );
           terrainHeight = -valleyDepth * valleyFactor;
           // Add natural side slope variation
           terrainHeight += this.smoothNoise(x * 0.025, z * 0.025) * 2.5; // ±2.5 feet variation
@@ -566,7 +646,9 @@ export class Terrain {
           // Broad hill with natural variation
           const hillHeight = 6 + this.smoothNoise(x * 0.01, z * 0.01) * 3; // 3-9 feet high, varying
           const hillWidth = 0.5 + this.smoothNoise(x * 0.008, z * 0.008) * 0.2; // Variable width
-          const hillFactor = Math.exp(-Math.pow(normalizedDistance / hillWidth, 2));
+          const hillFactor = Math.exp(
+            -Math.pow(normalizedDistance / hillWidth, 2)
+          );
           terrainHeight = hillHeight * hillFactor;
           // Add natural undulations
           terrainHeight += this.smoothNoise(x * 0.03, z * 0.03) * 2.5; // ±2.5 feet variation
@@ -575,11 +657,17 @@ export class Terrain {
 
         case 'rolling':
           // Rolling hills with multiple scales and natural variation
-          const largeWaves = Math.sin(x * 0.018) * Math.cos(z * 0.015) * (4 + this.smoothNoise(x * 0.01, z * 0.01) * 2); // 2-6 foot large waves
-          const mediumWaves = Math.sin(x * 0.035) * Math.cos(z * 0.03) * (2 + this.smoothNoise(x * 0.02, z * 0.02) * 1.5); // 0.5-3.5 foot medium waves
+          const largeWaves =
+            Math.sin(x * 0.018) *
+            Math.cos(z * 0.015) *
+            (4 + this.smoothNoise(x * 0.01, z * 0.01) * 2); // 2-6 foot large waves
+          const mediumWaves =
+            Math.sin(x * 0.035) *
+            Math.cos(z * 0.03) *
+            (2 + this.smoothNoise(x * 0.02, z * 0.02) * 1.5); // 0.5-3.5 foot medium waves
           const smallWaves = this.smoothNoise(x * 0.05, z * 0.05) * 1.8; // Small 1.8-foot variation
           const fineDetail = this.smoothNoise(x * 0.08, z * 0.08) * 0.7; // Fine 0.7-foot detail
-          
+
           terrainHeight = largeWaves + mediumWaves + smallWaves + fineDetail;
           break;
 
@@ -607,18 +695,22 @@ export class Terrain {
     const noise1 = Math.sin(x * 2.4 + z * 1.7) * 0.5;
     const noise2 = Math.sin(x * 1.2 - z * 2.1) * 0.3;
     const noise3 = Math.sin(x * 3.1 + z * 0.8) * 0.2;
-    
+
     return noise1 + noise2 + noise3;
   }
 
   /**
    * Apply smoothing to terrain to remove sharp transitions
    */
-  private smoothTerrain(vertices: Float32Array, width: number, height: number): void {
+  private smoothTerrain(
+    vertices: Float32Array,
+    width: number,
+    height: number
+  ): void {
     const widthSegments = this.geometry.parameters.widthSegments;
     const heightSegments = this.geometry.parameters.heightSegments;
     const smoothedVertices = new Float32Array(vertices.length);
-    
+
     // Copy original vertices
     for (let i = 0; i < vertices.length; i++) {
       smoothedVertices[i] = vertices[i];
@@ -628,7 +720,7 @@ export class Terrain {
     for (let row = 1; row < heightSegments; row++) {
       for (let col = 1; col < widthSegments; col++) {
         const index = (row * (widthSegments + 1) + col) * 3;
-        
+
         if (index + 1 < vertices.length) {
           // Get neighboring heights
           const currentHeight = vertices[index + 1];
@@ -636,10 +728,10 @@ export class Terrain {
           const rightIndex = (row * (widthSegments + 1) + (col + 1)) * 3;
           const topIndex = ((row - 1) * (widthSegments + 1) + col) * 3;
           const bottomIndex = ((row + 1) * (widthSegments + 1) + col) * 3;
-          
+
           let neighborCount = 1;
           let heightSum = currentHeight;
-          
+
           if (leftIndex + 1 < vertices.length) {
             heightSum += vertices[leftIndex + 1];
             neighborCount++;
@@ -656,13 +748,14 @@ export class Terrain {
             heightSum += vertices[bottomIndex + 1];
             neighborCount++;
           }
-          
+
           // Apply smoothed height (weighted average)
-          smoothedVertices[index + 1] = (currentHeight * 0.6) + (heightSum / neighborCount * 0.4);
+          smoothedVertices[index + 1] =
+            currentHeight * 0.6 + (heightSum / neighborCount) * 0.4;
         }
       }
     }
-    
+
     // Copy smoothed heights back
     for (let i = 1; i < vertices.length; i += 3) {
       vertices[i] = smoothedVertices[i];
@@ -676,13 +769,13 @@ export class Terrain {
     this.updateTerrainColors();
     this.updateWallColors();
     this.generateContourLines(); // Update contour lines when colors change
-    
+
     // Mark geometry as needing updates
     this.geometry.attributes.position.needsUpdate = true;
     if (this.geometry.attributes.color) {
       this.geometry.attributes.color.needsUpdate = true;
     }
-    
+
     // Update wall geometries
     this.wallMeshes.forEach(wall => {
       if (wall.geometry.attributes.color) {
@@ -696,15 +789,15 @@ export class Terrain {
    */
   public generateContourLines(): void {
     this.clearContourLines();
-    
+
     const vertices = this.geometry.attributes.position.array as Float32Array;
     const widthSegments = this.geometry.parameters.widthSegments;
     const heightSegments = this.geometry.parameters.heightSegments;
-    
+
     // Find elevation range
     let minHeight = Infinity;
     let maxHeight = -Infinity;
-    
+
     for (let i = 1; i < vertices.length; i += 3) {
       const height = vertices[i];
       if (isFinite(height)) {
@@ -712,45 +805,101 @@ export class Terrain {
         maxHeight = Math.max(maxHeight, height);
       }
     }
-    
+
     if (!isFinite(minHeight) || !isFinite(maxHeight)) {
       return; // No valid terrain data
     }
-    
+
     // Generate contour lines at regular intervals
-    const startElevation = Math.floor(minHeight / this.contourInterval) * this.contourInterval;
-    const endElevation = Math.ceil(maxHeight / this.contourInterval) * this.contourInterval;
-    
-    for (let elevation = startElevation; elevation <= endElevation; elevation += this.contourInterval) {
-      this.generateContourLineAtElevation(elevation, vertices, widthSegments, heightSegments);
+    const startElevation =
+      Math.floor(minHeight / this.contourInterval) * this.contourInterval;
+    const endElevation =
+      Math.ceil(maxHeight / this.contourInterval) * this.contourInterval;
+
+    for (
+      let elevation = startElevation;
+      elevation <= endElevation;
+      elevation += this.contourInterval
+    ) {
+      this.generateContourLineAtElevation(
+        elevation,
+        vertices,
+        widthSegments,
+        heightSegments
+      );
     }
   }
 
   /**
    * Generate a single contour line at the specified elevation
    */
-  private generateContourLineAtElevation(elevation: number, vertices: Float32Array, widthSegments: number, heightSegments: number): void {
+  private generateContourLineAtElevation(
+    elevation: number,
+    vertices: Float32Array,
+    widthSegments: number,
+    heightSegments: number
+  ): void {
     const contourSegments: { start: THREE.Vector3; end: THREE.Vector3 }[] = [];
     const contourColor = this.getColorAtElevation(elevation);
-    
+
     // March through the terrain grid to find contour segments
     for (let row = 0; row < heightSegments; row++) {
       for (let col = 0; col < widthSegments; col++) {
         // Check each quad for contour intersections
-        const topLeft = this.getVertexPosition(vertices, row, col, widthSegments);
-        const topRight = this.getVertexPosition(vertices, row, col + 1, widthSegments);
-        const bottomLeft = this.getVertexPosition(vertices, row + 1, col, widthSegments);
-        const bottomRight = this.getVertexPosition(vertices, row + 1, col + 1, widthSegments);
-        
+        const topLeft = this.getVertexPosition(
+          vertices,
+          row,
+          col,
+          widthSegments
+        );
+        const topRight = this.getVertexPosition(
+          vertices,
+          row,
+          col + 1,
+          widthSegments
+        );
+        const bottomLeft = this.getVertexPosition(
+          vertices,
+          row + 1,
+          col,
+          widthSegments
+        );
+        const bottomRight = this.getVertexPosition(
+          vertices,
+          row + 1,
+          col + 1,
+          widthSegments
+        );
+
         // Find intersections with the elevation plane on each edge
         const intersections: THREE.Vector3[] = [];
-        
+
         // Check each edge and add intersections
-        this.addContourIntersection(topLeft, topRight, elevation, intersections);
-        this.addContourIntersection(topRight, bottomRight, elevation, intersections);
-        this.addContourIntersection(bottomRight, bottomLeft, elevation, intersections);
-        this.addContourIntersection(bottomLeft, topLeft, elevation, intersections);
-        
+        this.addContourIntersection(
+          topLeft,
+          topRight,
+          elevation,
+          intersections
+        );
+        this.addContourIntersection(
+          topRight,
+          bottomRight,
+          elevation,
+          intersections
+        );
+        this.addContourIntersection(
+          bottomRight,
+          bottomLeft,
+          elevation,
+          intersections
+        );
+        this.addContourIntersection(
+          bottomLeft,
+          topLeft,
+          elevation,
+          intersections
+        );
+
         // Create contour segments from intersections (should be 0, 2, or 4 intersections per quad)
         if (intersections.length >= 2) {
           // For each pair of intersections, create a segment
@@ -758,17 +907,17 @@ export class Terrain {
             if (i + 1 < intersections.length) {
               contourSegments.push({
                 start: intersections[i].clone(),
-                end: intersections[i + 1].clone()
+                end: intersections[i + 1].clone(),
               });
             }
           }
         }
       }
     }
-    
+
     // Connect segments into continuous contour lines
     const contourLines = this.connectContourSegments(contourSegments);
-    
+
     // Create geometry for each continuous contour line
     contourLines.forEach(linePoints => {
       if (linePoints.length >= 2) {
@@ -780,36 +929,41 @@ export class Terrain {
   /**
    * Connect individual contour segments into continuous lines
    */
-  private connectContourSegments(segments: { start: THREE.Vector3; end: THREE.Vector3 }[]): THREE.Vector3[][] {
+  private connectContourSegments(
+    segments: { start: THREE.Vector3; end: THREE.Vector3 }[]
+  ): THREE.Vector3[][] {
     if (segments.length === 0) return [];
-    
+
     const contourLines: THREE.Vector3[][] = [];
     const usedSegments = new Set<number>();
     const tolerance = 0.1; // Tolerance for connecting segments
-    
+
     for (let i = 0; i < segments.length; i++) {
       if (usedSegments.has(i)) continue;
-      
+
       const currentLine: THREE.Vector3[] = [];
-      let currentSegment = segments[i];
+      const currentSegment = segments[i];
       usedSegments.add(i);
-      
+
       // Start the line
-      currentLine.push(currentSegment.start.clone(), currentSegment.end.clone());
-      
+      currentLine.push(
+        currentSegment.start.clone(),
+        currentSegment.end.clone()
+      );
+
       // Try to extend the line by finding connected segments
       let extended = true;
       while (extended) {
         extended = false;
         const lineEnd = currentLine[currentLine.length - 1];
         const lineStart = currentLine[0];
-        
+
         // Look for segments that connect to the end of current line
         for (let j = 0; j < segments.length; j++) {
           if (usedSegments.has(j)) continue;
-          
+
           const segment = segments[j];
-          
+
           // Check if segment connects to line end
           if (lineEnd.distanceTo(segment.start) < tolerance) {
             currentLine.push(segment.end.clone());
@@ -836,20 +990,25 @@ export class Terrain {
           }
         }
       }
-      
+
       // Only add lines with sufficient length
       if (currentLine.length >= 2) {
         contourLines.push(currentLine);
       }
     }
-    
+
     return contourLines;
   }
 
   /**
    * Get vertex position from the terrain vertices array
    */
-  private getVertexPosition(vertices: Float32Array, row: number, col: number, widthSegments: number): THREE.Vector3 {
+  private getVertexPosition(
+    vertices: Float32Array,
+    row: number,
+    col: number,
+    widthSegments: number
+  ): THREE.Vector3 {
     const index = (row * (widthSegments + 1) + col) * 3;
     const verticesArray = vertices as Float32Array;
     return new THREE.Vector3(
@@ -862,52 +1021,52 @@ export class Terrain {
   /**
    * Add contour intersection between two points if it exists
    */
-  private addContourIntersection(p1: THREE.Vector3, p2: THREE.Vector3, elevation: number, intersections: THREE.Vector3[]): void {
+  private addContourIntersection(
+    p1: THREE.Vector3,
+    p2: THREE.Vector3,
+    elevation: number,
+    intersections: THREE.Vector3[]
+  ): void {
     const h1 = p1.y;
     const h2 = p2.y;
-    
+
     // Check if the elevation crosses this edge
-    if ((h1 <= elevation && h2 >= elevation) || (h1 >= elevation && h2 <= elevation)) {
+    if (
+      (h1 <= elevation && h2 >= elevation) ||
+      (h1 >= elevation && h2 <= elevation)
+    ) {
       const heightDiff = Math.abs(h1 - h2);
-      
+
       // Skip near-horizontal edges or edges where heights are too similar
       if (heightDiff < 0.005) return;
-      
+
       // Handle exact matches to prevent duplicate intersections
       if (Math.abs(h1 - elevation) < 0.001) {
         // Point 1 is exactly on the contour
-        const intersection = new THREE.Vector3(
-          p1.x,
-          elevation + 0.02,
-          p1.z
-        );
+        const intersection = new THREE.Vector3(p1.x, elevation + 0.02, p1.z);
         intersections.push(intersection);
         return;
       }
-      
+
       if (Math.abs(h2 - elevation) < 0.001) {
         // Point 2 is exactly on the contour
-        const intersection = new THREE.Vector3(
-          p2.x,
-          elevation + 0.02,
-          p2.z
-        );
+        const intersection = new THREE.Vector3(p2.x, elevation + 0.02, p2.z);
         intersections.push(intersection);
         return;
       }
-      
+
       // Linear interpolation to find intersection point
       const t = (elevation - h1) / (h2 - h1);
-      
+
       // Clamp t to valid range to prevent extrapolation
       const clampedT = Math.max(0, Math.min(1, t));
-      
+
       const intersection = new THREE.Vector3(
         p1.x + clampedT * (p2.x - p1.x),
         elevation + 0.02, // Raise slightly above terrain to avoid z-fighting
         p1.z + clampedT * (p2.z - p1.z)
       );
-      
+
       intersections.push(intersection);
     }
   }
@@ -915,26 +1074,29 @@ export class Terrain {
   /**
    * Create the actual line geometry for a contour line
    */
-  private createContourLineGeometry(points: THREE.Vector3[], color: THREE.Color): void {
+  private createContourLineGeometry(
+    points: THREE.Vector3[],
+    color: THREE.Color
+  ): void {
     if (points.length < 2) return;
-    
+
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({
       color: 0x000000, // Changed to black
       linewidth: 3,
       transparent: true,
       opacity: 0.9,
-      depthTest: false // Ensure lines render on top like axes
+      depthTest: false, // Ensure lines render on top like axes
     });
-    
+
     const contourLine = new THREE.Line(geometry, material);
     contourLine.name = 'contourLine';
     contourLine.renderOrder = 999; // High render order like axes, but slightly lower than axes (1000)
     (contourLine as any).elevation = points[0]?.y || 0; // Store elevation for reference
-    
+
     this.contourLines.push(contourLine);
     this.terrainGroup.add(contourLine);
-    
+
     // Add elevation labels with dynamic spacing
     this.createContourLabels(points, new THREE.Color(0x000000)); // Use black for labels too
   }
@@ -942,17 +1104,22 @@ export class Terrain {
   /**
    * Create elevation labels for a contour line with dynamic spacing
    */
-  private createContourLabels(points: THREE.Vector3[], color: THREE.Color): void {
+  private createContourLabels(
+    points: THREE.Vector3[],
+    color: THREE.Color
+  ): void {
     if (points.length < 2) return;
-    
+
     // Don't create labels if they're supposed to be hidden
     if (!this.contourLabelsVisible) return;
-    
+
     const elevation = points[0]?.y || 0;
-    
+
     // Calculate dynamic label spacing based on camera distance
-    const cameraDistance = this.camera ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50)) : 100;
-    
+    const cameraDistance = this.camera
+      ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50))
+      : 100;
+
     // Dynamic spacing: closer camera = more labels, farther = fewer labels
     let labelSpacing: number;
     if (cameraDistance < 50) {
@@ -964,11 +1131,15 @@ export class Terrain {
     } else {
       labelSpacing = 60; // Far - label every 60 feet along line
     }
-    
+
     // Calculate total line length and label positions
     let totalLength = 0;
-    const segments: { start: THREE.Vector3; end: THREE.Vector3; length: number }[] = [];
-    
+    const segments: {
+      start: THREE.Vector3;
+      end: THREE.Vector3;
+      length: number;
+    }[] = [];
+
     for (let i = 0; i < points.length - 1; i += 2) {
       const start = points[i];
       const end = points[i + 1];
@@ -978,27 +1149,37 @@ export class Terrain {
         totalLength += segmentLength;
       }
     }
-    
+
     // Only add labels if the line is long enough
     if (totalLength < labelSpacing * 0.8) return;
-    
+
     // Place labels at regular intervals along the line (max 2 labels per contour)
-    const numLabels = Math.max(1, Math.min(2, Math.floor(totalLength / labelSpacing)));
+    const numLabels = Math.max(
+      1,
+      Math.min(2, Math.floor(totalLength / labelSpacing))
+    );
     const actualSpacing = totalLength / numLabels;
-    
+
     for (let i = 0; i < numLabels; i++) {
       const targetDistance = (i + 0.5) * actualSpacing; // Offset by half spacing to center labels
       let currentDistance = 0;
-      
+
       // Find the segment containing this label position
       for (const segment of segments) {
         if (currentDistance + segment.length >= targetDistance) {
           // Position within this segment
-          const segmentProgress = (targetDistance - currentDistance) / segment.length;
-          const labelPosition = segment.start.clone().lerp(segment.end, segmentProgress);
-          
+          const segmentProgress =
+            (targetDistance - currentDistance) / segment.length;
+          const labelPosition = segment.start
+            .clone()
+            .lerp(segment.end, segmentProgress);
+
           // Create the elevation label
-          const label = this.createElevationLabel(elevation, labelPosition, color);
+          const label = this.createElevationLabel(
+            elevation,
+            labelPosition,
+            color
+          );
           if (label) {
             this.contourLabels.push(label);
             this.terrainGroup.add(label);
@@ -1013,54 +1194,63 @@ export class Terrain {
   /**
    * Create a single elevation label sprite
    */
-  private createElevationLabel(elevation: number, position: THREE.Vector3, lineColor: THREE.Color): THREE.Sprite | null {
+  private createElevationLabel(
+    elevation: number,
+    position: THREE.Vector3,
+    lineColor: THREE.Color
+  ): THREE.Sprite | null {
     // Convert elevation from feet to yards and format text
     const elevationInYards = elevation / 3;
-    const elevationText = elevationInYards >= 0 ? `+${elevationInYards.toFixed(1)}yd` : `${elevationInYards.toFixed(1)}yd`;
-    
+    const elevationText =
+      elevationInYards >= 0
+        ? `+${elevationInYards.toFixed(1)}yd`
+        : `${elevationInYards.toFixed(1)}yd`;
+
     // Create canvas for text
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     if (!context) return null;
-    
+
     // Dynamic canvas size based on camera distance
-    const cameraDistance = this.camera ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50)) : 100;
+    const cameraDistance = this.camera
+      ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50))
+      : 100;
     const scale = Math.max(0.5, Math.min(1.5, 100 / cameraDistance)); // Scale text based on distance
-    
+
     canvas.width = 96 * scale; // Doubled from 48
     canvas.height = 40 * scale; // Doubled from 20
-    
+
     // Style the text
     context.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent background
     context.fillRect(0, 0, canvas.width, canvas.height);
-    
+
     // Add border
     context.strokeStyle = '#' + lineColor.getHexString();
     context.lineWidth = 1;
     context.strokeRect(0, 0, canvas.width, canvas.height);
-    
+
     // Add text
     context.fillStyle = '#FFFFFF'; // White text for good contrast
     context.font = `bold ${20 * scale}px Arial`; // Doubled font size from 10
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.fillText(elevationText, canvas.width / 2, canvas.height / 2);
-    
+
     // Create sprite
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ 
+    const material = new THREE.SpriteMaterial({
       map: texture,
       depthTest: false, // Always render on top
-      transparent: true
+      transparent: true,
     });
-    
+
     const sprite = new THREE.Sprite(material);
     sprite.position.copy(position);
     sprite.position.y += 0.1; // Raise slightly above contour line
     sprite.scale.set(8 * scale, 4 * scale, 1); // Doubled scale from 4x2
     sprite.renderOrder = 1003; // Render above axes
     sprite.name = 'contourLabel';
-    
+
     return sprite;
   }
 
@@ -1074,13 +1264,16 @@ export class Terrain {
         if (line.geometry) {
           line.geometry.dispose();
         }
-        if (line.material && typeof (line.material as THREE.Material).dispose === 'function') {
+        if (
+          line.material &&
+          typeof (line.material as THREE.Material).dispose === 'function'
+        ) {
           (line.material as THREE.Material).dispose();
         }
       }
     });
     this.contourLines = [];
-    
+
     // Clear elevation labels
     this.contourLabels.forEach(label => {
       if (label) {
@@ -1112,7 +1305,7 @@ export class Terrain {
    */
   public setContourLabelsVisible(visible: boolean): void {
     this.contourLabelsVisible = visible;
-    
+
     if (visible) {
       // When turning labels back on, check if we have any labels to show
       // If not, regenerate them from existing contour lines
@@ -1147,20 +1340,22 @@ export class Terrain {
       }
     });
     this.contourLabels = [];
-    
+
     // Regenerate labels for each existing contour line
     this.contourLines.forEach(line => {
       const elevation = (line as any).elevation || 0;
       const color = this.getColorAtElevation(elevation);
-      
+
       // Extract points from line geometry
       const positions = line.geometry.attributes.position.array;
       const points: THREE.Vector3[] = [];
-      
+
       for (let i = 0; i < positions.length; i += 3) {
-        points.push(new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]));
+        points.push(
+          new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2])
+        );
       }
-      
+
       if (points.length >= 2) {
         this.createContourLabels(points, color);
       }
@@ -1187,12 +1382,17 @@ export class Terrain {
   /**
    * Get current contour line settings
    */
-  public getContourSettings(): { visible: boolean; interval: number; count: number; labelCount: number } {
+  public getContourSettings(): {
+    visible: boolean;
+    interval: number;
+    count: number;
+    labelCount: number;
+  } {
     return {
       visible: this.contourLinesVisible,
       interval: this.contourInterval,
       count: this.contourLines.length,
-      labelCount: this.contourLabels.length
+      labelCount: this.contourLabels.length,
     };
   }
 
@@ -1207,12 +1407,12 @@ export class Terrain {
     // Calculate camera distance from terrain center
     const terrainCenter = new THREE.Vector3(50, 0, 50); // Center of 100x100 terrain
     const cameraDistance = this.camera.position.distanceTo(terrainCenter);
-    
+
     // Define zoom level ranges and corresponding contour intervals
     // Closer camera = more detail = smaller intervals
     // Further camera = less detail = larger intervals
     let dynamicInterval: number;
-    
+
     if (cameraDistance < 30) {
       // Very close - show maximum detail
       dynamicInterval = this.baseContourInterval * 0.25; // 4x more lines
@@ -1232,7 +1432,7 @@ export class Terrain {
       // Extremely far - very minimal detail
       dynamicInterval = this.baseContourInterval * 8; // Eighth of the lines
     }
-    
+
     // Ensure minimum interval of 0.25 feet and maximum of 10 feet
     return Math.max(0.25, Math.min(10, dynamicInterval));
   }
@@ -1247,24 +1447,26 @@ export class Terrain {
 
     const terrainCenter = new THREE.Vector3(50, 0, 50);
     const currentDistance = this.camera.position.distanceTo(terrainCenter);
-    
+
     // Only update if camera moved significantly (threshold to prevent excessive updates)
     const distanceThreshold = Math.max(3, currentDistance * 0.08); // Reduced threshold for more responsive updates
-    
-    if (Math.abs(currentDistance - this.lastCameraDistance) < distanceThreshold) {
+
+    if (
+      Math.abs(currentDistance - this.lastCameraDistance) < distanceThreshold
+    ) {
       return; // Camera hasn't moved enough to warrant an update
     }
-    
+
     this.lastCameraDistance = currentDistance;
-    
+
     // Throttle updates to prevent excessive regeneration
     if (this.contourUpdateThrottle) {
       clearTimeout(this.contourUpdateThrottle);
     }
-    
+
     this.contourUpdateThrottle = setTimeout(() => {
       const newInterval = this.calculateDynamicContourInterval();
-      
+
       // Regenerate contours if interval changed significantly
       if (Math.abs(newInterval - this.contourInterval) > 0.1) {
         this.contourInterval = newInterval;
@@ -1275,34 +1477,43 @@ export class Terrain {
         this.contourLabels.forEach(label => {
           if (label) {
             this.terrainGroup.remove(label);
-            if (label.material && typeof label.material.dispose === 'function') {
+            if (
+              label.material &&
+              typeof label.material.dispose === 'function'
+            ) {
               label.material.dispose();
             }
           }
         });
         this.contourLabels = [];
-        
+
         // Regenerate labels with current camera-based spacing (only if labels should be visible)
         if (this.contourLabelsVisible) {
           this.contourLines.forEach(line => {
             const elevation = (line as any).elevation || 0;
             const color = this.getColorAtElevation(elevation);
-            
+
             // Extract points from line geometry
             const positions = line.geometry.attributes.position.array;
             const points: THREE.Vector3[] = [];
-            
+
             for (let i = 0; i < positions.length; i += 3) {
-              points.push(new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]));
+              points.push(
+                new THREE.Vector3(
+                  positions[i],
+                  positions[i + 1],
+                  positions[i + 2]
+                )
+              );
             }
-            
+
             if (points.length >= 2) {
               this.createContourLabels(points, color);
             }
           });
         }
       }
-      
+
       this.contourUpdateThrottle = null;
     }, 150); // Reduced throttle time for more responsive updates
   }
@@ -1339,20 +1550,22 @@ export class Terrain {
   /**
    * Get dynamic contour settings
    */
-  public getDynamicContourSettings(): { 
-    dynamic: boolean; 
-    baseInterval: number; 
-    currentInterval: number; 
-    cameraDistance: number 
+  public getDynamicContourSettings(): {
+    dynamic: boolean;
+    baseInterval: number;
+    currentInterval: number;
+    cameraDistance: number;
   } {
     const terrainCenter = new THREE.Vector3(50, 0, 50);
-    const distance = this.camera ? this.camera.position.distanceTo(terrainCenter) : 0;
-    
+    const distance = this.camera
+      ? this.camera.position.distanceTo(terrainCenter)
+      : 0;
+
     return {
       dynamic: this.dynamicContours,
       baseInterval: this.baseContourInterval,
       currentInterval: this.contourInterval,
-      cameraDistance: distance
+      cameraDistance: distance,
     };
   }
 
@@ -1366,10 +1579,12 @@ export class Terrain {
     // Apply uniform light brown coloring
     for (let i = 0; i < vertices.length; i += 3) {
       const height = vertices[i + 1] || 0;
-      
+
       // Consistent surface color to match main terrain coloring
-      let r = 0.82, g = 0.72, b = 0.58; // Same as main surface color
-      
+      let r = 0.82,
+        g = 0.72,
+        b = 0.58; // Same as main surface color
+
       // Very minimal variation for natural look
       if (isFinite(height)) {
         const x = vertices[i] || 0;
@@ -1379,7 +1594,7 @@ export class Terrain {
         g += subtleVariation * 0.8;
         b += subtleVariation * 0.6;
       }
-      
+
       // Ensure colors stay within bounds and never go dark
       colors[i] = Math.min(1.0, Math.max(0.75, r));
       colors[i + 1] = Math.min(1.0, Math.max(0.7, g));
@@ -1416,36 +1631,39 @@ export class Terrain {
     }
 
     // Grayscale range: #444 (0.267) to #DDD (0.867)
-    const darkGray = 0.267;  // #444 in normalized RGB
+    const darkGray = 0.267; // #444 in normalized RGB
     const lightGray = 0.867; // #DDD in normalized RGB
     const colorRange = lightGray - darkGray;
 
     // Apply grayscale coloring based on height
     for (let i = 0; i < vertices.length; i += 3) {
       const height = vertices[i + 1];
-      
+
       let grayValue = darkGray; // Default to dark gray
-      
+
       if (isFinite(height) && !isNaN(height)) {
         // Normalize height to 0-1 range
-        const normalizedHeight = Math.max(0, Math.min(1, (height - minHeight) / (maxHeight - minHeight)));
-        
+        const normalizedHeight = Math.max(
+          0,
+          Math.min(1, (height - minHeight) / (maxHeight - minHeight))
+        );
+
         // Map to grayscale range: deeper areas are darker (#444), higher areas are lighter (#DDD)
-        grayValue = darkGray + (normalizedHeight * colorRange);
-        
+        grayValue = darkGray + normalizedHeight * colorRange;
+
         // Clamp to our defined range
         grayValue = Math.max(darkGray, Math.min(lightGray, grayValue));
       }
 
       // Set RGB values to same gray value for true grayscale
-      colors[i] = grayValue;     // R
-      colors[i + 1] = grayValue; // G  
+      colors[i] = grayValue; // R
+      colors[i + 1] = grayValue; // G
       colors[i + 2] = grayValue; // B
     }
 
     this.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     this.geometry.attributes.color.needsUpdate = true;
-    
+
     // Update wall colors to match
     this.updateWallColors();
   }
@@ -1455,11 +1673,11 @@ export class Terrain {
    */
   private updateWallColors(): void {
     if (this.wallMeshes.length === 0) return;
-    
+
     const wallGeometry = this.wallMeshes[0].geometry as THREE.BufferGeometry;
     const positions = wallGeometry.attributes.position.array;
     const wallColors = new Float32Array(positions.length);
-    
+
     // Calculate colors for each vertex using material layers
     for (let i = 0; i < positions.length; i += 3) {
       const y = positions[i + 1]; // Height/depth
@@ -1468,12 +1686,16 @@ export class Terrain {
       wallColors[i + 1] = color.g;
       wallColors[i + 2] = color.b;
     }
-    
-    wallGeometry.setAttribute('color', new THREE.BufferAttribute(wallColors, 3));
+
+    wallGeometry.setAttribute(
+      'color',
+      new THREE.BufferAttribute(wallColors, 3)
+    );
     wallGeometry.attributes.color.needsUpdate = true;
-    
+
     // Update material to use vertex colors
-    const wallMaterial = this.wallMeshes[0].material as THREE.MeshLambertMaterial;
+    const wallMaterial = this.wallMeshes[0]
+      .material as THREE.MeshLambertMaterial;
     wallMaterial.vertexColors = true;
     wallMaterial.needsUpdate = true;
   }
@@ -1487,32 +1709,46 @@ export class Terrain {
       const brushRadius = this.brushSettings.size;
       // Collect affected samples to compute boundary
       const vertices = this.geometry.attributes.position.array;
-      const points2D: {x:number; z:number}[] = [];
+      const points2D: { x: number; z: number }[] = [];
       for (let i = 0; i < vertices.length; i += 3) {
         const vx = vertices[i];
         const vz = vertices[i + 2];
         const dx = vx - x;
         const dz = vz - z;
-        const dist = Math.sqrt(dx*dx + dz*dz);
-        if(this.isInBrush(dist, dx, dz)) {
-          points2D.push({x:vx, z:vz});
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (this.isInBrush(dist, dx, dz)) {
+          points2D.push({ x: vx, z: vz });
         }
       }
       const boundary = this.computeConvexHull(points2D);
 
-      let overlay:THREE.Object3D | null = null;
-      if(heightChange<0){ overlay = this.createOutlineOverlay(boundary,'cut'); }
-      else if(heightChange>0){ overlay = this.createOutlineOverlay(boundary,'fill'); }
-      if(overlay){ this.terrainGroup.add(overlay); if(heightChange<0) this.cutOverlays.push(overlay as any); else this.fillOverlays.push(overlay as any); }
+      let overlay: THREE.Object3D | null = null;
+      if (heightChange < 0) {
+        overlay = this.createOutlineOverlay(boundary, 'cut');
+      } else if (heightChange > 0) {
+        overlay = this.createOutlineOverlay(boundary, 'fill');
+      }
+      if (overlay) {
+        this.terrainGroup.add(overlay);
+        if (heightChange < 0) this.cutOverlays.push(overlay as any);
+        else this.fillOverlays.push(overlay as any);
+      }
 
-      this.plannedStrokes.push({x, z, radius: brushRadius, heightChange, type: heightChange<0?'cut':'fill', boundary});
+      this.plannedStrokes.push({
+        x,
+        z,
+        radius: brushRadius,
+        heightChange,
+        type: heightChange < 0 ? 'cut' : 'fill',
+        boundary,
+      });
       return;
     }
 
     const vertices = this.geometry.attributes.position.array;
     const widthSegments = this.geometry.parameters.widthSegments;
     const heightSegments = this.geometry.parameters.heightSegments;
-    
+
     // Calculate brush area
     const brushRadius = this.brushSettings.size;
     let modified = false;
@@ -1526,35 +1762,45 @@ export class Terrain {
       const distance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
 
       if (this.isInBrush(distance, deltaX, deltaZ)) {
-        const falloff = this.calculateFalloff(distance, brushRadius, deltaX, deltaZ);
-        
+        const falloff = this.calculateFalloff(
+          distance,
+          brushRadius,
+          deltaX,
+          deltaZ
+        );
+
         // Get material resistance at current depth
         const currentHeight = vertices[i + 1];
         const excavationDepth = Math.max(0, -currentHeight);
         const currentMaterial = this.getMaterialAtDepth(excavationDepth);
-        
+
         // Apply material resistance to excavation
         let materialResistance = 1.0;
-        if (heightChange < 0) { // Only apply resistance when digging
-          materialResistance = 1.0 - (currentMaterial.hardness * 0.3);
+        if (heightChange < 0) {
+          // Only apply resistance when digging
+          materialResistance = 1.0 - currentMaterial.hardness * 0.3;
         }
-        
-        const actualChange = heightChange * this.brushSettings.strength * falloff * materialResistance;
-        
+
+        const actualChange =
+          heightChange *
+          this.brushSettings.strength *
+          falloff *
+          materialResistance;
+
         // Apply 5-foot depth/height limits from original terrain
         const originalHeight = this.originalVertices[i + 1];
         const existingHeight = vertices[i + 1];
         const newHeight = existingHeight + actualChange;
-        
+
         // Calculate change from original terrain
         const changeFromOriginal = newHeight - originalHeight;
-        
+
         // Apply 20-foot limits for cut and fill operations
         const maxCutDepth = -6.67; // 6.67 yards below original (was 20 feet)
         const maxFillHeight = 6.67; // 6.67 yards above original (was 20 feet)
-        
+
         let limitedNewHeight = newHeight;
-        
+
         if (changeFromOriginal < maxCutDepth) {
           // Limit cut to 20 feet below original
           limitedNewHeight = originalHeight + maxCutDepth;
@@ -1562,13 +1808,13 @@ export class Terrain {
           // Limit fill to 20 feet above original
           limitedNewHeight = originalHeight + maxFillHeight;
         }
-        
+
         // Also ensure we don't dig through the terrain block bottom
         const maxExcavationDepth = -this.blockDepth * 0.9; // About 22.5 feet with 25-foot block
         limitedNewHeight = Math.max(maxExcavationDepth, limitedNewHeight);
-        
+
         vertices[i + 1] = limitedNewHeight;
-        
+
         totalVolumeChange += Math.abs(actualChange);
         modified = true;
       }
@@ -1577,13 +1823,13 @@ export class Terrain {
     if (modified) {
       this.geometry.attributes.position.needsUpdate = true;
       this.geometry.computeVertexNormals();
-      
+
       // Skip expensive operations in performance mode for real-time responsiveness
       if (!this.skipExpensiveOperations) {
         this.updateTerrainColors();
         this.updateBlockGeometry();
         this.generateContourLines();
-        
+
         // Auto-enable overlays and create localized overlays for modification area
         if (heightChange < 0) {
           this.showOriginalTerrainOverlay = true;
@@ -1605,19 +1851,19 @@ export class Terrain {
     const vertices = this.geometry.attributes.position.array;
     let closestHeight = 0;
     let minDistance = Infinity;
-    
+
     // Find closest vertex height
     for (let i = 0; i < vertices.length; i += 3) {
       const vertexX = vertices[i];
       const vertexZ = vertices[i + 2];
       const distance = Math.sqrt((x - vertexX) ** 2 + (z - vertexZ) ** 2);
-      
+
       if (distance < minDistance) {
         minDistance = distance;
         closestHeight = vertices[i + 1];
       }
     }
-    
+
     return closestHeight;
   }
 
@@ -1626,12 +1872,14 @@ export class Terrain {
    */
   private isInBrush(distance: number, deltaX: number, deltaZ: number): boolean {
     const brushRadius = this.brushSettings.size;
-    
+
     switch (this.brushSettings.shape) {
       case 'circle':
         return distance <= brushRadius;
       case 'square':
-        return Math.abs(deltaX) <= brushRadius && Math.abs(deltaZ) <= brushRadius;
+        return (
+          Math.abs(deltaX) <= brushRadius && Math.abs(deltaZ) <= brushRadius
+        );
       default:
         return distance <= brushRadius;
     }
@@ -1640,11 +1888,20 @@ export class Terrain {
   /**
    * Calculate falloff based on distance and falloff type, with proper handling for different brush shapes
    */
-  private calculateFalloff(distance: number, radius: number, deltaX?: number, deltaZ?: number): number {
+  private calculateFalloff(
+    distance: number,
+    radius: number,
+    deltaX?: number,
+    deltaZ?: number
+  ): number {
     let normalizedDistance: number;
-    
+
     // Calculate normalized distance based on brush shape
-    if (this.brushSettings.shape === 'square' && deltaX !== undefined && deltaZ !== undefined) {
+    if (
+      this.brushSettings.shape === 'square' &&
+      deltaX !== undefined &&
+      deltaZ !== undefined
+    ) {
       // For square brushes, use the maximum distance along either axis
       const maxAxisDistance = Math.max(Math.abs(deltaX), Math.abs(deltaZ));
       if (maxAxisDistance >= radius) return 0;
@@ -1654,7 +1911,7 @@ export class Terrain {
       if (distance >= radius) return 0;
       normalizedDistance = distance / radius;
     }
-    
+
     // Apply falloff curve based on type
     switch (this.brushSettings.falloff) {
       case 'linear':
@@ -1678,33 +1935,42 @@ export class Terrain {
   /**
    * Update terrain height at a specific position for precision tools
    */
-  public modifyHeightAtPosition(x: number, z: number, heightChange: number): void {
+  public modifyHeightAtPosition(
+    x: number,
+    z: number,
+    heightChange: number
+  ): void {
     // Get grid dimensions
     const widthSegments = this.geometry.parameters.widthSegments;
     const heightSegments = this.geometry.parameters.heightSegments;
-    
+
     // Convert world coordinates to grid coordinates
     // Terrain spans from 0 to 120 in both X and Z directions
     const gridX = Math.round((x / 120) * widthSegments);
     const gridZ = Math.round((z / 120) * heightSegments);
-    
+
     // Check bounds
-    if (gridX < 0 || gridX > widthSegments || gridZ < 0 || gridZ > heightSegments) {
+    if (
+      gridX < 0 ||
+      gridX > widthSegments ||
+      gridZ < 0 ||
+      gridZ > heightSegments
+    ) {
       return;
     }
-    
+
     // Calculate vertex index
     const index = gridZ * (widthSegments + 1) + gridX;
-    
+
     // Apply the height change directly to the vertex
     const vertices = this.geometry.attributes.position.array as Float32Array;
     if (index * 3 + 1 < vertices.length) {
       vertices[index * 3 + 1] += heightChange;
-      
+
       // Mark geometry as needing update
       this.geometry.attributes.position.needsUpdate = true;
       this.geometry.computeVertexNormals();
-      
+
       // Update terrain colors and contours (skip expensive operations in performance mode)
       if (!this.skipExpensiveOperations) {
         this.updateTerrainColors();
@@ -1717,7 +1983,10 @@ export class Terrain {
   /**
    * Check depth/height limits at a position for visual feedback
    */
-  public getDepthLimitsAtPosition(x: number, z: number): {
+  public getDepthLimitsAtPosition(
+    x: number,
+    z: number
+  ): {
     currentDepth: number;
     remainingCutDepth: number;
     remainingFillHeight: number;
@@ -1727,19 +1996,19 @@ export class Terrain {
     const currentHeight = this.getHeightAtPosition(x, z);
     const originalHeight = this.getOriginalHeightAtPosition(x, z);
     const changeFromOriginal = currentHeight - originalHeight;
-    
+
     const maxCutDepth = -5.0;
     const maxFillHeight = 5.0;
-    
+
     const remainingCutDepth = Math.max(0, changeFromOriginal - maxCutDepth);
     const remainingFillHeight = Math.max(0, maxFillHeight - changeFromOriginal);
-    
+
     return {
       currentDepth: changeFromOriginal,
       remainingCutDepth,
       remainingFillHeight,
       atCutLimit: changeFromOriginal <= maxCutDepth + 0.1, // Small tolerance
-      atFillLimit: changeFromOriginal >= maxFillHeight - 0.1
+      atFillLimit: changeFromOriginal >= maxFillHeight - 0.1,
     };
   }
 
@@ -1754,35 +2023,52 @@ export class Terrain {
     const vertices = this.geometry.attributes.position.array;
     const originalVertices = this.originalVertices;
     const index = this.geometry.index;
-    
+
     let cut = 0;
     let fill = 0;
 
     if (index) {
       // Use triangulation for more accurate volume calculation
       const triangles = index.array;
-      
+
       for (let i = 0; i < triangles.length; i += 3) {
         const i1 = triangles[i] * 3;
         const i2 = triangles[i + 1] * 3;
         const i3 = triangles[i + 2] * 3;
-        
+
         // Calculate triangle area
-        const v1 = new THREE.Vector3(vertices[i1], vertices[i1 + 1], vertices[i1 + 2]);
-        const v2 = new THREE.Vector3(vertices[i2], vertices[i2 + 1], vertices[i2 + 2]);
-        const v3 = new THREE.Vector3(vertices[i3], vertices[i3 + 1], vertices[i3 + 2]);
-        
+        const v1 = new THREE.Vector3(
+          vertices[i1],
+          vertices[i1 + 1],
+          vertices[i1 + 2]
+        );
+        const v2 = new THREE.Vector3(
+          vertices[i2],
+          vertices[i2 + 1],
+          vertices[i2 + 2]
+        );
+        const v3 = new THREE.Vector3(
+          vertices[i3],
+          vertices[i3 + 1],
+          vertices[i3 + 2]
+        );
+
         const edge1 = v2.clone().sub(v1);
         const edge2 = v3.clone().sub(v1);
         const area = edge1.cross(edge2).length() * 0.5;
-        
+
         // Average height difference
-        const avgCurrentHeight = (vertices[i1 + 1] + vertices[i2 + 1] + vertices[i3 + 1]) / 3;
-        const avgOriginalHeight = (originalVertices[i1 + 1] + originalVertices[i2 + 1] + originalVertices[i3 + 1]) / 3;
-        
+        const avgCurrentHeight =
+          (vertices[i1 + 1] + vertices[i2 + 1] + vertices[i3 + 1]) / 3;
+        const avgOriginalHeight =
+          (originalVertices[i1 + 1] +
+            originalVertices[i2 + 1] +
+            originalVertices[i3 + 1]) /
+          3;
+
         const heightDiff = avgCurrentHeight - avgOriginalHeight;
         const volume = area * heightDiff;
-        
+
         if (volume > 0) {
           fill += volume;
         } else {
@@ -1818,16 +2104,16 @@ export class Terrain {
     const state: TerrainState = {
       vertices: new Float32Array(this.geometry.attributes.position.array),
       timestamp: Date.now(),
-      volume: this.calculateVolumeDifference()
+      volume: this.calculateVolumeDifference(),
     };
 
     this.undoStack.push(state);
-    
+
     // Limit undo stack size
     if (this.undoStack.length > this.maxUndoStates) {
       this.undoStack.shift();
     }
-    
+
     // Clear redo stack when new state is saved
     this.redoStack = [];
   }
@@ -1837,13 +2123,13 @@ export class Terrain {
    */
   public undo(): boolean {
     if (this.undoStack.length < 2) return false;
-    
+
     const currentState = this.undoStack.pop()!;
     this.redoStack.push(currentState);
-    
+
     const previousState = this.undoStack[this.undoStack.length - 1];
     this.restoreState(previousState);
-    
+
     return true;
   }
 
@@ -1852,11 +2138,11 @@ export class Terrain {
    */
   public redo(): boolean {
     if (this.redoStack.length === 0) return false;
-    
+
     const state = this.redoStack.pop()!;
     this.undoStack.push(state);
     this.restoreState(state);
-    
+
     return true;
   }
 
@@ -1865,7 +2151,7 @@ export class Terrain {
    */
   private restoreState(state: TerrainState): void {
     const vertices = this.geometry.attributes.position.array;
-    
+
     for (let i = 0; i < vertices.length; i++) {
       vertices[i] = state.vertices[i];
     }
@@ -1889,10 +2175,10 @@ export class Terrain {
         width: this.geometry.parameters.width,
         height: this.geometry.parameters.height,
         widthSegments: this.geometry.parameters.widthSegments,
-        heightSegments: this.geometry.parameters.heightSegments
+        heightSegments: this.geometry.parameters.heightSegments,
       },
       volume: this.calculateVolumeDifference(),
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
   }
 
@@ -1900,9 +2186,12 @@ export class Terrain {
    * Import terrain data
    */
   public importTerrain(data: any): void {
-    if (data.vertices && data.vertices.length === this.geometry.attributes.position.array.length) {
+    if (
+      data.vertices &&
+      data.vertices.length === this.geometry.attributes.position.array.length
+    ) {
       const vertices = this.geometry.attributes.position.array;
-      
+
       for (let i = 0; i < vertices.length; i++) {
         vertices[i] = data.vertices[i];
       }
@@ -1954,17 +2243,17 @@ export class Terrain {
     this.geometry.computeVertexNormals();
     this.updateTerrainColors();
     this.updateBlockGeometry(); // Update block to match reset terrain
-    
+
     // Clear all arrows including persistent cut arrows
     this.clearAllArrows();
-    
+
     // Clean up existing overlays instead of recreating them
     this.cleanupAllOverlays();
-    
+
     // Reset overlay visibility flags
     this.showOriginalTerrainOverlay = false;
     this.showFillVolumeOverlay = false;
-    
+
     // Clear undo/redo stacks and save initial state
     this.undoStack = [];
     this.redoStack = [];
@@ -1989,9 +2278,10 @@ export class Terrain {
    */
   public toggleWireframe(): void {
     // Toggle wireframe on surface mesh
-    const surfaceMaterial = this.surfaceMesh.material as THREE.MeshBasicMaterial;
+    const surfaceMaterial = this.surfaceMesh
+      .material as THREE.MeshBasicMaterial;
     surfaceMaterial.wireframe = !surfaceMaterial.wireframe;
-    
+
     // Toggle wireframe on the terrain block (now has 5 materials: bottom, front, back, left, right)
     this.wallMeshes.forEach(block => {
       if (block.material instanceof Array) {
@@ -2051,13 +2341,13 @@ export class Terrain {
   } {
     const vertices = this.geometry.attributes.position.array;
     const index = this.geometry.index;
-    
+
     return {
       vertexCount: vertices.length / 3,
       triangleCount: index ? index.count / 3 : 0,
       dimensions: this.getDimensions(),
       volume: this.calculateVolumeDifference(),
-      materialLayers: this.materialLayers.length
+      materialLayers: this.materialLayers.length,
     };
   }
 
@@ -2066,48 +2356,53 @@ export class Terrain {
    */
   private updateBlockGeometry(): void {
     if (this.wallMeshes.length === 0) return;
-    
+
     const blockGeometry = this.wallMeshes[0].geometry as THREE.BufferGeometry;
     const positions = blockGeometry.attributes.position.array as Float32Array;
-    
+
     // PERFORMANCE OPTIMIZATION: Update only the top layer vertices at low resolution
     // Block uses 8x8 grid instead of full 32x32 terrain resolution
     const blockWidthSegments = 8;
     const blockHeightSegments = 8;
     const verticalLayers = 4;
-    const levelVertexCount = (blockWidthSegments + 1) * (blockHeightSegments + 1);
-    
+    const levelVertexCount =
+      (blockWidthSegments + 1) * (blockHeightSegments + 1);
+
     // Update only the top layer (layer 0) vertices
     for (let row = 0; row <= blockHeightSegments; row++) {
       for (let col = 0; col <= blockWidthSegments; col++) {
         const vertexIndex = (row * (blockWidthSegments + 1) + col) * 3;
-        
+
         // Sample terrain height at this low-res position
-        const worldX = (col / blockWidthSegments) * this.geometry.parameters.width; // terrain width
-        const worldZ = (row / blockHeightSegments) * this.geometry.parameters.height; // terrain height
+        const worldX =
+          (col / blockWidthSegments) * this.geometry.parameters.width; // terrain width
+        const worldZ =
+          (row / blockHeightSegments) * this.geometry.parameters.height; // terrain height
         const terrainHeight = this.getHeightAtPosition(worldX, worldZ);
-        
+
         // Update all layers for this column
         for (let layer = 0; layer <= verticalLayers; layer++) {
-          const layerVertexIndex = (layer * levelVertexCount + row * (blockWidthSegments + 1) + col) * 3;
+          const layerVertexIndex =
+            (layer * levelVertexCount + row * (blockWidthSegments + 1) + col) *
+            3;
           const layerDepth = -(this.blockDepth * (layer / verticalLayers));
-          
-          positions[layerVertexIndex] = worldX;     // x
+
+          positions[layerVertexIndex] = worldX; // x
           positions[layerVertexIndex + 2] = worldZ; // z
-          
+
           if (layer === 0) {
             // Top layer: follows terrain surface
             positions[layerVertexIndex + 1] = terrainHeight - 0.005;
           } else {
             // FIXED: Lower layers stay at fixed depth - completely flat bottom
             // Use the same flat base elevation as initial creation
-            const baseElevation = 0; // Flat reference level  
+            const baseElevation = 0; // Flat reference level
             positions[layerVertexIndex + 1] = baseElevation + layerDepth;
           }
         }
       }
     }
-    
+
     blockGeometry.attributes.position.needsUpdate = true;
     // Skip expensive normal recalculation for better performance during real-time updates
     // blockGeometry.computeVertexNormals();
@@ -2119,7 +2414,9 @@ export class Terrain {
     let height = 0;
     let minDist = Infinity;
     for (let i = 0; i < vertices.length; i += 3) {
-      const dist = Math.sqrt((x - vertices[i]) ** 2 + (z - vertices[i + 2]) ** 2);
+      const dist = Math.sqrt(
+        (x - vertices[i]) ** 2 + (z - vertices[i + 2]) ** 2
+      );
       if (dist < minDist) {
         minDist = dist;
         height = vertices[i + 1];
@@ -2133,7 +2430,9 @@ export class Terrain {
   /**
    * Set accessibility mode for terrain visualization
    */
-  public setAccessibilityMode(mode: 'normal' | 'colorBlind' | 'highContrast' | 'patterns'): void {
+  public setAccessibilityMode(
+    mode: 'normal' | 'colorBlind' | 'highContrast' | 'patterns'
+  ): void {
     this.accessibilityMode = mode;
     this.updateAccessibilityFeatures();
     this.updateTerrainColors();
@@ -2142,7 +2441,9 @@ export class Terrain {
   /**
    * Set color blind type for specialized color adjustments
    */
-  public setColorBlindType(type: 'protanopia' | 'deuteranopia' | 'tritanopia' | 'normal'): void {
+  public setColorBlindType(
+    type: 'protanopia' | 'deuteranopia' | 'tritanopia' | 'normal'
+  ): void {
     this.colorBlindType = type;
     if (this.accessibilityMode === 'colorBlind') {
       this.updateAccessibilityFeatures();
@@ -2176,22 +2477,22 @@ export class Terrain {
   private applyColorBlindFriendlyColors(): void {
     switch (this.colorBlindType) {
       case 'protanopia': // Red-blind
-        this.elevationZones.high.color = new THREE.Color(0x2E7D32); // Dark green
-        this.elevationZones.medium.color = new THREE.Color(0xFFC107); // Amber (yellow-orange)
-        this.elevationZones.low.color = new THREE.Color(0xF5F5F5); // Light gray
-        this.elevationZones.cut.color = new THREE.Color(0x1976D2); // Dark blue
+        this.elevationZones.high.color = new THREE.Color(0x2e7d32); // Dark green
+        this.elevationZones.medium.color = new THREE.Color(0xffc107); // Amber (yellow-orange)
+        this.elevationZones.low.color = new THREE.Color(0xf5f5f5); // Light gray
+        this.elevationZones.cut.color = new THREE.Color(0x1976d2); // Dark blue
         break;
       case 'deuteranopia': // Green-blind
-        this.elevationZones.high.color = new THREE.Color(0x4FC3F7); // Light blue
-        this.elevationZones.medium.color = new THREE.Color(0xFFB74D); // Orange
-        this.elevationZones.low.color = new THREE.Color(0xF5F5F5); // Light gray
-        this.elevationZones.cut.color = new THREE.Color(0x9C27B0); // Purple
+        this.elevationZones.high.color = new THREE.Color(0x4fc3f7); // Light blue
+        this.elevationZones.medium.color = new THREE.Color(0xffb74d); // Orange
+        this.elevationZones.low.color = new THREE.Color(0xf5f5f5); // Light gray
+        this.elevationZones.cut.color = new THREE.Color(0x9c27b0); // Purple
         break;
       case 'tritanopia': // Blue-blind
-        this.elevationZones.high.color = new THREE.Color(0x66BB6A); // Green
-        this.elevationZones.medium.color = new THREE.Color(0xFF7043); // Deep orange
-        this.elevationZones.low.color = new THREE.Color(0xF5F5F5); // Light gray
-        this.elevationZones.cut.color = new THREE.Color(0xD32F2F); // Red
+        this.elevationZones.high.color = new THREE.Color(0x66bb6a); // Green
+        this.elevationZones.medium.color = new THREE.Color(0xff7043); // Deep orange
+        this.elevationZones.low.color = new THREE.Color(0xf5f5f5); // Light gray
+        this.elevationZones.cut.color = new THREE.Color(0xd32f2f); // Red
         break;
     }
   }
@@ -2200,20 +2501,20 @@ export class Terrain {
    * Apply high contrast colors for better visibility
    */
   private applyHighContrastColors(): void {
-    this.elevationZones.high.color = new THREE.Color(0x00FF00); // Bright green
-    this.elevationZones.medium.color = new THREE.Color(0xFFFF00); // Bright yellow
-    this.elevationZones.low.color = new THREE.Color(0xFFFFFF); // White
-    this.elevationZones.cut.color = new THREE.Color(0x0000FF); // Bright blue
+    this.elevationZones.high.color = new THREE.Color(0x00ff00); // Bright green
+    this.elevationZones.medium.color = new THREE.Color(0xffff00); // Bright yellow
+    this.elevationZones.low.color = new THREE.Color(0xffffff); // White
+    this.elevationZones.cut.color = new THREE.Color(0x0000ff); // Bright blue
   }
 
   /**
    * Restore normal color palette
    */
   private restoreNormalColors(): void {
-    this.elevationZones.high.color = new THREE.Color(0x4CAF50); // Green
-    this.elevationZones.medium.color = new THREE.Color(0xFF9800); // Orange
-    this.elevationZones.low.color = new THREE.Color(0xFFF59D); // Light yellow
-    this.elevationZones.cut.color = new THREE.Color(0x2196F3); // Blue
+    this.elevationZones.high.color = new THREE.Color(0x4caf50); // Green
+    this.elevationZones.medium.color = new THREE.Color(0xff9800); // Orange
+    this.elevationZones.low.color = new THREE.Color(0xfff59d); // Light yellow
+    this.elevationZones.cut.color = new THREE.Color(0x2196f3); // Blue
   }
 
   /**
@@ -2227,7 +2528,10 @@ export class Terrain {
         if (overlay.geometry) {
           overlay.geometry.dispose();
         }
-        if (overlay.material && typeof (overlay.material as THREE.Material).dispose === 'function') {
+        if (
+          overlay.material &&
+          typeof (overlay.material as THREE.Material).dispose === 'function'
+        ) {
           (overlay.material as THREE.Material).dispose();
         }
       }
@@ -2241,7 +2545,10 @@ export class Terrain {
         if (overlay.geometry) {
           overlay.geometry.dispose();
         }
-        if (overlay.material && typeof (overlay.material as THREE.Material).dispose === 'function') {
+        if (
+          overlay.material &&
+          typeof (overlay.material as THREE.Material).dispose === 'function'
+        ) {
           (overlay.material as THREE.Material).dispose();
         }
       }
@@ -2326,13 +2633,17 @@ export class Terrain {
     return interpolatedHeight;
   }
 
-  private createLocalizedCutOverlay(centerX: number, centerZ: number, radius: number): void {
+  private createLocalizedCutOverlay(
+    centerX: number,
+    centerZ: number,
+    radius: number
+  ): void {
     const brushRadius = radius * 1.2;
     let bounds = {
       minX: Math.max(0, centerX - brushRadius),
       maxX: Math.min(120, centerX + brushRadius),
       minZ: Math.max(0, centerZ - brushRadius),
-      maxZ: Math.min(120, centerZ + brushRadius)
+      maxZ: Math.min(120, centerZ + brushRadius),
     };
 
     // Recursively merge with ANY existing cut areas that touch/overlap until no more merges are possible
@@ -2345,13 +2656,16 @@ export class Terrain {
         minX: Math.min(bounds.minX, existingArea.area.bounds.minX),
         maxX: Math.max(bounds.maxX, existingArea.area.bounds.maxX),
         minZ: Math.min(bounds.minZ, existingArea.area.bounds.minZ),
-        maxZ: Math.max(bounds.maxZ, existingArea.area.bounds.maxZ)
+        maxZ: Math.max(bounds.maxZ, existingArea.area.bounds.maxZ),
       };
 
       // Remove the old overlay mesh & bookkeeping
       if (existingArea.area.overlay) {
         this.terrainGroup.remove(existingArea.area.overlay);
-        this.cutOverlays.splice(this.cutOverlays.indexOf(existingArea.area.overlay), 1);
+        this.cutOverlays.splice(
+          this.cutOverlays.indexOf(existingArea.area.overlay),
+          1
+        );
       }
       this.modificationAreas.delete(existingArea.key);
       // Clear any arrows in old bounds (arrows currently removed – keeps call for future)
@@ -2362,10 +2676,23 @@ export class Terrain {
     // Build a new single overlay that covers the merged bounds
     const mergedCenterX = (bounds.minX + bounds.maxX) / 2;
     const mergedCenterZ = (bounds.minZ + bounds.maxZ) / 2;
-    const mergedRadius = Math.max((bounds.maxX - bounds.minX), (bounds.maxZ - bounds.minZ)) / 2;
+    const mergedRadius =
+      Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 2;
 
-    const geometry = this.createCutPolyhedronGeometry(bounds, mergedCenterX, mergedCenterZ, mergedRadius);
-    const material = new THREE.MeshBasicMaterial({ color: 0xFF4444, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, depthTest: false });
+    const geometry = this.createCutPolyhedronGeometry(
+      bounds,
+      mergedCenterX,
+      mergedCenterZ,
+      mergedRadius
+    );
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xff4444,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      depthTest: false,
+    });
     const overlay = new THREE.Mesh(geometry, material);
     overlay.renderOrder = 1; // draw after terrain so it is visible
     this.terrainGroup.add(overlay);
@@ -2375,13 +2702,18 @@ export class Terrain {
     this.modificationAreas.set(areaKey, { bounds, type: 'cut', overlay });
   }
 
-  private createLocalizedFillOverlay(centerX: number, centerZ: number, radius: number, plannedHeight: number = 0): void {
+  private createLocalizedFillOverlay(
+    centerX: number,
+    centerZ: number,
+    radius: number,
+    plannedHeight: number = 0
+  ): void {
     const brushRadius = radius * 1.2;
     let bounds = {
       minX: Math.max(0, centerX - brushRadius),
       maxX: Math.min(120, centerX + brushRadius),
       minZ: Math.max(0, centerZ - brushRadius),
-      maxZ: Math.min(120, centerZ + brushRadius)
+      maxZ: Math.min(120, centerZ + brushRadius),
     };
 
     // Recursively merge with ANY existing fill areas that touch/overlap until no more merges are possible
@@ -2393,11 +2725,14 @@ export class Terrain {
         minX: Math.min(bounds.minX, existingArea.area.bounds.minX),
         maxX: Math.max(bounds.maxX, existingArea.area.bounds.maxX),
         minZ: Math.min(bounds.minZ, existingArea.area.bounds.minZ),
-        maxZ: Math.max(bounds.maxZ, existingArea.area.bounds.maxZ)
+        maxZ: Math.max(bounds.maxZ, existingArea.area.bounds.maxZ),
       };
       if (existingArea.area.overlay) {
         this.terrainGroup.remove(existingArea.area.overlay);
-        this.fillOverlays.splice(this.fillOverlays.indexOf(existingArea.area.overlay), 1);
+        this.fillOverlays.splice(
+          this.fillOverlays.indexOf(existingArea.area.overlay),
+          1
+        );
       }
       this.modificationAreas.delete(existingArea.key);
       this.clearArrowsInBounds(bounds);
@@ -2405,10 +2740,23 @@ export class Terrain {
 
     const mergedCenterX = (bounds.minX + bounds.maxX) / 2;
     const mergedCenterZ = (bounds.minZ + bounds.maxZ) / 2;
-    const mergedRadius = Math.max((bounds.maxX - bounds.minX), (bounds.maxZ - bounds.minZ)) / 2;
+    const mergedRadius =
+      Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 2;
 
-    const geometry = this.createFillPolyhedronGeometry(bounds, mergedCenterX, mergedCenterZ, mergedRadius, plannedHeight);
-    const material = new THREE.MeshBasicMaterial({ color: 0x4444FF, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false });
+    const geometry = this.createFillPolyhedronGeometry(
+      bounds,
+      mergedCenterX,
+      mergedCenterZ,
+      mergedRadius,
+      plannedHeight
+    );
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x4444ff,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
     const overlay = new THREE.Mesh(geometry, material);
     this.terrainGroup.add(overlay);
     this.fillOverlays.push(overlay);
@@ -2420,47 +2768,53 @@ export class Terrain {
   /**
    * Create fill overlay for polyline operations
    */
-  public createPolylineFillOverlay(points: {x: number, z: number}[], thickness: number): void {
+  public createPolylineFillOverlay(
+    points: { x: number; z: number }[],
+    thickness: number
+  ): void {
     if (points.length < 2) return;
-    
+
     // Calculate bounding box for the polyline
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
     const halfThickness = thickness / 2;
-    
+
     for (const point of points) {
       minX = Math.min(minX, point.x - halfThickness);
       maxX = Math.max(maxX, point.x + halfThickness);
       minZ = Math.min(minZ, point.z - halfThickness);
       maxZ = Math.max(maxZ, point.z + halfThickness);
     }
-    
+
     // Ensure bounds are within terrain limits
     const bounds = {
       minX: Math.max(0, minX),
       maxX: Math.min(120, maxX),
       minZ: Math.max(0, minZ),
-      maxZ: Math.min(120, maxZ)
+      maxZ: Math.min(120, maxZ),
     };
-    
+
     // Create geometry for the polyline fill area
     const geometry = this.createPolylineFillGeometry(points, thickness);
-    const material = new THREE.MeshBasicMaterial({ 
-      color: 0x4444FF, 
-      transparent: true, 
-      opacity: 0.3, 
-      side: THREE.DoubleSide, 
-      depthWrite: false 
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x4444ff,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+      depthWrite: false,
     });
     const overlay = new THREE.Mesh(geometry, material);
     this.terrainGroup.add(overlay);
     this.fillOverlays.push(overlay);
-    
+
     // Track this overlay
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerZ = (bounds.minZ + bounds.maxZ) / 2;
     const areaKey = `polyline_fill_${Math.round(centerX)}_${Math.round(centerZ)}_${Date.now()}`;
     this.modificationAreas.set(areaKey, { bounds, type: 'fill', overlay });
-    
+
     // Auto-enable fill overlay display
     this.showFillVolumeOverlay = true;
   }
@@ -2468,45 +2822,55 @@ export class Terrain {
   /**
    * Create fill overlay for polygon operations
    */
-  public createPolygonFillOverlay(vertices: {x: number, z: number}[]): void {
+  public createPolygonFillOverlay(vertices: { x: number; z: number }[]): void {
     if (vertices.length < 3) return;
-    
+
     // Calculate bounding box
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
     for (const vertex of vertices) {
       minX = Math.min(minX, vertex.x);
       maxX = Math.max(maxX, vertex.x);
       minZ = Math.min(minZ, vertex.z);
       maxZ = Math.max(maxZ, vertex.z);
     }
-    
+
     const bounds = {
       minX: Math.max(0, minX),
       maxX: Math.min(120, maxX),
       minZ: Math.max(0, minZ),
-      maxZ: Math.min(120, maxZ)
+      maxZ: Math.min(120, maxZ),
     };
-    
+
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-    const radius = Math.max((bounds.maxX - bounds.minX), (bounds.maxZ - bounds.minZ)) / 2;
-    
+    const radius =
+      Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 2;
+
     // Create geometry using existing polygon fill logic
-    const geometry = this.createFillPolyhedronGeometry(bounds, centerX, centerZ, radius, 0);
-    const material = new THREE.MeshBasicMaterial({ 
-      color: 0x4444FF, 
-      transparent: true, 
-      opacity: 0.3, 
-      side: THREE.DoubleSide, 
-      depthWrite: false 
+    const geometry = this.createFillPolyhedronGeometry(
+      bounds,
+      centerX,
+      centerZ,
+      radius,
+      0
+    );
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x4444ff,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+      depthWrite: false,
     });
     const overlay = new THREE.Mesh(geometry, material);
     this.terrainGroup.add(overlay);
     this.fillOverlays.push(overlay);
-    
+
     const areaKey = `polygon_fill_${Math.round(centerX)}_${Math.round(centerZ)}_${Date.now()}`;
     this.modificationAreas.set(areaKey, { bounds, type: 'fill', overlay });
-    
+
     // Auto-enable fill overlay display
     this.showFillVolumeOverlay = true;
   }
@@ -2514,105 +2878,128 @@ export class Terrain {
   /**
    * Create geometry for polyline fill overlay
    */
-  private createPolylineFillGeometry(points: {x: number, z: number}[], thickness: number): THREE.BufferGeometry {
+  private createPolylineFillGeometry(
+    points: { x: number; z: number }[],
+    thickness: number
+  ): THREE.BufferGeometry {
     const positions: number[] = [];
     const indices: number[] = [];
     const halfThickness = thickness / 2;
     const EPS = 0.001;
-    
+
     let vertexIndex = 0;
-    
+
     for (let i = 0; i < points.length - 1; i++) {
       const start = points[i];
       const end = points[i + 1];
-      
+
       // Calculate direction and perpendicular vectors
       const dx = end.x - start.x;
       const dz = end.z - start.z;
       const length = Math.sqrt(dx * dx + dz * dz);
       const normalizedX = dx / length;
       const normalizedZ = dz / length;
-      
+
       // Perpendicular vector for thickness
       const perpX = -normalizedZ;
       const perpZ = normalizedX;
-      
+
       // Sample points along the segment
       const steps = Math.max(10, Math.floor(length * 2));
-      
+
       for (let step = 0; step <= steps; step++) {
         const t = step / steps;
         const centerX = start.x + normalizedX * t * length;
         const centerZ = start.z + normalizedZ * t * length;
-        
+
         // Create vertices for left and right edges of thickness
         const leftX = centerX + perpX * halfThickness;
         const leftZ = centerZ + perpZ * halfThickness;
         const rightX = centerX - perpX * halfThickness;
         const rightZ = centerZ - perpZ * halfThickness;
-        
+
         // Get surface heights and check if there's actually fill at this location
         const leftOrigY = this.getOriginalHeightAtPosition(leftX, leftZ);
         const leftCurrY = this.getHeightAtPosition(leftX, leftZ);
         const rightOrigY = this.getOriginalHeightAtPosition(rightX, rightZ);
         const rightCurrY = this.getHeightAtPosition(rightX, rightZ);
-        
+
         // Only create overlay where there's actual fill (current > original)
         if (leftCurrY > leftOrigY + EPS || rightCurrY > rightOrigY + EPS) {
           // Bottom vertices (original surface)
           positions.push(leftX, leftOrigY, leftZ);
           positions.push(rightX, rightOrigY, rightZ);
-          // Top vertices (current surface) 
+          // Top vertices (current surface)
           positions.push(leftX, leftCurrY, leftZ);
           positions.push(rightX, rightCurrY, rightZ);
-          
+
           // Create faces if not the first step
           if (step > 0 && vertexIndex >= 4) {
             const prevBase = vertexIndex - 4;
             const currBase = vertexIndex;
-            
+
             // Bottom face (original surface)
             indices.push(prevBase, currBase, prevBase + 1);
             indices.push(currBase, currBase + 1, prevBase + 1);
-            
+
             // Top face (current surface)
             indices.push(prevBase + 2, prevBase + 3, currBase + 2);
             indices.push(currBase + 2, prevBase + 3, currBase + 3);
-            
+
             // Left side face
             indices.push(prevBase, prevBase + 2, currBase);
             indices.push(currBase, prevBase + 2, currBase + 2);
-            
+
             // Right side face
             indices.push(prevBase + 1, currBase + 1, prevBase + 3);
             indices.push(currBase + 1, currBase + 3, prevBase + 3);
           }
-          
+
           vertexIndex += 4;
         }
       }
     }
-    
+
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    
+
     return geometry;
   }
 
-  private createDensityBasedArrows(x: number, z: number, heightChange: number, volumeChange: number, radius: number): void {
+  private createDensityBasedArrows(
+    x: number,
+    z: number,
+    heightChange: number,
+    volumeChange: number,
+    radius: number
+  ): void {
     // Removed entire method body
   }
 
-  private clearArrowsInBounds(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }): void {
+  private clearArrowsInBounds(bounds: {
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+  }): void {
     // Removed entire method body
   }
 
-  private createArrowsForMergedArea(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, isFill: boolean): void {
+  private createArrowsForMergedArea(
+    bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+    isFill: boolean
+  ): void {
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-    const radius = Math.max((bounds.maxX - bounds.minX) / 2, (bounds.maxZ - bounds.minZ) / 2);
+    const radius = Math.max(
+      (bounds.maxX - bounds.minX) / 2,
+      (bounds.maxZ - bounds.minZ) / 2
+    );
     this.createDensityBasedArrows(centerX, centerZ, isFill ? 1 : -1, 1, radius);
   }
 
@@ -2643,19 +3030,26 @@ export class Terrain {
    */
   public forceDisableWireframe(): void {
     // Disable wireframe on surface mesh
-    const surfaceMaterial = this.surfaceMesh.material as THREE.MeshBasicMaterial;
+    const surfaceMaterial = this.surfaceMesh
+      .material as THREE.MeshBasicMaterial;
     surfaceMaterial.wireframe = false;
-    
+
     // Also disable wireframe on the terrain block
     this.wallMeshes.forEach(block => {
       if (block.material instanceof Array) {
         // Handle multi-material mesh
         block.material.forEach(mat => {
-          if (mat instanceof THREE.MeshBasicMaterial || mat instanceof THREE.MeshLambertMaterial) {
+          if (
+            mat instanceof THREE.MeshBasicMaterial ||
+            mat instanceof THREE.MeshLambertMaterial
+          ) {
             mat.wireframe = false;
           }
         });
-      } else if (block.material instanceof THREE.MeshBasicMaterial || block.material instanceof THREE.MeshLambertMaterial) {
+      } else if (
+        block.material instanceof THREE.MeshBasicMaterial ||
+        block.material instanceof THREE.MeshLambertMaterial
+      ) {
         block.material.wireframe = false;
       }
     });
@@ -2669,11 +3063,11 @@ export class Terrain {
     this.wallMeshes.forEach(block => {
       block.visible = false;
     });
-    
+
     // Ensure surface mesh is visible and properly positioned
     this.surfaceMesh.visible = true;
     this.surfaceMesh.position.y = 0;
-    
+
     // Also hide contour lines temporarily to fix rendering issues
     this.contourLines.forEach(line => {
       line.visible = false;
@@ -2681,7 +3075,7 @@ export class Terrain {
     this.contourLabels.forEach(label => {
       label.visible = false;
     });
-    
+
     console.log('🎯 3D terrain block disabled - showing surface only');
   }
 
@@ -2693,7 +3087,7 @@ export class Terrain {
     this.wallMeshes.forEach(block => {
       block.visible = true;
     });
-    
+
     // Re-enable contour lines
     this.contourLines.forEach(line => {
       line.visible = true;
@@ -2701,7 +3095,7 @@ export class Terrain {
     this.contourLabels.forEach(label => {
       label.visible = true;
     });
-    
+
     console.log('🎯 3D terrain block enabled');
   }
 
@@ -2711,21 +3105,24 @@ export class Terrain {
   public forceCleanRendering(): void {
     // Disable 3D terrain block
     this.disable3DTerrainBlock();
-    
+
     // Ensure surface mesh uses basic material
-    const surfaceMaterial = this.surfaceMesh.material as THREE.MeshBasicMaterial;
+    const surfaceMaterial = this.surfaceMesh
+      .material as THREE.MeshBasicMaterial;
     surfaceMaterial.wireframe = false;
     surfaceMaterial.transparent = false;
     surfaceMaterial.opacity = 1.0;
-    
+
     // Force update geometry
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.computeVertexNormals();
-    
+
     // Update colors
     this.updateTerrainColors();
-    
-    console.log('🎯 Terrain rendering cleaned - surface only with basic material');
+
+    console.log(
+      '🎯 Terrain rendering cleaned - surface only with basic material'
+    );
   }
 
   /**
@@ -2745,15 +3142,20 @@ export class Terrain {
   /**
    * Find overlapping modification area of the same type
    */
-  private findOverlappingArea(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, type: 'cut' | 'fill'): { key: string; area: any } | null {
+  private findOverlappingArea(
+    bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+    type: 'cut' | 'fill'
+  ): { key: string; area: any } | null {
     for (const [key, area] of this.modificationAreas.entries()) {
       if (area.type === type) {
         // Check if this new area overlaps with existing area
-        const overlap = !(bounds.maxX < area.bounds.minX || 
-                         bounds.minX > area.bounds.maxX || 
-                         bounds.maxZ < area.bounds.minZ || 
-                         bounds.minZ > area.bounds.maxZ);
-        
+        const overlap = !(
+          bounds.maxX < area.bounds.minX ||
+          bounds.minX > area.bounds.maxX ||
+          bounds.maxZ < area.bounds.minZ ||
+          bounds.minZ > area.bounds.maxZ
+        );
+
         if (overlap) {
           return { key, area };
         }
@@ -2765,13 +3167,23 @@ export class Terrain {
   /**
    * Save individual terrain modification to database (no-op without database integration)
    */
-  public saveModificationToDatabase(x: number, z: number, heightChange: number, tool: string): void {
+  public saveModificationToDatabase(
+    x: number,
+    z: number,
+    heightChange: number,
+    tool: string
+  ): void {
     // Database save functionality would go here if database is connected
     // For now, this is a no-op to prevent runtime errors
   }
 
   // OPTIMIZED Geometry builder for CUT overlays – simplified for better performance
-  private createCutPolyhedronGeometry(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, centerX: number, centerZ: number, radius: number): THREE.BufferGeometry {
+  private createCutPolyhedronGeometry(
+    bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+    centerX: number,
+    centerZ: number,
+    radius: number
+  ): THREE.BufferGeometry {
     const isCircle = this.brushSettings.shape === 'circle';
 
     const positions: number[] = [];
@@ -2781,8 +3193,8 @@ export class Terrain {
 
     if (isCircle) {
       // PERFORMANCE: Reduced complexity for real-time performance
-      const radialSteps = 12;  // Reduced from 36 to 12
-      const ringSteps = 4;     // Reduced from 10 to 4
+      const radialSteps = 12; // Reduced from 36 to 12
+      const ringSteps = 4; // Reduced from 10 to 4
       // scan to find min current height
       for (let j = 0; j <= ringSteps; j++) {
         const rFrac = j / ringSteps;
@@ -2795,9 +3207,10 @@ export class Terrain {
         }
       }
       // index helpers
-      const bottomIndex = (j:number,i:number) => j * radialSteps + i;
+      const bottomIndex = (j: number, i: number) => j * radialSteps + i;
       const bottomCount = (ringSteps + 1) * radialSteps;
-      const topIndex = (j:number,i:number) => bottomCount + j * radialSteps + i;
+      const topIndex = (j: number, i: number) =>
+        bottomCount + j * radialSteps + i;
 
       // vertices – bottom then top
       for (let j = 0; j <= ringSteps; j++) {
@@ -2824,136 +3237,145 @@ export class Terrain {
       // faces bottom
       for (let j = 0; j < ringSteps; j++) {
         for (let i = 0; i < radialSteps; i++) {
-          const a = bottomIndex(j,i);
-          const b = bottomIndex(j+1,i);
-          const c = bottomIndex(j+1,(i+1)%radialSteps);
-          const d = bottomIndex(j,(i+1)%radialSteps);
-          indices.push(a,c,b);
-          indices.push(a,d,c);
+          const a = bottomIndex(j, i);
+          const b = bottomIndex(j + 1, i);
+          const c = bottomIndex(j + 1, (i + 1) % radialSteps);
+          const d = bottomIndex(j, (i + 1) % radialSteps);
+          indices.push(a, c, b);
+          indices.push(a, d, c);
         }
       }
       // faces top
       for (let j = 0; j < ringSteps; j++) {
         for (let i = 0; i < radialSteps; i++) {
-          const a = topIndex(j,i);
-          const b = topIndex(j,(i+1)%radialSteps);
-          const c = topIndex(j+1,(i+1)%radialSteps);
-          const d = topIndex(j+1,i);
-          indices.push(a,b,c);
-          indices.push(a,c,d);
+          const a = topIndex(j, i);
+          const b = topIndex(j, (i + 1) % radialSteps);
+          const c = topIndex(j + 1, (i + 1) % radialSteps);
+          const d = topIndex(j + 1, i);
+          indices.push(a, b, c);
+          indices.push(a, c, d);
         }
       }
       // side walls
       for (let j = 0; j <= ringSteps; j++) {
         for (let i = 0; i < radialSteps; i++) {
-          const b1 = bottomIndex(j,i);
-          const b2 = bottomIndex(j,(i+1)%radialSteps);
-          const t1 = topIndex(j,i);
-          const t2 = topIndex(j,(i+1)%radialSteps);
-          indices.push(b1,t1,b2);
-          indices.push(b2,t1,t2);
+          const b1 = bottomIndex(j, i);
+          const b2 = bottomIndex(j, (i + 1) % radialSteps);
+          const t1 = topIndex(j, i);
+          const t2 = topIndex(j, (i + 1) % radialSteps);
+          indices.push(b1, t1, b2);
+          indices.push(b2, t1, t2);
         }
       }
     } else {
-      // square brush – OPTIMIZED grid sampling  
-      const steps = 6;  // Reduced from 15 to 6 for better performance
+      // square brush – OPTIMIZED grid sampling
+      const steps = 6; // Reduced from 15 to 6 for better performance
       const stepX = (bounds.maxX - bounds.minX) / steps;
       const stepZ = (bounds.maxZ - bounds.minZ) / steps;
       const numX = steps + 1;
       const numZ = steps + 1;
       const totalGrid = numX * numZ;
       // find min height
-      for (let iz=0; iz<=steps; iz++) {
-        for (let ix=0; ix<=steps; ix++) {
-          const px = bounds.minX + ix*stepX;
-          const pz = bounds.minZ + iz*stepZ;
-          minHeight = Math.min(minHeight, this.getHeightAtPosition(px,pz));
+      for (let iz = 0; iz <= steps; iz++) {
+        for (let ix = 0; ix <= steps; ix++) {
+          const px = bounds.minX + ix * stepX;
+          const pz = bounds.minZ + iz * stepZ;
+          minHeight = Math.min(minHeight, this.getHeightAtPosition(px, pz));
         }
       }
       // vertices bottom
-      for (let iz=0; iz<=steps; iz++) {
-        for (let ix=0; ix<=steps; ix++) {
-          const px = bounds.minX + ix*stepX;
-          const pz = bounds.minZ + iz*stepZ;
-          positions.push(px,minHeight,pz);
+      for (let iz = 0; iz <= steps; iz++) {
+        for (let ix = 0; ix <= steps; ix++) {
+          const px = bounds.minX + ix * stepX;
+          const pz = bounds.minZ + iz * stepZ;
+          positions.push(px, minHeight, pz);
         }
       }
       // vertices top
-      for (let iz=0; iz<=steps; iz++) {
-        for (let ix=0; ix<=steps; ix++) {
-          const px = bounds.minX + ix*stepX;
-          const pz = bounds.minZ + iz*stepZ;
-          const origY = this.getOriginalHeightAtPosition(px,pz);
-          positions.push(px,origY,pz);
+      for (let iz = 0; iz <= steps; iz++) {
+        for (let ix = 0; ix <= steps; ix++) {
+          const px = bounds.minX + ix * stepX;
+          const pz = bounds.minZ + iz * stepZ;
+          const origY = this.getOriginalHeightAtPosition(px, pz);
+          positions.push(px, origY, pz);
         }
       }
       const topOffset = totalGrid;
       // faces bottom
-      for (let iz=0; iz<steps; iz++) {
-        for (let ix=0; ix<steps; ix++) {
-          const a = ix + numX*iz;
-          const b = ix + numX*(iz+1);
-          const c = (ix+1) + numX*(iz+1);
-          const d = (ix+1) + numX*iz;
-          indices.push(a,c,b);
-          indices.push(a,d,c);
+      for (let iz = 0; iz < steps; iz++) {
+        for (let ix = 0; ix < steps; ix++) {
+          const a = ix + numX * iz;
+          const b = ix + numX * (iz + 1);
+          const c = ix + 1 + numX * (iz + 1);
+          const d = ix + 1 + numX * iz;
+          indices.push(a, c, b);
+          indices.push(a, d, c);
         }
       }
       // faces top
-      for (let iz=0; iz<steps; iz++) {
-        for (let ix=0; ix<steps; ix++) {
-          const a = topOffset + ix + numX*iz;
-          const b = topOffset + (ix+1) + numX*iz;
-          const c = topOffset + (ix+1) + numX*(iz+1);
-          const d = topOffset + ix + numX*(iz+1);
-          indices.push(a,b,c);
-          indices.push(a,c,d);
+      for (let iz = 0; iz < steps; iz++) {
+        for (let ix = 0; ix < steps; ix++) {
+          const a = topOffset + ix + numX * iz;
+          const b = topOffset + (ix + 1) + numX * iz;
+          const c = topOffset + (ix + 1) + numX * (iz + 1);
+          const d = topOffset + ix + numX * (iz + 1);
+          indices.push(a, b, c);
+          indices.push(a, c, d);
         }
       }
       // side walls around perimeter
-      for (let iz=0; iz<steps; iz++) {
+      for (let iz = 0; iz < steps; iz++) {
         // left
-        let b1 = 0 + numX*iz;
-        let b2 = 0 + numX*(iz+1);
+        let b1 = 0 + numX * iz;
+        let b2 = 0 + numX * (iz + 1);
         let t1 = topOffset + b1;
         let t2 = topOffset + b2;
-        indices.push(b1,b2,t1);
-        indices.push(t1,b2,t2);
+        indices.push(b1, b2, t1);
+        indices.push(t1, b2, t2);
         // right
-        b1 = steps + numX*iz;
-        b2 = steps + numX*(iz+1);
+        b1 = steps + numX * iz;
+        b2 = steps + numX * (iz + 1);
         t1 = topOffset + b1;
         t2 = topOffset + b2;
-        indices.push(b2,t1,b1);
-        indices.push(b2,t2,t1);
+        indices.push(b2, t1, b1);
+        indices.push(b2, t2, t1);
       }
-      for (let ix=0; ix<steps; ix++) {
+      for (let ix = 0; ix < steps; ix++) {
         // front
         let b1 = ix;
-        let b2 = ix+1;
+        let b2 = ix + 1;
         let t1 = topOffset + b1;
         let t2 = topOffset + b2;
-        indices.push(b1,t1,b2);
-        indices.push(b2,t1,t2);
+        indices.push(b1, t1, b2);
+        indices.push(b2, t1, t2);
         // back
-        b1 = ix + numX*steps;
-        b2 = ix+1 + numX*steps;
+        b1 = ix + numX * steps;
+        b2 = ix + 1 + numX * steps;
         t1 = topOffset + b1;
         t2 = topOffset + b2;
-        indices.push(b2,b1,t1);
-        indices.push(b2,t1,t2);
+        indices.push(b2, b1, t1);
+        indices.push(b2, t1, t2);
       }
     }
 
     const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+    geom.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
     geom.setIndex(indices);
     geom.computeVertexNormals();
     return geom;
   }
 
   // OPTIMIZED Geometry builder for FILL overlays – simplified for better performance
-  private createFillPolyhedronGeometry(bounds: { minX: number, maxX: number, minZ: number, maxZ: number }, centerX: number, centerZ: number, radius: number, plannedHeight: number = 0): THREE.BufferGeometry {
+  private createFillPolyhedronGeometry(
+    bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+    centerX: number,
+    centerZ: number,
+    radius: number,
+    plannedHeight: number = 0
+  ): THREE.BufferGeometry {
     const isCircle = this.brushSettings.shape === 'circle';
     const EPS = 0.001;
 
@@ -2961,22 +3383,24 @@ export class Terrain {
     const indices: number[] = [];
 
     if (isCircle) {
-      // PERFORMANCE: Reduced complexity for real-time performance  
-      const radialSteps = 12;  // Reduced from 36 to 12
-      const ringSteps = 4;     // Reduced from 10 to 4
-      const maxRadii:number[] = new Array(radialSteps).fill( plannedHeight>0 ? radius : 0 );
+      // PERFORMANCE: Reduced complexity for real-time performance
+      const radialSteps = 12; // Reduced from 36 to 12
+      const ringSteps = 4; // Reduced from 10 to 4
+      const maxRadii: number[] = new Array(radialSteps).fill(
+        plannedHeight > 0 ? radius : 0
+      );
 
-      for (let i=0;i<radialSteps;i++){
-        const angle = (i/radialSteps)*Math.PI*2;
+      for (let i = 0; i < radialSteps; i++) {
+        const angle = (i / radialSteps) * Math.PI * 2;
         let maxDist = 0;
         // march outward to radius collecting last point where current>original
-        const samples = ringSteps*2;
-        for (let s=1;s<=samples;s++){
-          const dist = (s/samples)*radius;
-          const px = centerX + Math.cos(angle)*dist;
-          const pz = centerZ + Math.sin(angle)*dist;
-          const cur = this.getHeightAtPosition(px,pz);
-          const orig = this.getOriginalHeightAtPosition(px,pz);
+        const samples = ringSteps * 2;
+        for (let s = 1; s <= samples; s++) {
+          const dist = (s / samples) * radius;
+          const px = centerX + Math.cos(angle) * dist;
+          const pz = centerZ + Math.sin(angle) * dist;
+          const cur = this.getHeightAtPosition(px, pz);
+          const orig = this.getOriginalHeightAtPosition(px, pz);
           if (cur > orig + EPS) {
             maxDist = dist;
           }
@@ -2985,157 +3409,187 @@ export class Terrain {
       }
 
       // If no positive fill found, return empty geometry
-      if (maxRadii.every(r => r===0)) {
+      if (maxRadii.every(r => r === 0)) {
         return new THREE.BufferGeometry();
       }
 
       // 2. Build concentric rings up to each direction's max radius proportionally
-      const bottomIndex = (j:number,i:number) => j*radialSteps + i;
-      const bottomCount = (ringSteps+1)*radialSteps;
-      const topIndex = (j:number,i:number) => bottomCount + j*radialSteps + i;
+      const bottomIndex = (j: number, i: number) => j * radialSteps + i;
+      const bottomCount = (ringSteps + 1) * radialSteps;
+      const topIndex = (j: number, i: number) =>
+        bottomCount + j * radialSteps + i;
 
-      for (let j=0;j<=ringSteps;j++){
-        const frac = j/ringSteps;
-        for (let i=0;i<radialSteps;i++){
+      for (let j = 0; j <= ringSteps; j++) {
+        const frac = j / ringSteps;
+        for (let i = 0; i < radialSteps; i++) {
           const maxDist = maxRadii[i];
-          const dist = frac*maxDist;
-          const angle = (i/radialSteps)*Math.PI*2;
-          const px = centerX + Math.cos(angle)*dist;
-          const pz = centerZ + Math.sin(angle)*dist;
-          const orig = this.getOriginalHeightAtPosition(px,pz);
-          const cur  = plannedHeight>0 ? orig + plannedHeight : this.getHeightAtPosition(px,pz);
+          const dist = frac * maxDist;
+          const angle = (i / radialSteps) * Math.PI * 2;
+          const px = centerX + Math.cos(angle) * dist;
+          const pz = centerZ + Math.sin(angle) * dist;
+          const orig = this.getOriginalHeightAtPosition(px, pz);
+          const cur =
+            plannedHeight > 0
+              ? orig + plannedHeight
+              : this.getHeightAtPosition(px, pz);
           positions.push(px, orig, pz); // bottom vertex (original terrain)
         }
       }
-      for (let j=0;j<=ringSteps;j++){
-        const frac = j/ringSteps;
-        for (let i=0;i<radialSteps;i++){
+      for (let j = 0; j <= ringSteps; j++) {
+        const frac = j / ringSteps;
+        for (let i = 0; i < radialSteps; i++) {
           const maxDist = maxRadii[i];
-          const dist = frac*maxDist;
-          const angle = (i/radialSteps)*Math.PI*2;
-          const px = centerX + Math.cos(angle)*dist;
-          const pz = centerZ + Math.sin(angle)*dist;
-          const orig = this.getOriginalHeightAtPosition(px,pz);
-          const cur  = plannedHeight>0 ? orig + plannedHeight : this.getHeightAtPosition(px,pz);
+          const dist = frac * maxDist;
+          const angle = (i / radialSteps) * Math.PI * 2;
+          const px = centerX + Math.cos(angle) * dist;
+          const pz = centerZ + Math.sin(angle) * dist;
+          const orig = this.getOriginalHeightAtPosition(px, pz);
+          const cur =
+            plannedHeight > 0
+              ? orig + plannedHeight
+              : this.getHeightAtPosition(px, pz);
           positions.push(px, cur, pz); // top vertex (built terrain)
         }
       }
 
       // Faces similar to cut polyhedron but bottom normals face down.
-      for (let j=0;j<ringSteps;j++){
-        for (let i=0;i<radialSteps;i++){
-          const a = bottomIndex(j,i);
-          const b = bottomIndex(j+1,i);
-          const c = bottomIndex(j+1,(i+1)%radialSteps);
-          const d = bottomIndex(j,(i+1)%radialSteps);
-          indices.push(a,b,c); // bottom normal orientation up? we want downward, use opposite
-          indices.push(a,c,d);
+      for (let j = 0; j < ringSteps; j++) {
+        for (let i = 0; i < radialSteps; i++) {
+          const a = bottomIndex(j, i);
+          const b = bottomIndex(j + 1, i);
+          const c = bottomIndex(j + 1, (i + 1) % radialSteps);
+          const d = bottomIndex(j, (i + 1) % radialSteps);
+          indices.push(a, b, c); // bottom normal orientation up? we want downward, use opposite
+          indices.push(a, c, d);
         }
       }
-      for (let j=0;j<ringSteps;j++){
-        for (let i=0;i<radialSteps;i++){
-          const a = topIndex(j,i);
-          const b = topIndex(j,(i+1)%radialSteps);
-          const c = topIndex(j+1,(i+1)%radialSteps);
-          const d = topIndex(j+1,i);
-          indices.push(a,c,b);
-          indices.push(a,d,c);
+      for (let j = 0; j < ringSteps; j++) {
+        for (let i = 0; i < radialSteps; i++) {
+          const a = topIndex(j, i);
+          const b = topIndex(j, (i + 1) % radialSteps);
+          const c = topIndex(j + 1, (i + 1) % radialSteps);
+          const d = topIndex(j + 1, i);
+          indices.push(a, c, b);
+          indices.push(a, d, c);
         }
       }
-      for (let j=0;j<=ringSteps;j++){
-        for (let i=0;i<radialSteps;i++){
-          const b1 = bottomIndex(j,i);
-          const b2 = bottomIndex(j,(i+1)%radialSteps);
-          const t1 = topIndex(j,i);
-          const t2 = topIndex(j,(i+1)%radialSteps);
-          indices.push(b1,b2,t1);
-          indices.push(b2,t2,t1);
+      for (let j = 0; j <= ringSteps; j++) {
+        for (let i = 0; i < radialSteps; i++) {
+          const b1 = bottomIndex(j, i);
+          const b2 = bottomIndex(j, (i + 1) % radialSteps);
+          const t1 = topIndex(j, i);
+          const t2 = topIndex(j, (i + 1) % radialSteps);
+          indices.push(b1, b2, t1);
+          indices.push(b2, t2, t1);
         }
       }
-
     } else {
       // square grid sampling: OPTIMIZED for performance
-      const steps = 8;  // Reduced from 20 to 8 for better performance
-      const stepX = (bounds.maxX-bounds.minX)/steps;
-      const stepZ = (bounds.maxZ-bounds.minZ)/steps;
+      const steps = 8; // Reduced from 20 to 8 for better performance
+      const stepX = (bounds.maxX - bounds.minX) / steps;
+      const stepZ = (bounds.maxZ - bounds.minZ) / steps;
 
-      const idx = (ix:number,iz:number,layer:number) => layer*(steps+1)*(steps+1) + iz*(steps+1) + ix;
-      const vertsPerLayer = (steps+1)*(steps+1);
+      const idx = (ix: number, iz: number, layer: number) =>
+        layer * (steps + 1) * (steps + 1) + iz * (steps + 1) + ix;
+      const vertsPerLayer = (steps + 1) * (steps + 1);
 
-      for (let iz=0; iz<=steps; iz++){
-        for (let ix=0; ix<=steps; ix++){
-          const px = bounds.minX + ix*stepX;
-          const pz = bounds.minZ + iz*stepZ;
-          const orig = this.getOriginalHeightAtPosition(px,pz);
-          const cur  = this.getHeightAtPosition(px,pz);
+      for (let iz = 0; iz <= steps; iz++) {
+        for (let ix = 0; ix <= steps; ix++) {
+          const px = bounds.minX + ix * stepX;
+          const pz = bounds.minZ + iz * stepZ;
+          const orig = this.getOriginalHeightAtPosition(px, pz);
+          const cur = this.getHeightAtPosition(px, pz);
           positions.push(px, orig, pz); // bottom layer
         }
       }
-      for (let iz=0; iz<=steps; iz++){
-        for (let ix=0; ix<=steps; ix++){
-          const px = bounds.minX + ix*stepX;
-          const pz = bounds.minZ + iz*stepZ;
-          const cur  = this.getHeightAtPosition(px,pz);
+      for (let iz = 0; iz <= steps; iz++) {
+        for (let ix = 0; ix <= steps; ix++) {
+          const px = bounds.minX + ix * stepX;
+          const pz = bounds.minZ + iz * stepZ;
+          const cur = this.getHeightAtPosition(px, pz);
           positions.push(px, cur, pz); // top layer
         }
       }
       // build faces only when cur>orig for at least one vertex in cell
-      for (let iz=0; iz<steps; iz++){
-        for (let ix=0; ix<steps; ix++){
-          const corners:number[][] = [];
-          const vertsIndex=[
-            [ix,iz],[ix+1,iz],[ix,iz+1],[ix+1,iz+1]
+      for (let iz = 0; iz < steps; iz++) {
+        for (let ix = 0; ix < steps; ix++) {
+          const corners: number[][] = [];
+          const vertsIndex = [
+            [ix, iz],
+            [ix + 1, iz],
+            [ix, iz + 1],
+            [ix + 1, iz + 1],
           ];
-          let hasFill=false;
-          vertsIndex.forEach(([vx,vz])=>{
-            const px = bounds.minX + vx*stepX;
-            const pz = bounds.minZ + vz*stepZ;
-            if (this.getHeightAtPosition(px,pz) > this.getOriginalHeightAtPosition(px,pz)+EPS) hasFill=true;
+          let hasFill = false;
+          vertsIndex.forEach(([vx, vz]) => {
+            const px = bounds.minX + vx * stepX;
+            const pz = bounds.minZ + vz * stepZ;
+            if (
+              this.getHeightAtPosition(px, pz) >
+              this.getOriginalHeightAtPosition(px, pz) + EPS
+            )
+              hasFill = true;
           });
-          if(!hasFill) continue;
-          const a = idx(ix,iz,0);
-          const b = idx(ix+1,iz,0);
-          const c = idx(ix+1,iz+1,0);
-          const d = idx(ix,iz+1,0);
-          const A = idx(ix,iz,1);
-          const B = idx(ix+1,iz,1);
-          const C = idx(ix+1,iz+1,1);
-          const D = idx(ix,iz+1,1);
+          if (!hasFill) continue;
+          const a = idx(ix, iz, 0);
+          const b = idx(ix + 1, iz, 0);
+          const c = idx(ix + 1, iz + 1, 0);
+          const d = idx(ix, iz + 1, 0);
+          const A = idx(ix, iz, 1);
+          const B = idx(ix + 1, iz, 1);
+          const C = idx(ix + 1, iz + 1, 1);
+          const D = idx(ix, iz + 1, 1);
 
           // bottom (original terrain) faces orientation downward
-          indices.push(a,c,b);
-          indices.push(a,d,c);
+          indices.push(a, c, b);
+          indices.push(a, d, c);
           // top faces
-          indices.push(A,B,C);
-          indices.push(A,C,D);
+          indices.push(A, B, C);
+          indices.push(A, C, D);
           // sides for each edge that borders empty/no-fill cell
-          const pushSide =(bLow:number,bHigh:number,tLow:number,tHigh:number)=>{
-            indices.push(bLow,bHigh,tLow);
-            indices.push(bHigh,tHigh,tLow);
+          const pushSide = (
+            bLow: number,
+            bHigh: number,
+            tLow: number,
+            tHigh: number
+          ) => {
+            indices.push(bLow, bHigh, tLow);
+            indices.push(bHigh, tHigh, tLow);
           };
           // left edge
-          if(ix===0|| !hasFillCell(ix-1,iz)) pushSide(a,d,A,D);
+          if (ix === 0 || !hasFillCell(ix - 1, iz)) pushSide(a, d, A, D);
           // right edge
-          if(ix===steps-1|| !hasFillCell(ix+1,iz)) pushSide(b,c,B,C);
+          if (ix === steps - 1 || !hasFillCell(ix + 1, iz))
+            pushSide(b, c, B, C);
           // front edge
-          if(iz===0 || !hasFillCell(ix,iz-1)) pushSide(a,b,A,B);
+          if (iz === 0 || !hasFillCell(ix, iz - 1)) pushSide(a, b, A, B);
           // back edge
-          if(iz===steps-1 || !hasFillCell(ix,iz+1)) pushSide(d,c,D,C);
+          if (iz === steps - 1 || !hasFillCell(ix, iz + 1))
+            pushSide(d, c, D, C);
         }
       }
-      function hasFillCell(ix:number,iz:number):boolean{return false;} // placeholder; edges simplification
+      function hasFillCell(ix: number, iz: number): boolean {
+        return false;
+      } // placeholder; edges simplification
     }
 
     const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    geom.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
     geom.setIndex(indices);
     geom.computeVertexNormals();
     return geom;
   }
 
-  public isInPlanningMode(): boolean { return this.planningMode; }
+  public isInPlanningMode(): boolean {
+    return this.planningMode;
+  }
 
-  public hasPendingChanges(): boolean { return this.plannedStrokes.length>0; }
+  public hasPendingChanges(): boolean {
+    return this.plannedStrokes.length > 0;
+  }
 
   /**
    * Apply all planned strokes to the terrain, commit to undo stack, regenerate contours, then clear planning state
@@ -3177,29 +3631,52 @@ export class Terrain {
   }
 
   // --- Stub methods for integration points not yet implemented (prevent TS errors) ---
-  public setUserId(id: string | null): void { this.currentUserId = id; }
-  public savePendingModifications(): void { /* planned for DB integration */ }
-  public setAutoSave(enabled: boolean): void { this.autoSaveEnabled = enabled; }
-  public saveCurrentState(callback?: (success:boolean)=>void): void { if(callback) callback(true); }
-  public getUserTerrainStates(userId: string): any[] { return []; }
-  public loadTerrainFromDatabase(userId: string): void { /* no-op */ }
+  public setUserId(id: string | null): void {
+    this.currentUserId = id;
+  }
+  public savePendingModifications(): void {
+    /* planned for DB integration */
+  }
+  public setAutoSave(enabled: boolean): void {
+    this.autoSaveEnabled = enabled;
+  }
+  public saveCurrentState(callback?: (success: boolean) => void): void {
+    if (callback) callback(true);
+  }
+  public getUserTerrainStates(userId: string): any[] {
+    return [];
+  }
+  public loadTerrainFromDatabase(userId: string): void {
+    /* no-op */
+  }
 
   // === Convex Hull Helper (Monotone Chain) ===
-  private computeConvexHull(points: {x:number; z:number}[]): {x:number; z:number}[] {
+  private computeConvexHull(
+    points: { x: number; z: number }[]
+  ): { x: number; z: number }[] {
     if (points.length < 4) return points;
     // convert to array of [x,z]
-    const pts = points.map(p=>({x:p.x,z:p.z}));
-    pts.sort((a,b)=> a.x===b.x ? a.z-b.z : a.x-b.x);
-    const cross = (o:any,a:any,b:any)=> (a.x-o.x)*(b.z-o.z)-(a.z-o.z)*(b.x-o.x);
+    const pts = points.map(p => ({ x: p.x, z: p.z }));
+    pts.sort((a, b) => (a.x === b.x ? a.z - b.z : a.x - b.x));
+    const cross = (o: any, a: any, b: any) =>
+      (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
     const lower: any[] = [];
-    for(const p of pts){
-      while(lower.length>=2 && cross(lower[lower.length-2], lower[lower.length-1], p)<=0) lower.pop();
+    for (const p of pts) {
+      while (
+        lower.length >= 2 &&
+        cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0
+      )
+        lower.pop();
       lower.push(p);
     }
     const upper: any[] = [];
-    for(let i=pts.length-1;i>=0;i--){
-      const p=pts[i];
-      while(upper.length>=2 && cross(upper[upper.length-2], upper[upper.length-1], p)<=0) upper.pop();
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      while (
+        upper.length >= 2 &&
+        cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0
+      )
+        upper.pop();
       upper.push(p);
     }
     upper.pop();
@@ -3208,144 +3685,158 @@ export class Terrain {
   }
 
   // === Outline Overlay Creator ===
-  private createOutlineOverlay(boundary: {x:number; z:number}[], type: 'cut'|'fill'): THREE.Object3D | null {
-     if(boundary.length < 3) return null;
-     
-     const group = new THREE.Group();
-     const color = type==='cut'? 0xFF4444 : 0x4444FF;
-     
-     // Create smooth curved boundary with interpolation
-     const smoothBoundary = this.createSmoothBoundary(boundary, 32); // Increase resolution for smoother curves
-     
-     // Create terrain-following geometry using higher resolution triangulation
-     const vertices: number[] = [];
-     const indices: number[] = [];
-     
-     // Create center point at average position and height
-     const centerX = boundary.reduce((s,p)=> s + p.x, 0) / boundary.length;
-     const centerZ = boundary.reduce((s,p)=> s + p.z, 0) / boundary.length;
-     const centerY = this.getHeightAtPosition(centerX, centerZ) + 0.05;
-     vertices.push(centerX, centerY, centerZ);
-     
-     // Add smooth boundary vertices at terrain height
-     for (let i = 0; i < smoothBoundary.length; i++) {
-       const p = smoothBoundary[i];
-       const terrainY = this.getHeightAtPosition(p.x, p.z) + 0.05;
-       vertices.push(p.x, terrainY, p.z);
-     }
-     
-     // Create triangular faces from center to boundary segments
-     for (let i = 0; i < smoothBoundary.length; i++) {
-       const next = (i + 1) % smoothBoundary.length;
-       indices.push(0, i + 1, next + 1);
-     }
-     
-     // Create the mesh geometry
-     const geometry = new THREE.BufferGeometry();
-     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-     geometry.setIndex(indices);
-     geometry.computeVertexNormals();
-     
-     const mat = new THREE.MeshBasicMaterial({
-       color, 
-       transparent: true, 
-       opacity: 0.4, 
-       depthWrite: false, 
-       depthTest: false, 
-       side: THREE.DoubleSide
-     });
-     const mesh = new THREE.Mesh(geometry, mat);
-     mesh.renderOrder = 1;
-     group.add(mesh);
+  private createOutlineOverlay(
+    boundary: { x: number; z: number }[],
+    type: 'cut' | 'fill'
+  ): THREE.Object3D | null {
+    if (boundary.length < 3) return null;
 
-     // Create smooth outline line following terrain surface
-     const outlinePts: THREE.Vector3[] = smoothBoundary.map(p => {
-       const terrainY = this.getHeightAtPosition(p.x, p.z) + 0.08;
-       return new THREE.Vector3(p.x, terrainY, p.z);
-     });
-     // Close the loop
-     outlinePts.push(outlinePts[0].clone());
-     
-     const lineGeom = new THREE.BufferGeometry().setFromPoints(outlinePts);
-     const lineMat = new THREE.LineBasicMaterial({color: 0x000000, linewidth: 2});
-     const loop = new THREE.Line(lineGeom, lineMat);
-     loop.renderOrder = 2;
-     group.add(loop);
+    const group = new THREE.Group();
+    const color = type === 'cut' ? 0xff4444 : 0x4444ff;
 
-     return group;
-   }
+    // Create smooth curved boundary with interpolation
+    const smoothBoundary = this.createSmoothBoundary(boundary, 32); // Increase resolution for smoother curves
 
-   /**
-    * Create a smooth curved boundary by interpolating between boundary points
-    */
-   private createSmoothBoundary(boundary: {x:number; z:number}[], resolution: number): {x:number; z:number}[] {
-     if (boundary.length < 3) return boundary;
-     
-     const smoothPoints: {x:number; z:number}[] = [];
-     
-     for (let i = 0; i < boundary.length; i++) {
-       const current = boundary[i];
-       const next = boundary[(i + 1) % boundary.length];
-       const prev = boundary[(i - 1 + boundary.length) % boundary.length];
-       
-       // Add the current point
-       smoothPoints.push(current);
-       
-       // Calculate number of interpolation points based on distance
-       const segmentLength = Math.sqrt(
-         Math.pow(next.x - current.x, 2) + Math.pow(next.z - current.z, 2)
-       );
-       const numInterpolations = Math.max(1, Math.floor(segmentLength / 2)); // One point every 2 feet
-       
-       // Create smooth curve between current and next point using catmull-rom spline
-       for (let j = 1; j <= numInterpolations; j++) {
-         const t = j / (numInterpolations + 1);
-         
-         // Catmull-Rom spline interpolation for smoother curves
-         const interpolated = this.catmullRomInterpolation(
-           prev, current, next, 
-           boundary[(i + 2) % boundary.length], 
-           t
-         );
-         
-         smoothPoints.push(interpolated);
-       }
-     }
-     
-     return smoothPoints;
-   }
+    // Create terrain-following geometry using higher resolution triangulation
+    const vertices: number[] = [];
+    const indices: number[] = [];
 
-   /**
-    * Catmull-Rom spline interpolation for smooth curves
-    */
-   private catmullRomInterpolation(
-     p0: {x:number; z:number}, 
-     p1: {x:number; z:number}, 
-     p2: {x:number; z:number}, 
-     p3: {x:number; z:number}, 
-     t: number
-   ): {x:number; z:number} {
-     const t2 = t * t;
-     const t3 = t2 * t;
-     
-     // Catmull-Rom coefficients
-     const c0 = -0.5 * t3 + t2 - 0.5 * t;
-     const c1 = 1.5 * t3 - 2.5 * t2 + 1;
-     const c2 = -1.5 * t3 + 2 * t2 + 0.5 * t;
-     const c3 = 0.5 * t3 - 0.5 * t2;
-     
-     return {
-       x: c0 * p0.x + c1 * p1.x + c2 * p2.x + c3 * p3.x,
-       z: c0 * p0.z + c1 * p1.z + c2 * p2.z + c3 * p3.z
-     };
-   }
+    // Create center point at average position and height
+    const centerX = boundary.reduce((s, p) => s + p.x, 0) / boundary.length;
+    const centerZ = boundary.reduce((s, p) => s + p.z, 0) / boundary.length;
+    const centerY = this.getHeightAtPosition(centerX, centerZ) + 0.05;
+    vertices.push(centerX, centerY, centerZ);
+
+    // Add smooth boundary vertices at terrain height
+    for (let i = 0; i < smoothBoundary.length; i++) {
+      const p = smoothBoundary[i];
+      const terrainY = this.getHeightAtPosition(p.x, p.z) + 0.05;
+      vertices.push(p.x, terrainY, p.z);
+    }
+
+    // Create triangular faces from center to boundary segments
+    for (let i = 0; i < smoothBoundary.length; i++) {
+      const next = (i + 1) % smoothBoundary.length;
+      indices.push(0, i + 1, next + 1);
+    }
+
+    // Create the mesh geometry
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(vertices, 3)
+    );
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.renderOrder = 1;
+    group.add(mesh);
+
+    // Create smooth outline line following terrain surface
+    const outlinePts: THREE.Vector3[] = smoothBoundary.map(p => {
+      const terrainY = this.getHeightAtPosition(p.x, p.z) + 0.08;
+      return new THREE.Vector3(p.x, terrainY, p.z);
+    });
+    // Close the loop
+    outlinePts.push(outlinePts[0].clone());
+
+    const lineGeom = new THREE.BufferGeometry().setFromPoints(outlinePts);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x000000,
+      linewidth: 2,
+    });
+    const loop = new THREE.Line(lineGeom, lineMat);
+    loop.renderOrder = 2;
+    group.add(loop);
+
+    return group;
+  }
+
+  /**
+   * Create a smooth curved boundary by interpolating between boundary points
+   */
+  private createSmoothBoundary(
+    boundary: { x: number; z: number }[],
+    resolution: number
+  ): { x: number; z: number }[] {
+    if (boundary.length < 3) return boundary;
+
+    const smoothPoints: { x: number; z: number }[] = [];
+
+    for (let i = 0; i < boundary.length; i++) {
+      const current = boundary[i];
+      const next = boundary[(i + 1) % boundary.length];
+      const prev = boundary[(i - 1 + boundary.length) % boundary.length];
+
+      // Add the current point
+      smoothPoints.push(current);
+
+      // Calculate number of interpolation points based on distance
+      const segmentLength = Math.sqrt(
+        Math.pow(next.x - current.x, 2) + Math.pow(next.z - current.z, 2)
+      );
+      const numInterpolations = Math.max(1, Math.floor(segmentLength / 2)); // One point every 2 feet
+
+      // Create smooth curve between current and next point using catmull-rom spline
+      for (let j = 1; j <= numInterpolations; j++) {
+        const t = j / (numInterpolations + 1);
+
+        // Catmull-Rom spline interpolation for smoother curves
+        const interpolated = this.catmullRomInterpolation(
+          prev,
+          current,
+          next,
+          boundary[(i + 2) % boundary.length],
+          t
+        );
+
+        smoothPoints.push(interpolated);
+      }
+    }
+
+    return smoothPoints;
+  }
+
+  /**
+   * Catmull-Rom spline interpolation for smooth curves
+   */
+  private catmullRomInterpolation(
+    p0: { x: number; z: number },
+    p1: { x: number; z: number },
+    p2: { x: number; z: number },
+    p3: { x: number; z: number },
+    t: number
+  ): { x: number; z: number } {
+    const t2 = t * t;
+    const t3 = t2 * t;
+
+    // Catmull-Rom coefficients
+    const c0 = -0.5 * t3 + t2 - 0.5 * t;
+    const c1 = 1.5 * t3 - 2.5 * t2 + 1;
+    const c2 = -1.5 * t3 + 2 * t2 + 0.5 * t;
+    const c3 = 0.5 * t3 - 0.5 * t2;
+
+    return {
+      x: c0 * p0.x + c1 * p1.x + c2 * p2.x + c3 * p3.x,
+      z: c0 * p0.z + c1 * p1.z + c2 * p2.z + c3 * p3.z,
+    };
+  }
 
   /**
    * Clear all fill overlays (blue areas) from the terrain
    */
   public clearFillOverlays(): void {
     console.log('Clearing fill overlays after operation execution');
-    
+
     // Remove all fill overlays from the scene
     this.fillOverlays.forEach(overlay => {
       if (overlay) {
@@ -3353,61 +3844,72 @@ export class Terrain {
         if (overlay.geometry) {
           overlay.geometry.dispose();
         }
-        if (overlay.material && typeof (overlay.material as THREE.Material).dispose === 'function') {
+        if (
+          overlay.material &&
+          typeof (overlay.material as THREE.Material).dispose === 'function'
+        ) {
           (overlay.material as THREE.Material).dispose();
         }
       }
     });
-    
+
     // Clear the fill overlays array
     this.fillOverlays = [];
-    
+
     // Remove fill modification areas from tracking
-    const fillAreaKeys = Array.from(this.modificationAreas.keys()).filter(key => 
-      key.includes('fill_') || key.includes('polyline_fill_') || key.includes('polygon_fill_')
+    const fillAreaKeys = Array.from(this.modificationAreas.keys()).filter(
+      key =>
+        key.includes('fill_') ||
+        key.includes('polyline_fill_') ||
+        key.includes('polygon_fill_')
     );
-    
+
     fillAreaKeys.forEach(key => {
       this.modificationAreas.delete(key);
     });
-    
+
     // Disable fill overlay display
     this.showFillVolumeOverlay = false;
-    
+
     console.log('Fill overlays cleared successfully');
   }
 
   /**
    * Load terrain configuration from server
    */
-  public async loadTerrainFromServer(levelId: number, assignmentId?: string): Promise<boolean> {
+  public async loadTerrainFromServer(
+    levelId: number,
+    assignmentId?: string
+  ): Promise<boolean> {
     try {
-      console.log(`🌍 Loading terrain from server: Level ${levelId}, Assignment ${assignmentId}`);
-      
+      console.log(
+        `🌍 Loading terrain from server: Level ${levelId}, Assignment ${assignmentId}`
+      );
+
       let url = `http://localhost:3001/api/terrain/${levelId}`;
       if (assignmentId) {
         url += `?assignmentId=${assignmentId}`;
       }
 
       const response = await fetch(url);
-      
+
       if (!response.ok) {
         console.warn(`Failed to load terrain: ${response.statusText}`);
         return false;
       }
 
       const result = await response.json();
-      
+
       if (result.success && result.terrain) {
         console.log('✅ Terrain loaded from server:', result.terrain.name);
-        
+
         // Apply the terrain data
         if (result.terrain.terrain_data) {
           this.importTerrain(result.terrain.terrain_data);
           return true;
         }
       }
-      
+
       return false;
     } catch (error) {
       console.error('Error loading terrain from server:', error);
@@ -3434,20 +3936,22 @@ export class Terrain {
       }
 
       const terrainData = this.exportTerrain();
-      
+
       const saveData = {
         levelId: levelId,
         assignmentId: assignmentId,
-        name: name || `Level ${levelId} Terrain - ${new Date().toLocaleString()}`,
-        description: description || `Terrain configuration for level ${levelId}`,
+        name:
+          name || `Level ${levelId} Terrain - ${new Date().toLocaleString()}`,
+        description:
+          description || `Terrain configuration for level ${levelId}`,
         terrainData: terrainData,
         terrainConfig: {
           width: 120,
           height: 120,
-          pattern: 'custom'
+          pattern: 'custom',
         },
         isDefault: isDefault,
-        userId: userId
+        userId: userId,
       };
 
       const response = await fetch('http://localhost:3001/api/terrain/save', {
@@ -3455,7 +3959,7 @@ export class Terrain {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(saveData)
+        body: JSON.stringify(saveData),
       });
 
       if (response.ok) {
@@ -3479,7 +3983,9 @@ export class Terrain {
     try {
       // Import supabase client
       const { supabase } = await import('./supabase');
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       return user?.id || null;
     } catch (error) {
       console.error('Error getting current user:', error);
@@ -3492,8 +3998,10 @@ export class Terrain {
    */
   public async listTerrainsForLevel(levelId: number): Promise<any[]> {
     try {
-      const response = await fetch(`http://localhost:3001/api/terrain/list/${levelId}`);
-      
+      const response = await fetch(
+        `http://localhost:3001/api/terrain/list/${levelId}`
+      );
+
       if (response.ok) {
         const result = await response.json();
         return result.terrains || [];
@@ -3518,13 +4026,16 @@ export class Terrain {
         return false;
       }
 
-      const response = await fetch(`http://localhost:3001/api/terrain/${terrainId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId })
-      });
+      const response = await fetch(
+        `http://localhost:3001/api/terrain/${terrainId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId }),
+        }
+      );
 
       if (response.ok) {
         console.log('✅ Terrain deleted from server');

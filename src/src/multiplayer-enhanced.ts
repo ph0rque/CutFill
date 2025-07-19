@@ -129,7 +129,12 @@ export interface SessionSettings {
 
 export type PlayerRole = 'host' | 'participant' | 'spectator' | 'pending';
 export type PlayerStatus = 'active' | 'idle' | 'disconnected' | 'busy';
-export type SessionState = 'waiting' | 'active' | 'paused' | 'completed' | 'cancelled';
+export type SessionState =
+  | 'waiting'
+  | 'active'
+  | 'paused'
+  | 'completed'
+  | 'cancelled';
 
 export class EnhancedMultiplayerManager {
   private socket: Socket;
@@ -173,13 +178,16 @@ export class EnhancedMultiplayerManager {
       this.callbacks.onSessionCreated?.(data.session);
     });
 
-    this.socket.on('session-joined', (data: { session: GameSession; player: PlayerData }) => {
-      console.log('Joined session:', data.session.id);
-      this.currentSession = data.session;
-      this.localPlayer = data.player;
-      this.updatePlayerList();
-      this.callbacks.onSessionJoined?.(data.session, data.player);
-    });
+    this.socket.on(
+      'session-joined',
+      (data: { session: GameSession; player: PlayerData }) => {
+        console.log('Joined session:', data.session.id);
+        this.currentSession = data.session;
+        this.localPlayer = data.player;
+        this.updatePlayerList();
+        this.callbacks.onSessionJoined?.(data.session, data.player);
+      }
+    );
 
     this.socket.on('session-updated', (data: { session: GameSession }) => {
       console.log('Session updated:', data.session.id);
@@ -199,26 +207,29 @@ export class EnhancedMultiplayerManager {
         playerName: 'System',
         message: `${data.player.name} joined the session`,
         timestamp: Date.now(),
-        type: 'system'
+        type: 'system',
       });
       this.callbacks.onPlayerJoined?.(data.player);
     });
 
-    this.socket.on('player-left', (data: { playerId: string; playerName: string }) => {
-      console.log('Player left:', data.playerName);
-      this.players.delete(data.playerId);
-      this.removeCursor(data.playerId);
-      this.updatePlayerList();
-      this.addChatMessage({
-        id: `system-${Date.now()}`,
-        playerId: 'system',
-        playerName: 'System',
-        message: `${data.playerName} left the session`,
-        timestamp: Date.now(),
-        type: 'system'
-      });
-      this.callbacks.onPlayerLeft?.(data.playerId);
-    });
+    this.socket.on(
+      'player-left',
+      (data: { playerId: string; playerName: string }) => {
+        console.log('Player left:', data.playerName);
+        this.players.delete(data.playerId);
+        this.removeCursor(data.playerId);
+        this.updatePlayerList();
+        this.addChatMessage({
+          id: `system-${Date.now()}`,
+          playerId: 'system',
+          playerName: 'System',
+          message: `${data.playerName} left the session`,
+          timestamp: Date.now(),
+          type: 'system',
+        });
+        this.callbacks.onPlayerLeft?.(data.playerId);
+      }
+    );
 
     this.socket.on('player-updated', (data: { player: PlayerData }) => {
       console.log('Player updated:', data.player.name);
@@ -228,33 +239,43 @@ export class EnhancedMultiplayerManager {
     });
 
     // Cursor events
-    this.socket.on('cursor-moved', (data: { playerId: string; cursor: CursorPosition }) => {
-      if (data.playerId !== this.socket.id) {
-        this.updatePlayerCursor(data.playerId, data.cursor);
+    this.socket.on(
+      'cursor-moved',
+      (data: { playerId: string; cursor: CursorPosition }) => {
+        if (data.playerId !== this.socket.id) {
+          this.updatePlayerCursor(data.playerId, data.cursor);
+        }
       }
-    });
+    );
 
     // Terrain events
     this.socket.on('terrain-modified', (modification: TerrainModification) => {
       if (modification.playerId !== this.socket.id) {
-        this.terrain.modifyHeight(modification.x, modification.z, modification.heightChange);
+        this.terrain.modifyHeight(
+          modification.x,
+          modification.z,
+          modification.heightChange
+        );
         this.callbacks.onTerrainModified?.(modification);
       }
     });
 
-    this.socket.on('terrain-reset', (data: { playerId: string; playerName: string }) => {
-      console.log('Terrain reset by:', data.playerName);
-      this.terrain.resetTerrain();
-      this.addChatMessage({
-        id: `system-${Date.now()}`,
-        playerId: 'system',
-        playerName: 'System',
-        message: `${data.playerName} reset the terrain`,
-        timestamp: Date.now(),
-        type: 'system'
-      });
-      this.callbacks.onTerrainReset?.(data.playerId);
-    });
+    this.socket.on(
+      'terrain-reset',
+      (data: { playerId: string; playerName: string }) => {
+        console.log('Terrain reset by:', data.playerName);
+        this.terrain.resetTerrain();
+        this.addChatMessage({
+          id: `system-${Date.now()}`,
+          playerId: 'system',
+          playerName: 'System',
+          message: `${data.playerName} reset the terrain`,
+          timestamp: Date.now(),
+          type: 'system',
+        });
+        this.callbacks.onTerrainReset?.(data.playerId);
+      }
+    );
 
     // Chat events
     this.socket.on('chat-message', (message: ChatMessage) => {
@@ -263,32 +284,40 @@ export class EnhancedMultiplayerManager {
     });
 
     // Objective events
-    this.socket.on('objective-updated', (data: { objective: SharedObjective }) => {
-      console.log('Objective updated:', data.objective.id);
-      if (this.currentSession) {
-        const index = this.currentSession.sharedObjectives.findIndex(obj => obj.id === data.objective.id);
-        if (index !== -1) {
-          this.currentSession.sharedObjectives[index] = data.objective;
-        } else {
-          this.currentSession.sharedObjectives.push(data.objective);
+    this.socket.on(
+      'objective-updated',
+      (data: { objective: SharedObjective }) => {
+        console.log('Objective updated:', data.objective.id);
+        if (this.currentSession) {
+          const index = this.currentSession.sharedObjectives.findIndex(
+            obj => obj.id === data.objective.id
+          );
+          if (index !== -1) {
+            this.currentSession.sharedObjectives[index] = data.objective;
+          } else {
+            this.currentSession.sharedObjectives.push(data.objective);
+          }
         }
+        this.callbacks.onObjectiveUpdated?.(data.objective);
       }
-      this.callbacks.onObjectiveUpdated?.(data.objective);
-    });
+    );
 
-    this.socket.on('objective-completed', (data: { objective: SharedObjective; playerId: string }) => {
-      console.log('Objective completed:', data.objective.id);
-      const player = this.players.get(data.playerId);
-      this.addChatMessage({
-        id: `achievement-${Date.now()}`,
-        playerId: 'system',
-        playerName: 'System',
-        message: `${player?.name || 'Player'} completed: ${data.objective.description}`,
-        timestamp: Date.now(),
-        type: 'achievement'
-      });
-      this.callbacks.onObjectiveCompleted?.(data.objective, data.playerId);
-    });
+    this.socket.on(
+      'objective-completed',
+      (data: { objective: SharedObjective; playerId: string }) => {
+        console.log('Objective completed:', data.objective.id);
+        const player = this.players.get(data.playerId);
+        this.addChatMessage({
+          id: `achievement-${Date.now()}`,
+          playerId: 'system',
+          playerName: 'System',
+          message: `${player?.name || 'Player'} completed: ${data.objective.description}`,
+          timestamp: Date.now(),
+          type: 'achievement',
+        });
+        this.callbacks.onObjectiveCompleted?.(data.objective, data.playerId);
+      }
+    );
 
     // Error events
     this.socket.on('error', (error: { message: string; code: string }) => {
@@ -296,10 +325,13 @@ export class EnhancedMultiplayerManager {
       this.callbacks.onError?.(error);
     });
 
-    this.socket.on('permission-denied', (data: { action: string; reason: string }) => {
-      console.warn('Permission denied:', data.action, data.reason);
-      this.callbacks.onPermissionDenied?.(data.action, data.reason);
-    });
+    this.socket.on(
+      'permission-denied',
+      (data: { action: string; reason: string }) => {
+        console.warn('Permission denied:', data.action, data.reason);
+        this.callbacks.onPermissionDenied?.(data.action, data.reason);
+      }
+    );
   }
 
   // Session management
@@ -352,7 +384,12 @@ export class EnhancedMultiplayerManager {
   }
 
   // Terrain interaction
-  public modifyTerrain(x: number, z: number, heightChange: number, tool: string): void {
+  public modifyTerrain(
+    x: number,
+    z: number,
+    heightChange: number,
+    tool: string
+  ): void {
     if (this.currentSession && this.localPlayer?.permissions.canModifyTerrain) {
       const modification: TerrainModification = {
         id: `mod-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -362,7 +399,7 @@ export class EnhancedMultiplayerManager {
         heightChange,
         tool,
         timestamp: Date.now(),
-        sessionId: this.currentSession.id
+        sessionId: this.currentSession.id,
       };
 
       this.socket.emit('terrain-modify', modification);
@@ -384,12 +421,12 @@ export class EnhancedMultiplayerManager {
 
   private addChatMessage(message: ChatMessage): void {
     this.chatMessages.push(message);
-    
+
     // Keep only last 100 messages
     if (this.chatMessages.length > 100) {
       this.chatMessages = this.chatMessages.slice(-100);
     }
-    
+
     this.updateChatUI();
   }
 
@@ -405,9 +442,9 @@ export class EnhancedMultiplayerManager {
             z: mousePos.z,
             isVisible: true,
             color: this.getPlayerColor(this.localPlayer.id),
-            tool: this.localPlayer.currentTool
+            tool: this.localPlayer.currentTool,
           };
-          
+
           this.socket.emit('cursor-move', cursor);
         }
       }
@@ -437,7 +474,10 @@ export class EnhancedMultiplayerManager {
     }
   }
 
-  private createCursorElement(playerId: string, cursor: CursorPosition): HTMLElement {
+  private createCursorElement(
+    playerId: string,
+    cursor: CursorPosition
+  ): HTMLElement {
     const element = document.createElement('div');
     element.className = 'player-cursor';
     element.style.cssText = `
@@ -455,7 +495,7 @@ export class EnhancedMultiplayerManager {
     const player = this.players.get(playerId);
     if (player) {
       element.title = `${player.name} (${cursor.tool})`;
-      
+
       // Add player name label
       const label = document.createElement('div');
       label.style.cssText = `
@@ -507,7 +547,14 @@ export class EnhancedMultiplayerManager {
   }
 
   private getPlayerColor(playerId: string): string {
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#FFD93D'];
+    const colors = [
+      '#FF6B6B',
+      '#4ECDC4',
+      '#45B7D1',
+      '#FFA07A',
+      '#98D8C8',
+      '#FFD93D',
+    ];
     const index = playerId.charCodeAt(0) % colors.length;
     return colors[index];
   }
@@ -517,25 +564,34 @@ export class EnhancedMultiplayerManager {
     const playerListElement = document.getElementById('player-list');
     if (playerListElement && this.currentSession) {
       const players = Array.from(this.currentSession.players.values());
-      playerListElement.innerHTML = players.map(player => 
-        `<div style="color: ${this.getPlayerColor(player.id)}">
+      playerListElement.innerHTML = players
+        .map(
+          player =>
+            `<div style="color: ${this.getPlayerColor(player.id)}">
           ${player.isHost ? '👑' : '👤'} ${player.name} (${player.role})
         </div>`
-      ).join('');
+        )
+        .join('');
     }
   }
 
   private updateChatUI(): void {
     const chatElement = document.getElementById('chat-messages');
     if (chatElement) {
-      chatElement.innerHTML = this.chatMessages.slice(-20).map(msg => {
-        const time = new Date(msg.timestamp).toLocaleTimeString([], { timeStyle: 'short' });
-        const color = msg.type === 'system' ? '#888' : this.getPlayerColor(msg.playerId);
-        return `<div style="color: ${color}; margin: 2px 0;">
+      chatElement.innerHTML = this.chatMessages
+        .slice(-20)
+        .map(msg => {
+          const time = new Date(msg.timestamp).toLocaleTimeString([], {
+            timeStyle: 'short',
+          });
+          const color =
+            msg.type === 'system' ? '#888' : this.getPlayerColor(msg.playerId);
+          return `<div style="color: ${color}; margin: 2px 0;">
           <span style="font-size: 11px;">[${time}]</span>
           <strong>${msg.playerName}:</strong> ${msg.message}
         </div>`;
-      }).join('');
+        })
+        .join('');
       chatElement.scrollTop = chatElement.scrollHeight;
     }
   }
@@ -580,32 +636,36 @@ export class EnhancedMultiplayerManager {
       netZeroScore: this.calculateNetZeroScore(assignmentProgress),
       operationsScore: assignmentProgress.operationsEfficiencyScore || 0,
       operationCount: assignmentProgress.operationCount || 0,
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     };
 
     this.currentSession.liveScores.set(playerId, competitiveScore);
-    
+
     // Broadcast score update to all players
     this.socket.emit('live-score-update', {
       sessionId: this.currentSession.id,
-      scores: Object.fromEntries(this.currentSession.liveScores)
+      scores: Object.fromEntries(this.currentSession.liveScores),
     });
 
-    console.log(`Live score updated for ${playerId}: ${competitiveScore.totalScore.toFixed(1)}`);
+    console.log(
+      `Live score updated for ${playerId}: ${competitiveScore.totalScore.toFixed(1)}`
+    );
   }
 
   public getLeaderboard(): CompetitiveScore[] {
     if (!this.currentSession?.liveScores) return [];
-    
-    return Array.from(this.currentSession.liveScores.values())
-      .sort((a, b) => b.totalScore - a.totalScore);
+
+    return Array.from(this.currentSession.liveScores.values()).sort(
+      (a, b) => b.totalScore - a.totalScore
+    );
   }
 
   public startCompetitiveLevel(levelId: string): void {
     if (this.currentSession) {
-      this.currentSession.currentLevel = parseInt(levelId.replace(/\D/g, '')) || 1;
+      this.currentSession.currentLevel =
+        parseInt(levelId.replace(/\D/g, '')) || 1;
       this.currentSession.liveScores = new Map();
-      
+
       // Initialize scores for all players
       this.currentSession.players.forEach((player, playerId) => {
         this.currentSession!.liveScores.set(playerId, {
@@ -615,33 +675,35 @@ export class EnhancedMultiplayerManager {
           netZeroScore: 100, // Start with perfect net-zero
           operationsScore: 100, // Start with perfect efficiency
           operationCount: 0,
-          lastUpdated: Date.now()
+          lastUpdated: Date.now(),
         });
       });
 
-      console.log(`Started competitive level ${this.currentSession.currentLevel} with ${this.currentSession.players.size} players`);
+      console.log(
+        `Started competitive level ${this.currentSession.currentLevel} with ${this.currentSession.players.size} players`
+      );
     }
   }
 
   private calculateObjectiveScore(progress: any): number {
     if (!progress.objectives) return 0;
-    
+
     let totalScore = 0;
     let totalWeight = 0;
-    
+
     for (const objective of progress.objectives) {
       totalScore += (objective.score || 0) * (objective.weight || 1);
       totalWeight += objective.weight || 1;
     }
-    
+
     return totalWeight > 0 ? totalScore / totalWeight : 0;
   }
 
   private calculateNetZeroScore(progress: any): number {
     if (!progress.volumeData) return 100;
-    
+
     const netVolumeYards = Math.abs(progress.volumeData.netMovement || 0);
-    return Math.max(0, 100 - (netVolumeYards * 10)); // Lose 10 points per cubic yard imbalance
+    return Math.max(0, 100 - netVolumeYards * 10); // Lose 10 points per cubic yard imbalance
   }
 
   public cleanup(): void {
@@ -668,4 +730,4 @@ export interface MultiplayerCallbacks {
   onObjectiveCompleted?: (objective: SharedObjective, playerId: string) => void;
   onError?: (error: { message: string; code: string }) => void;
   onPermissionDenied?: (action: string, reason: string) => void;
-} 
+}

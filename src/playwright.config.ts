@@ -22,10 +22,10 @@ export default defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
-    
+
     /* Take screenshots on failure */
     screenshot: 'only-on-failure',
-    
+
     /* Record video on failure */
     video: 'retain-on-failure',
   },
@@ -37,6 +37,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
 
+    /* Removed Firefox and WebKit for faster testing - Chrome only
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
@@ -46,6 +47,7 @@ export default defineConfig({
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
     },
+    */
 
     /* Test against mobile viewports. */
     // {

@@ -1,4 +1,10 @@
-import { EnhancedMultiplayerManager, GameSession, PlayerData, SharedObjective, ObjectiveTarget } from './multiplayer-enhanced';
+import {
+  EnhancedMultiplayerManager,
+  GameSession,
+  PlayerData,
+  SharedObjective,
+  ObjectiveTarget,
+} from './multiplayer-enhanced';
 import { AssignmentManager } from './assignments';
 import { ProgressTracker } from './progress';
 
@@ -93,7 +99,8 @@ export class CollaborativeFeatures {
       {
         id: 'collab_foundation_team',
         name: 'Team Foundation Preparation',
-        description: 'Work together to prepare multiple building foundations with precise coordination',
+        description:
+          'Work together to prepare multiple building foundations with precise coordination',
         type: 'cooperative',
         maxPlayers: 4,
         timeLimit: 900000, // 15 minutes
@@ -105,12 +112,12 @@ export class CollaborativeFeatures {
             target: {
               type: 'volume_balance',
               parameters: { tolerance: 0.02 },
-              tolerance: 0.02
+              tolerance: 0.02,
             },
             progress: new Map(),
             completed: false,
             completedBy: null,
-            completedAt: null
+            completedAt: null,
           },
           {
             id: 'team_efficiency',
@@ -119,13 +126,13 @@ export class CollaborativeFeatures {
             target: {
               type: 'area_level',
               parameters: { efficiency: 0.85 },
-              tolerance: 0.1
+              tolerance: 0.1,
             },
             progress: new Map(),
             completed: false,
             completedBy: null,
-            completedAt: null
-          }
+            completedAt: null,
+          },
         ],
         individualObjectives: new Map(),
         teamProgress: this.createInitialTeamProgress(),
@@ -134,7 +141,7 @@ export class CollaborativeFeatures {
           requireAllObjectives: true,
           maxTimeAllowed: 900000,
           minimumIndividualScore: 60,
-          collaborationRequirement: 70
+          collaborationRequirement: 70,
         },
         difficulty: 3,
         rewards: {
@@ -143,13 +150,14 @@ export class CollaborativeFeatures {
           speedBonusXP: 100,
           accuracyBonusXP: 100,
           collaborationBonusXP: 200,
-          achievements: ['team_player', 'foundation_master']
-        }
+          achievements: ['team_player', 'foundation_master'],
+        },
       },
       {
         id: 'competitive_grading',
         name: 'Competitive Site Grading',
-        description: 'Race to complete identical grading assignments with the highest accuracy',
+        description:
+          'Race to complete identical grading assignments with the highest accuracy',
         type: 'competitive',
         maxPlayers: 4,
         timeLimit: 600000, // 10 minutes
@@ -161,13 +169,13 @@ export class CollaborativeFeatures {
             target: {
               type: 'grade_road',
               parameters: { accuracy: 0.95 },
-              tolerance: 0.05
+              tolerance: 0.05,
             },
             progress: new Map(),
             completed: false,
             completedBy: null,
-            completedAt: null
-          }
+            completedAt: null,
+          },
         ],
         individualObjectives: new Map(),
         teamProgress: this.createInitialTeamProgress(),
@@ -176,7 +184,7 @@ export class CollaborativeFeatures {
           requireAllObjectives: false,
           maxTimeAllowed: 600000,
           minimumIndividualScore: 50,
-          collaborationRequirement: 0
+          collaborationRequirement: 0,
         },
         difficulty: 4,
         rewards: {
@@ -185,13 +193,14 @@ export class CollaborativeFeatures {
           speedBonusXP: 150,
           accuracyBonusXP: 200,
           collaborationBonusXP: 0,
-          achievements: ['speed_grader', 'precision_expert']
-        }
+          achievements: ['speed_grader', 'precision_expert'],
+        },
       },
       {
         id: 'collaborative_drainage',
         name: 'Collaborative Drainage System',
-        description: 'Design and implement a comprehensive drainage system across multiple zones',
+        description:
+          'Design and implement a comprehensive drainage system across multiple zones',
         type: 'collaborative',
         maxPlayers: 6,
         timeLimit: 1200000, // 20 minutes
@@ -203,12 +212,12 @@ export class CollaborativeFeatures {
             target: {
               type: 'create_channel',
               parameters: { connectivity: 1.0 },
-              tolerance: 0.1
+              tolerance: 0.1,
             },
             progress: new Map(),
             completed: false,
             completedBy: null,
-            completedAt: null
+            completedAt: null,
           },
           {
             id: 'water_flow_efficiency',
@@ -217,13 +226,13 @@ export class CollaborativeFeatures {
             target: {
               type: 'volume_balance',
               parameters: { flowEfficiency: 0.9 },
-              tolerance: 0.05
+              tolerance: 0.05,
             },
             progress: new Map(),
             completed: false,
             completedBy: null,
-            completedAt: null
-          }
+            completedAt: null,
+          },
         ],
         individualObjectives: new Map(),
         teamProgress: this.createInitialTeamProgress(),
@@ -232,7 +241,7 @@ export class CollaborativeFeatures {
           requireAllObjectives: true,
           maxTimeAllowed: 1200000,
           minimumIndividualScore: 70,
-          collaborationRequirement: 80
+          collaborationRequirement: 80,
         },
         difficulty: 5,
         rewards: {
@@ -241,9 +250,9 @@ export class CollaborativeFeatures {
           speedBonusXP: 100,
           accuracyBonusXP: 150,
           collaborationBonusXP: 300,
-          achievements: ['drainage_engineer', 'team_coordinator']
-        }
-      }
+          achievements: ['drainage_engineer', 'team_coordinator'],
+        },
+      },
     ];
 
     // Initialize individual objectives for each assignment
@@ -261,18 +270,20 @@ export class CollaborativeFeatures {
       collaborationBonus: 0,
       timeRemaining: 0,
       milestones: [],
-      contributions: new Map()
+      contributions: new Map(),
     };
   }
 
-  private initializeIndividualObjectives(assignment: CollaborativeAssignment): void {
+  private initializeIndividualObjectives(
+    assignment: CollaborativeAssignment
+  ): void {
     const session = this.multiplayerManager.getCurrentSession();
     if (!session) return;
 
     // Create individual objectives based on assignment type
     for (const [playerId, player] of session.players) {
       const objectives: SharedObjective[] = [];
-      
+
       if (assignment.type === 'cooperative') {
         objectives.push({
           id: `individual_${playerId}_contribution`,
@@ -281,12 +292,12 @@ export class CollaborativeFeatures {
           target: {
             type: 'volume_balance',
             parameters: { minContribution: 0.25 },
-            tolerance: 0.05
+            tolerance: 0.05,
           },
           progress: new Map([[playerId, 0]]),
           completed: false,
           completedBy: null,
-          completedAt: null
+          completedAt: null,
         });
       } else if (assignment.type === 'competitive') {
         objectives.push({
@@ -296,12 +307,12 @@ export class CollaborativeFeatures {
           target: {
             type: 'area_level',
             parameters: { accuracy: 0.9 },
-            tolerance: 0.05
+            tolerance: 0.05,
           },
           progress: new Map([[playerId, 0]]),
           completed: false,
           completedBy: null,
-          completedAt: null
+          completedAt: null,
         });
       } else if (assignment.type === 'collaborative') {
         objectives.push({
@@ -311,12 +322,12 @@ export class CollaborativeFeatures {
           target: {
             type: 'area_level',
             parameters: { quality: 0.85 },
-            tolerance: 0.1
+            tolerance: 0.1,
           },
           progress: new Map([[playerId, 0]]),
           completed: false,
           completedBy: null,
-          completedAt: null
+          completedAt: null,
         });
       }
 
@@ -329,16 +340,16 @@ export class CollaborativeFeatures {
     if (!assignment) return;
 
     this.currentAssignment = assignment;
-    
+
     // Initialize team progress
     this.initializeTeamProgress(assignment);
-    
+
     // Start progress tracking
     this.startProgressTracking();
-    
+
     // Create collaborative UI
     this.createCollaborativeUI();
-    
+
     // Notify all players
     this.notifyAssignmentStart(assignment);
   }
@@ -349,7 +360,7 @@ export class CollaborativeFeatures {
 
     assignment.teamProgress.timeRemaining = assignment.timeLimit;
     assignment.teamProgress.milestones = this.createMilestones(assignment);
-    
+
     // Initialize contributions for each player
     for (const [playerId, player] of session.players) {
       assignment.teamProgress.contributions.set(playerId, {
@@ -359,16 +370,16 @@ export class CollaborativeFeatures {
         toolsUsed: {},
         accuracyScore: 0,
         collaborationScore: 0,
-        leadershipActions: 0
+        leadershipActions: 0,
       });
-      
+
       assignment.teamProgress.individualScores.set(playerId, 0);
     }
   }
 
   private createMilestones(assignment: CollaborativeAssignment): Milestone[] {
     const milestones: Milestone[] = [];
-    
+
     if (assignment.type === 'cooperative') {
       milestones.push({
         id: 'milestone_25',
@@ -379,10 +390,10 @@ export class CollaborativeFeatures {
         completedBy: [],
         completedAt: null,
         requiredProgress: 25,
-        rewards: 50
+        rewards: 50,
       });
     }
-    
+
     milestones.push({
       id: 'milestone_50',
       name: 'Halfway Point',
@@ -392,9 +403,9 @@ export class CollaborativeFeatures {
       completedBy: [],
       completedAt: null,
       requiredProgress: 50,
-      rewards: 100
+      rewards: 100,
     });
-    
+
     milestones.push({
       id: 'milestone_75',
       name: 'Almost There',
@@ -404,7 +415,7 @@ export class CollaborativeFeatures {
       completedBy: [],
       completedAt: null,
       requiredProgress: 75,
-      rewards: 150
+      rewards: 150,
     });
 
     return milestones;
@@ -427,24 +438,26 @@ export class CollaborativeFeatures {
     if (!session) return;
 
     // Update time remaining
-    this.currentAssignment.teamProgress.timeRemaining = Math.max(0, 
-      this.currentAssignment.teamProgress.timeRemaining - 1000);
+    this.currentAssignment.teamProgress.timeRemaining = Math.max(
+      0,
+      this.currentAssignment.teamProgress.timeRemaining - 1000
+    );
 
     // Calculate overall completion
     this.calculateOverallCompletion();
-    
+
     // Update individual scores
     this.updateIndividualScores();
-    
+
     // Calculate team efficiency
     this.calculateTeamEfficiency();
-    
+
     // Check milestones
     this.checkMilestones();
-    
+
     // Update UI
     this.updateCollaborativeUI();
-    
+
     // Check completion
     this.checkAssignmentCompletion();
   }
@@ -461,26 +474,33 @@ export class CollaborativeFeatures {
         totalCompletion += 100;
       } else {
         // Calculate progress percentage
-        const progressSum = Array.from(objective.progress.values()).reduce((a, b) => a + b, 0);
+        const progressSum = Array.from(objective.progress.values()).reduce(
+          (a, b) => a + b,
+          0
+        );
         totalCompletion += Math.min(100, progressSum);
       }
       objectiveCount++;
     }
 
     // Calculate completion from individual objectives
-    for (const [playerId, objectives] of this.currentAssignment.individualObjectives) {
+    for (const [playerId, objectives] of this.currentAssignment
+      .individualObjectives) {
       for (const objective of objectives) {
         if (objective.completed) {
           totalCompletion += 100;
         } else {
-          const progressSum = Array.from(objective.progress.values()).reduce((a, b) => a + b, 0);
+          const progressSum = Array.from(objective.progress.values()).reduce(
+            (a, b) => a + b,
+            0
+          );
           totalCompletion += Math.min(100, progressSum);
         }
         objectiveCount++;
       }
     }
 
-    this.currentAssignment.teamProgress.overallCompletion = 
+    this.currentAssignment.teamProgress.overallCompletion =
       objectiveCount > 0 ? totalCompletion / objectiveCount : 0;
   }
 
@@ -491,22 +511,27 @@ export class CollaborativeFeatures {
     if (!session) return;
 
     for (const [playerId, player] of session.players) {
-      const contribution = this.currentAssignment.teamProgress.contributions.get(playerId);
+      const contribution =
+        this.currentAssignment.teamProgress.contributions.get(playerId);
       if (!contribution) continue;
 
       // Calculate individual score based on contribution
       let score = 0;
-      
+
       // Volume contribution score (40%)
-      const totalVolume = Array.from(this.currentAssignment.teamProgress.contributions.values())
-        .reduce((sum, contrib) => sum + contrib.volumeContributed, 0);
+      const totalVolume = Array.from(
+        this.currentAssignment.teamProgress.contributions.values()
+      ).reduce((sum, contrib) => sum + contrib.volumeContributed, 0);
       if (totalVolume > 0) {
         score += (contribution.volumeContributed / totalVolume) * 40;
       }
 
       // Objective completion score (40%)
-      const individualObjectives = this.currentAssignment.individualObjectives.get(playerId) || [];
-      const completedObjectives = individualObjectives.filter(obj => obj.completed).length;
+      const individualObjectives =
+        this.currentAssignment.individualObjectives.get(playerId) || [];
+      const completedObjectives = individualObjectives.filter(
+        obj => obj.completed
+      ).length;
       if (individualObjectives.length > 0) {
         score += (completedObjectives / individualObjectives.length) * 40;
       }
@@ -514,7 +539,10 @@ export class CollaborativeFeatures {
       // Collaboration score (20%)
       score += contribution.collaborationScore * 20;
 
-      this.currentAssignment.teamProgress.individualScores.set(playerId, Math.min(100, score));
+      this.currentAssignment.teamProgress.individualScores.set(
+        playerId,
+        Math.min(100, score)
+      );
     }
   }
 
@@ -525,31 +553,40 @@ export class CollaborativeFeatures {
     if (!session) return;
 
     const playerCount = session.players.size;
-    const timeElapsed = this.currentAssignment.timeLimit - this.currentAssignment.teamProgress.timeRemaining;
+    const timeElapsed =
+      this.currentAssignment.timeLimit -
+      this.currentAssignment.teamProgress.timeRemaining;
     const completion = this.currentAssignment.teamProgress.overallCompletion;
 
     // Calculate efficiency based on completion vs time and player coordination
-    const timeEfficiency = completion / (timeElapsed / this.currentAssignment.timeLimit);
+    const timeEfficiency =
+      completion / (timeElapsed / this.currentAssignment.timeLimit);
     const playerEfficiency = this.calculatePlayerCoordination();
 
-    this.currentAssignment.teamProgress.teamEfficiency = 
-      Math.min(100, (timeEfficiency * 0.6 + playerEfficiency * 0.4));
+    this.currentAssignment.teamProgress.teamEfficiency = Math.min(
+      100,
+      timeEfficiency * 0.6 + playerEfficiency * 0.4
+    );
   }
 
   private calculatePlayerCoordination(): number {
     if (!this.currentAssignment) return 0;
 
-    const contributions = Array.from(this.currentAssignment.teamProgress.contributions.values());
+    const contributions = Array.from(
+      this.currentAssignment.teamProgress.contributions.values()
+    );
     if (contributions.length === 0) return 0;
 
     // Calculate balance of contributions
     const volumes = contributions.map(c => c.volumeContributed);
     const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
-    const variance = volumes.reduce((sum, vol) => sum + Math.pow(vol - avgVolume, 2), 0) / volumes.length;
-    
+    const variance =
+      volumes.reduce((sum, vol) => sum + Math.pow(vol - avgVolume, 2), 0) /
+      volumes.length;
+
     // Lower variance = better coordination
     const coordinationScore = Math.max(0, 100 - (variance / avgVolume) * 50);
-    
+
     return coordinationScore;
   }
 
@@ -557,19 +594,21 @@ export class CollaborativeFeatures {
     if (!this.currentAssignment) return;
 
     for (const milestone of this.currentAssignment.teamProgress.milestones) {
-      if (!milestone.completed && 
-          this.currentAssignment.teamProgress.overallCompletion >= milestone.requiredProgress) {
-        
+      if (
+        !milestone.completed &&
+        this.currentAssignment.teamProgress.overallCompletion >=
+          milestone.requiredProgress
+      ) {
         milestone.completed = true;
         milestone.completedAt = Date.now();
-        
+
         const session = this.multiplayerManager.getCurrentSession();
         if (session) {
           milestone.completedBy = Array.from(session.players.keys());
-          
+
           // Award milestone rewards
           this.awardMilestoneRewards(milestone);
-          
+
           // Notify players
           this.notifyMilestoneCompletion(milestone);
         }
@@ -583,7 +622,10 @@ export class CollaborativeFeatures {
 
     for (const playerId of milestone.completedBy) {
       // Award XP through progress tracker
-      this.progressTracker.awardXP(milestone.rewards, `Milestone: ${milestone.name}`);
+      this.progressTracker.awardXP(
+        milestone.rewards,
+        `Milestone: ${milestone.name}`
+      );
     }
   }
 
@@ -629,7 +671,8 @@ export class CollaborativeFeatures {
 
     // Check required objectives
     if (criteria.requireAllObjectives) {
-      const allObjectivesComplete = this.currentAssignment.sharedObjectives.every(obj => obj.completed);
+      const allObjectivesComplete =
+        this.currentAssignment.sharedObjectives.every(obj => obj.completed);
       if (!allObjectivesComplete) {
         isComplete = false;
         completionReason = 'Not all objectives completed';
@@ -652,13 +695,13 @@ export class CollaborativeFeatures {
 
     // Award final rewards
     this.awardFinalRewards();
-    
+
     // Update progress tracker
     this.updateProgressTracker();
-    
+
     // Show completion UI
     this.showCompletionResults();
-    
+
     // Clean up
     this.cleanupAssignment();
   }
@@ -674,27 +717,30 @@ export class CollaborativeFeatures {
 
     for (const [playerId, player] of session.players) {
       let totalXP = rewards.baseXP;
-      
+
       // Add bonuses
       if (progress.teamEfficiency > 85) {
         totalXP += rewards.teamBonusXP;
       }
-      
+
       if (progress.timeRemaining > this.currentAssignment.timeLimit * 0.3) {
         totalXP += rewards.speedBonusXP;
       }
-      
+
       const individualScore = progress.individualScores.get(playerId) || 0;
       if (individualScore > 90) {
         totalXP += rewards.accuracyBonusXP;
       }
-      
+
       if (progress.collaborationBonus > 80) {
         totalXP += rewards.collaborationBonusXP;
       }
 
       // Award XP
-      this.progressTracker.awardXP(totalXP, `Collaborative Assignment: ${this.currentAssignment.name}`);
+      this.progressTracker.awardXP(
+        totalXP,
+        `Collaborative Assignment: ${this.currentAssignment.name}`
+      );
     }
   }
 
@@ -705,9 +751,12 @@ export class CollaborativeFeatures {
     if (!session) return;
 
     // Record assignment completion
-    const avgAccuracy = Array.from(this.currentAssignment.teamProgress.individualScores.values())
-      .reduce((sum, score) => sum + score, 0) / this.currentAssignment.teamProgress.individualScores.size;
-    
+    const avgAccuracy =
+      Array.from(
+        this.currentAssignment.teamProgress.individualScores.values()
+      ).reduce((sum, score) => sum + score, 0) /
+      this.currentAssignment.teamProgress.individualScores.size;
+
     this.progressTracker.recordAssignmentCompletion(avgAccuracy);
   }
 
@@ -717,7 +766,9 @@ export class CollaborativeFeatures {
     // This would typically show a completion modal
     console.log(`Assignment completed: ${this.currentAssignment.name}`);
     console.log(`Team score: ${this.currentAssignment.teamProgress.teamScore}`);
-    console.log(`Team efficiency: ${this.currentAssignment.teamProgress.teamEfficiency}`);
+    console.log(
+      `Team efficiency: ${this.currentAssignment.teamProgress.teamEfficiency}`
+    );
   }
 
   private cleanupAssignment(): void {
@@ -757,7 +808,10 @@ export class CollaborativeFeatures {
     if (!this.collaborativeUI || !this.currentAssignment) return;
 
     const progress = this.currentAssignment.teamProgress;
-    const timeRemaining = Math.max(0, Math.floor(progress.timeRemaining / 1000));
+    const timeRemaining = Math.max(
+      0,
+      Math.floor(progress.timeRemaining / 1000)
+    );
     const minutes = Math.floor(timeRemaining / 60);
     const seconds = timeRemaining % 60;
 
@@ -795,11 +849,15 @@ export class CollaborativeFeatures {
       </div>
       <div style="font-size: 12px; color: #ccc;">
         <strong>Milestones:</strong>
-        ${progress.milestones.map(milestone => `
+        ${progress.milestones
+          .map(
+            milestone => `
           <div style="margin: 2px 0;">
             ${milestone.completed ? '✅' : '⏳'} ${milestone.name}
           </div>
-        `).join('')}
+        `
+          )
+          .join('')}
       </div>
     `;
   }
@@ -816,23 +874,31 @@ export class CollaborativeFeatures {
     console.log(`Starting collaborative assignment: ${assignment.name}`);
   }
 
-  private getCollaborativeAssignment(id: string): CollaborativeAssignment | null {
+  private getCollaborativeAssignment(
+    id: string
+  ): CollaborativeAssignment | null {
     // This would typically fetch from a database or assignment registry
     // For now, returning null as a placeholder
     return null;
   }
 
-  public recordPlayerAction(playerId: string, action: string, metadata: any): void {
+  public recordPlayerAction(
+    playerId: string,
+    action: string,
+    metadata: any
+  ): void {
     if (!this.currentAssignment) return;
 
-    const contribution = this.currentAssignment.teamProgress.contributions.get(playerId);
+    const contribution =
+      this.currentAssignment.teamProgress.contributions.get(playerId);
     if (!contribution) return;
 
     // Update contribution based on action
     switch (action) {
       case 'terrain_modify':
         contribution.volumeContributed += Math.abs(metadata.heightChange);
-        contribution.toolsUsed[metadata.tool] = (contribution.toolsUsed[metadata.tool] || 0) + 1;
+        contribution.toolsUsed[metadata.tool] =
+          (contribution.toolsUsed[metadata.tool] || 0) + 1;
         break;
       case 'objective_complete':
         contribution.objectivesCompleted++;
@@ -853,4 +919,4 @@ export class CollaborativeFeatures {
   public cleanup(): void {
     this.cleanupAssignment();
   }
-} 
+}

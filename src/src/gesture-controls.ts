@@ -20,63 +20,90 @@ export class GestureControls {
   private target: THREE.Vector3 = new THREE.Vector3(0, 0, 0);
   private spherical: THREE.Spherical = new THREE.Spherical();
   private sphericalDelta: THREE.Spherical = new THREE.Spherical();
-  
+
   // Touch state
   private touches: Map<number, Touch> = new Map();
   private gestureState: GestureState = {
     isRotating: false,
     isZooming: false,
     isPanning: false,
-    gestureMode: 'none'
+    gestureMode: 'none',
   };
-  
+
   // Rotation settings
   private rotateSpeed = 1.0;
   private minDistance = 10;
   private maxDistance = 500; // Increased from 100 to allow much more zoom out
   private minPolarAngle = 0; // radians
   private maxPolarAngle = Math.PI; // radians
-  
+
   // Zoom settings
   private zoomSpeed = 2.0;
   private lastPinchDistance = 0;
-  
+
   // Pan settings
   private panSpeed = 0.5;
   private panDelta: THREE.Vector3 = new THREE.Vector3();
-  
+
   // Touch position tracking for single-finger rotation
   private lastTouchX = 0;
   private lastTouchY = 0;
-  
+
   // Callbacks
   private onGestureChangeCallback?: (state: GestureState) => void;
 
   constructor(camera: THREE.PerspectiveCamera, domElement: HTMLElement) {
     this.camera = camera;
     this.domElement = domElement;
-    
+
     // Initialize spherical coordinates from current camera position
-    this.spherical.setFromVector3(this.camera.position.clone().sub(this.target));
-    
+    this.spherical.setFromVector3(
+      this.camera.position.clone().sub(this.target)
+    );
+
     this.setupEventListeners();
   }
 
   private setupEventListeners(): void {
     // Touch events
-    this.domElement.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
-    this.domElement.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
-    this.domElement.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
-    
+    this.domElement.addEventListener(
+      'touchstart',
+      this.onTouchStart.bind(this),
+      { passive: false }
+    );
+    this.domElement.addEventListener('touchmove', this.onTouchMove.bind(this), {
+      passive: false,
+    });
+    this.domElement.addEventListener('touchend', this.onTouchEnd.bind(this), {
+      passive: false,
+    });
+
     // Mac trackpad gesture events (WebKit specific)
-    (this.domElement as any).addEventListener('gesturestart', this.onTrackpadGestureStart.bind(this), { passive: false });
-    (this.domElement as any).addEventListener('gesturechange', this.onTrackpadGestureChange.bind(this), { passive: false });
-    (this.domElement as any).addEventListener('gestureend', this.onTrackpadGestureEnd.bind(this), { passive: false });
-    
+    (this.domElement as any).addEventListener(
+      'gesturestart',
+      this.onTrackpadGestureStart.bind(this),
+      { passive: false }
+    );
+    (this.domElement as any).addEventListener(
+      'gesturechange',
+      this.onTrackpadGestureChange.bind(this),
+      { passive: false }
+    );
+    (this.domElement as any).addEventListener(
+      'gestureend',
+      this.onTrackpadGestureEnd.bind(this),
+      { passive: false }
+    );
+
     // Mouse events for desktop equivalents
-    this.domElement.addEventListener('wheel', this.onMouseWheel.bind(this), { passive: false });
-    this.domElement.addEventListener('contextmenu', this.onContextMenu.bind(this));
-    
+    this.domElement.addEventListener('wheel', this.onMouseWheel.bind(this), {
+      passive: false,
+    });
+    this.domElement.addEventListener(
+      'contextmenu',
+      this.onContextMenu.bind(this)
+    );
+
     // Ensure the canvas can receive touch events
     const canvas = this.domElement as HTMLCanvasElement;
     canvas.style.touchAction = 'none';
@@ -86,7 +113,7 @@ export class GestureControls {
   private onTouchStart(event: TouchEvent): void {
     console.log('Touch start - fingers:', event.touches.length);
     event.preventDefault();
-    
+
     // Single-finger touch for rotation
     if (event.touches.length === 1) {
       const touch = event.touches[0];
@@ -101,16 +128,16 @@ export class GestureControls {
 
   private onTouchMove(event: TouchEvent): void {
     event.preventDefault();
-    
+
     // Single-finger rotation
     if (event.touches.length === 1 && this.gestureState.isRotating) {
       const touch = event.touches[0];
       const deltaX = touch.clientX - this.lastTouchX;
       const deltaY = touch.clientY - this.lastTouchY;
-      
+
       // Apply rotation using the same logic as mouse rotation
       this.handleMouseRotation(deltaX, deltaY);
-      
+
       // Update last touch position
       this.lastTouchX = touch.clientX;
       this.lastTouchY = touch.clientY;
@@ -170,42 +197,46 @@ export class GestureControls {
     // Calculate center point of touches
     const centerX = (touch1.clientX + touch2.clientX) / 2;
     const centerY = (touch1.clientY + touch2.clientY) / 2;
-    
+
     // Get previous touches for delta calculation
     const prevTouches = Array.from(this.touches.values());
     if (prevTouches.length === 2) {
       const prevCenterX = (prevTouches[0].clientX + prevTouches[1].clientX) / 2;
       const prevCenterY = (prevTouches[0].clientY + prevTouches[1].clientY) / 2;
-      
+
       const deltaX = centerX - prevCenterX;
       const deltaY = centerY - prevCenterY;
-      
+
       // Apply rotation
-      this.sphericalDelta.theta -= 2 * Math.PI * deltaX / this.domElement.clientWidth * this.rotateSpeed;
-      this.sphericalDelta.phi -= 2 * Math.PI * deltaY / this.domElement.clientHeight * this.rotateSpeed;
+      this.sphericalDelta.theta -=
+        ((2 * Math.PI * deltaX) / this.domElement.clientWidth) *
+        this.rotateSpeed;
+      this.sphericalDelta.phi -=
+        ((2 * Math.PI * deltaY) / this.domElement.clientHeight) *
+        this.rotateSpeed;
     }
-    
+
     // Update stored touches
     this.touches.set(touch1.identifier, touch1);
     this.touches.set(touch2.identifier, touch2);
-    
+
     this.updateCamera();
   }
 
   private handleTwoFingerZoom(touch1: Touch, touch2: Touch): void {
     const currentDistance = this.getTouchDistance(touch1, touch2);
-    
+
     if (this.lastPinchDistance > 0) {
       const deltaDistance = currentDistance - this.lastPinchDistance;
       const zoomDelta = deltaDistance * this.zoomSpeed * 0.01;
-      
+
       // Apply zoom by adjusting spherical radius
       this.spherical.radius = Math.max(
         this.minDistance,
         Math.min(this.maxDistance, this.spherical.radius - zoomDelta)
       );
     }
-    
+
     this.lastPinchDistance = currentDistance;
     this.updateCamera();
   }
@@ -219,13 +250,13 @@ export class GestureControls {
   // Mouse wheel zoom for desktop
   private onMouseWheel(event: WheelEvent): void {
     event.preventDefault();
-    
+
     const zoomDelta = event.deltaY * 0.01 * this.zoomSpeed;
     this.spherical.radius = Math.max(
       this.minDistance,
       Math.min(this.maxDistance, this.spherical.radius + zoomDelta)
     );
-    
+
     this.updateCamera();
   }
 
@@ -236,8 +267,11 @@ export class GestureControls {
 
   // Mouse rotation for desktop (called from main controls)
   public handleMouseRotation(deltaX: number, deltaY: number): void {
-    this.sphericalDelta.theta -= 2 * Math.PI * deltaX / this.domElement.clientWidth * this.rotateSpeed;
-    this.sphericalDelta.phi -= 2 * Math.PI * deltaY / this.domElement.clientHeight * this.rotateSpeed;
+    this.sphericalDelta.theta -=
+      ((2 * Math.PI * deltaX) / this.domElement.clientWidth) * this.rotateSpeed;
+    this.sphericalDelta.phi -=
+      ((2 * Math.PI * deltaY) / this.domElement.clientHeight) *
+      this.rotateSpeed;
     this.updateCamera();
   }
 
@@ -246,26 +280,26 @@ export class GestureControls {
     // Calculate pan direction based on camera orientation
     const camera = this.camera;
     const position = camera.position.clone();
-    
+
     // Get camera's right and up vectors
     const right = new THREE.Vector3();
     const up = new THREE.Vector3();
-    
+
     camera.getWorldDirection(right);
     right.cross(camera.up).normalize();
     up.copy(camera.up);
-    
+
     // Calculate pan distance based on camera distance from target
     const distance = this.spherical.radius;
     const panScale = distance * this.panSpeed * 0.001;
-    
+
     // Calculate pan vector
     this.panDelta.copy(right).multiplyScalar(-deltaX * panScale);
     this.panDelta.addScaledVector(up, deltaY * panScale);
-    
+
     // Apply pan to target
     this.target.add(this.panDelta);
-    
+
     this.updateCamera();
   }
 
@@ -273,21 +307,27 @@ export class GestureControls {
     // Apply deltas to spherical coordinates
     this.spherical.theta += this.sphericalDelta.theta;
     this.spherical.phi += this.sphericalDelta.phi;
-    
+
     // Restrict phi to be within limits
-    this.spherical.phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this.spherical.phi));
-    
+    this.spherical.phi = Math.max(
+      this.minPolarAngle,
+      Math.min(this.maxPolarAngle, this.spherical.phi)
+    );
+
     // Make sure radius is within bounds
-    this.spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this.spherical.radius));
-    
+    this.spherical.radius = Math.max(
+      this.minDistance,
+      Math.min(this.maxDistance, this.spherical.radius)
+    );
+
     // Convert spherical to cartesian and position camera
     const position = new THREE.Vector3();
     position.setFromSpherical(this.spherical);
     position.add(this.target);
-    
+
     this.camera.position.copy(position);
     this.camera.lookAt(this.target);
-    
+
     // Reset deltas
     this.sphericalDelta.set(0, 0, 0);
     this.panDelta.set(0, 0, 0);
@@ -335,13 +375,31 @@ export class GestureControls {
 
   // Cleanup method
   public dispose(): void {
-    this.domElement.removeEventListener('touchstart', this.onTouchStart.bind(this));
-    this.domElement.removeEventListener('touchmove', this.onTouchMove.bind(this));
+    this.domElement.removeEventListener(
+      'touchstart',
+      this.onTouchStart.bind(this)
+    );
+    this.domElement.removeEventListener(
+      'touchmove',
+      this.onTouchMove.bind(this)
+    );
     this.domElement.removeEventListener('touchend', this.onTouchEnd.bind(this));
-    (this.domElement as any).removeEventListener('gesturestart', this.onTrackpadGestureStart.bind(this));
-    (this.domElement as any).removeEventListener('gesturechange', this.onTrackpadGestureChange.bind(this));
-    (this.domElement as any).removeEventListener('gestureend', this.onTrackpadGestureEnd.bind(this));
+    (this.domElement as any).removeEventListener(
+      'gesturestart',
+      this.onTrackpadGestureStart.bind(this)
+    );
+    (this.domElement as any).removeEventListener(
+      'gesturechange',
+      this.onTrackpadGestureChange.bind(this)
+    );
+    (this.domElement as any).removeEventListener(
+      'gestureend',
+      this.onTrackpadGestureEnd.bind(this)
+    );
     this.domElement.removeEventListener('wheel', this.onMouseWheel.bind(this));
-    this.domElement.removeEventListener('contextmenu', this.onContextMenu.bind(this));
+    this.domElement.removeEventListener(
+      'contextmenu',
+      this.onContextMenu.bind(this)
+    );
   }
-} 
+}

@@ -13,9 +13,13 @@ import { ProgressTracker } from './progress';
 import { uiPolishSystem } from './ui-polish';
 import { visualEnhancementSystem } from './visual-enhancements';
 import { responsiveDesignSystem } from './responsive-design';
-import { performanceOptimizer, performanceMonitorUI } from './performance-optimization';
+import {
+  performanceOptimizer,
+  performanceMonitorUI,
+} from './performance-optimization';
 import { GestureControls, type GestureState } from './gesture-controls';
 import { ToolManager } from './tool-manager';
+import { GuestUI } from './guest-ui';
 
 // Global variables that need to be available before any functions run
 let isGameReady = false;
@@ -46,16 +50,16 @@ if ((window as any).cutfillRenderer) {
   renderer = (window as any).cutfillRenderer;
 } else {
   try {
-    renderer = new THREE.WebGLRenderer({ 
+    renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false,
-      preserveDrawingBuffer: false
+      preserveDrawingBuffer: false,
     });
-    
+
     // Set up renderer
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x87ceeb); // Sky blue background
-    
+
     // Store globally to prevent duplicate creation
     (window as any).cutfillRenderer = renderer;
   } catch (error) {
@@ -95,12 +99,12 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('selectstart', e => e.preventDefault());
 
 // Handle WebGL context loss/restore
-canvas.addEventListener('webglcontextlost', (e) => {
+canvas.addEventListener('webglcontextlost', e => {
   console.warn('WebGL context lost:', e);
   e.preventDefault();
 });
 
-canvas.addEventListener('webglcontextrestored', (e) => {
+canvas.addEventListener('webglcontextrestored', e => {
   // The renderer should automatically handle context restore
 });
 
@@ -122,7 +126,7 @@ terrain.forceCleanRendering();
 // Change to unlit material for even lighting
 terrain.getSurfaceMesh().material = new THREE.MeshBasicMaterial({
   vertexColors: true,
-  side: THREE.DoubleSide
+  side: THREE.DoubleSide,
 });
 
 // Force update colors with new depth-based gradient
@@ -165,28 +169,32 @@ camera.far = 2000; // Increase far clipping plane
 camera.updateProjectionMatrix();
 
 // Terrain is now visible - turn off wireframe
-        (terrain.getSurfaceMesh().material as THREE.MeshBasicMaterial).wireframe = false;
+(terrain.getSurfaceMesh().material as THREE.MeshBasicMaterial).wireframe =
+  false;
 
 // Function to add scale references to the scene
 function addScaleReferences(scene: THREE.Scene): { markers: THREE.Group } {
   // Add scale markers with axis lines in corner
   const markerGroup = new THREE.Group();
-  
+
   // Add a permanent grid system to show scale
   addPermanentScaleGrid(scene, markerGroup);
-  
+
   // These will be dynamically positioned based on camera angle
   updateAxisPosition(markerGroup, camera);
-  
+
   scene.add(markerGroup);
-  
+
   return { markers: markerGroup };
 }
 
 // Function to add permanent scale grid and dimension markers
-function addPermanentScaleGrid(scene: THREE.Scene, markerGroup: THREE.Group): void {
+function addPermanentScaleGrid(
+  scene: THREE.Scene,
+  markerGroup: THREE.Group
+): void {
   const terrainSize = 120; // 120ft = 40yd x 40yd terrain
-  
+
   // Create distance markers at key points for scale reference
   for (let x = 0; x <= terrainSize; x += 50) {
     for (let z = 0; z <= terrainSize; z += 50) {
@@ -197,7 +205,7 @@ function addPermanentScaleGrid(scene: THREE.Scene, markerGroup: THREE.Group): vo
         const marker = new THREE.Mesh(markerGeometry, markerMaterial);
         marker.position.set(x, 0.5, z);
         scene.add(marker);
-        
+
         // Add distance text (simplified - using CSS2D would be better but keeping it simple)
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d')!;
@@ -207,7 +215,7 @@ function addPermanentScaleGrid(scene: THREE.Scene, markerGroup: THREE.Group): vo
         context.font = '16px Arial';
         context.textAlign = 'center';
         context.fillText(`${x}',${z}'`, 64, 32);
-        
+
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
         const sprite = new THREE.Sprite(spriteMaterial);
@@ -219,27 +227,25 @@ function addPermanentScaleGrid(scene: THREE.Scene, markerGroup: THREE.Group): vo
   }
 }
 
-
-
 // Grid removed - contour lines provide better elevation reference
 
 // Contour lines visibility toggle
 function toggleContourLines() {
   const contoursVisible = terrain.toggleContourLines();
-  
+
   // Update stats immediately
   updateContourStats();
-  
+
   // Update HUD indicator if it exists
   const contourIndicator = document.getElementById('contour-indicator');
   if (contourIndicator) {
     contourIndicator.textContent = `📈 Contours: ${contoursVisible ? 'ON' : 'OFF'}`;
   }
-  
+
   // Show brief notification with dynamic status
   const dynamicSettings = terrain.getDynamicContourSettings();
   const modeText = dynamicSettings.dynamic ? 'Dynamic' : 'Static';
-  
+
   const notification = document.createElement('div');
   notification.style.cssText = `
     position: fixed;
@@ -255,7 +261,7 @@ function toggleContourLines() {
   `;
   notification.innerHTML = `📈 Contour Lines ${contoursVisible ? 'Enabled' : 'Disabled'}<br><small>${modeText} Mode</small>`;
   document.body.appendChild(notification);
-  
+
   setTimeout(() => {
     if (notification.parentNode) {
       notification.parentNode.removeChild(notification);
@@ -264,28 +270,33 @@ function toggleContourLines() {
 }
 
 // Function to update axis position based on camera rotation
-function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveCamera): void {
+function updateAxisPosition(
+  markerGroup: THREE.Group,
+  camera: THREE.PerspectiveCamera
+): void {
   // Clear existing markers
   markerGroup.clear();
-  
+
   // Get camera direction to determine which corner to place axes
   const cameraDirection = new THREE.Vector3();
   camera.getWorldDirection(cameraDirection);
-  
+
   // Calculate camera distance for dynamic scaling
-  const cameraDistance = camera.position.distanceTo(new THREE.Vector3(50, 0, 50)); // Center of terrain
-  
+  const cameraDistance = camera.position.distanceTo(
+    new THREE.Vector3(50, 0, 50)
+  ); // Center of terrain
+
   // Determine corner position based on camera view (terrain spans 0,0 to 120,120)
   let cornerX = 0; // Near corner (origin)
   let cornerZ = 0; // Near corner (origin)
-  
+
   // Adjust corner based on camera direction to show axes at visible corner
-  if (cameraDirection.x > 0) cornerX = 120;  // Switch to far corner X if looking from negative X
-  if (cameraDirection.z > 0) cornerZ = 120;  // Switch to far corner Z if looking from negative Z
-  
+  if (cameraDirection.x > 0) cornerX = 120; // Switch to far corner X if looking from negative X
+  if (cameraDirection.z > 0) cornerZ = 120; // Switch to far corner Z if looking from negative Z
+
   const axisY = 2; // Height above terrain
   const zAxisLength = 20; // Shortened Z-axis to 20 feet
-  
+
   // Calculate dynamic segment spacing based on zoom level
   let segmentSpacing = 10; // Default 10ft segments
   if (cameraDistance < 25) {
@@ -295,32 +306,41 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   } else if (cameraDistance > 200) {
     segmentSpacing = 25; // 25ft segments when zoomed out
   }
-  
+
   // Helper function to create segmented axis lines with dynamic occlusion
-  function createSegmentedAxisLine(startPoint: THREE.Vector3, endPoint: THREE.Vector3, color: number, name: string): void {
+  function createSegmentedAxisLine(
+    startPoint: THREE.Vector3,
+    endPoint: THREE.Vector3,
+    color: number,
+    name: string
+  ): void {
     if (!terrain || !camera) return;
-    
+
     try {
       const raycaster = new THREE.Raycaster();
       raycaster.camera = camera;
-      
+
       const numSegments = 20; // Number of segments to check
-      const segments: { start: THREE.Vector3, end: THREE.Vector3, occluded: boolean }[] = [];
-      
+      const segments: {
+        start: THREE.Vector3;
+        end: THREE.Vector3;
+        occluded: boolean;
+      }[] = [];
+
       // Check each segment for occlusion
       for (let i = 0; i < numSegments; i++) {
         const t1 = i / numSegments;
         const t2 = (i + 1) / numSegments;
-        
+
         const segmentStart = startPoint.clone().lerp(endPoint, t1);
         const segmentEnd = startPoint.clone().lerp(endPoint, t2);
         const segmentMiddle = segmentStart.clone().lerp(segmentEnd, 0.5);
-        
+
         // Check if this segment is occluded
         raycaster.set(segmentMiddle, new THREE.Vector3(0, -1, 0));
         const surfaceMesh = terrain.getSurfaceMesh();
         let isOccluded = false;
-        
+
         if (surfaceMesh && surfaceMesh.geometry && surfaceMesh.material) {
           const intersections = raycaster.intersectObject(surfaceMesh, false);
           if (intersections.length > 0) {
@@ -328,38 +348,46 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
             isOccluded = intersectionHeight > axisY - 0.1;
           }
         }
-        
-        segments.push({ start: segmentStart, end: segmentEnd, occluded: isOccluded });
+
+        segments.push({
+          start: segmentStart,
+          end: segmentEnd,
+          occluded: isOccluded,
+        });
       }
-      
+
       // Group consecutive segments with same occlusion state
-      const lineGroups: { points: THREE.Vector3[], occluded: boolean }[] = [];
-      let currentGroup: { points: THREE.Vector3[], occluded: boolean } | null = null;
-      
+      const lineGroups: { points: THREE.Vector3[]; occluded: boolean }[] = [];
+      let currentGroup: { points: THREE.Vector3[]; occluded: boolean } | null =
+        null;
+
       segments.forEach((segment, index) => {
         if (!currentGroup || currentGroup.occluded !== segment.occluded) {
           // Start new group
           if (currentGroup) {
             lineGroups.push(currentGroup);
           }
-          currentGroup = { points: [segment.start.clone()], occluded: segment.occluded };
+          currentGroup = {
+            points: [segment.start.clone()],
+            occluded: segment.occluded,
+          };
         }
-        
+
         // Add end point to current group
         currentGroup.points.push(segment.end.clone());
       });
-      
+
       if (currentGroup) {
         lineGroups.push(currentGroup);
       }
-      
+
       // Create line objects for each group
       lineGroups.forEach(group => {
         if (group.points.length < 2) return;
-        
+
         const geometry = new THREE.BufferGeometry().setFromPoints(group.points);
         let material: THREE.Material;
-        
+
         if (group.occluded) {
           // Dashed line for occluded segments
           material = new THREE.LineDashedMaterial({
@@ -367,17 +395,17 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
             linewidth: 3,
             depthTest: false,
             dashSize: 1, // Smaller for dotted effect
-            gapSize: 1 // Smaller for dotted effect
+            gapSize: 1, // Smaller for dotted effect
           });
         } else {
           // Solid line for visible segments
           material = new THREE.LineBasicMaterial({
             color: color,
             linewidth: 3,
-            depthTest: false
+            depthTest: false,
           });
         }
-        
+
         const line = new THREE.Line(geometry, material);
         if (group.occluded) {
           line.computeLineDistances(); // Required for dashed lines
@@ -386,15 +414,17 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
         line.name = name;
         markerGroup.add(line);
       });
-      
     } catch (error) {
       console.warn(`Segmented axis creation failed for ${name}:`, error);
       // Fallback: create simple solid line
-      const geometry = new THREE.BufferGeometry().setFromPoints([startPoint, endPoint]);
+      const geometry = new THREE.BufferGeometry().setFromPoints([
+        startPoint,
+        endPoint,
+      ]);
       const material = new THREE.LineBasicMaterial({
         color: color,
         linewidth: 3,
-        depthTest: false
+        depthTest: false,
       });
       const line = new THREE.Line(geometry, material);
       line.renderOrder = 1000;
@@ -404,153 +434,195 @@ function updateAxisPosition(markerGroup: THREE.Group, camera: THREE.PerspectiveC
   }
 
   // Helper function to create text markers
-  function createTextMarker(text: string, x: number, y: number, z: number = 0.5, color: string = '#000000', small: boolean = false): THREE.Sprite {
+  function createTextMarker(
+    text: string,
+    x: number,
+    y: number,
+    z: number = 0.5,
+    color: string = '#000000',
+    small: boolean = false
+  ): THREE.Sprite {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
     canvas.width = small ? 128 : 192; // Doubled
     canvas.height = small ? 64 : 96; // Doubled
-    
+
     // Style matching contours
     context.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black
     context.fillRect(0, 0, canvas.width, canvas.height);
-    
+
     // Add border
     context.strokeStyle = color;
     context.lineWidth = 1;
     context.strokeRect(0, 0, canvas.width, canvas.height);
-    
+
     // Add text
     context.fillStyle = '#FFFFFF';
     context.font = small ? 'bold 24px Arial' : 'bold 32px Arial'; // Doubled
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.fillText(text, canvas.width / 2, canvas.height / 2);
-    
+
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ 
+    const material = new THREE.SpriteMaterial({
       map: texture,
-      depthTest: false
+      depthTest: false,
     });
     const sprite = new THREE.Sprite(material);
     sprite.position.set(x, y, z);
     sprite.scale.set(small ? 10 : 16, small ? 5 : 8, 1); // Doubled
     sprite.renderOrder = 1002;
-    
+
     return sprite;
   }
-  
+
   // Create X-axis line (red) - full length across terrain (0 to 120) with dynamic segmentation
   const xAxisStartPoint = new THREE.Vector3(0, axisY, cornerZ);
   const xAxisEndPoint = new THREE.Vector3(120, axisY, cornerZ);
   createSegmentedAxisLine(xAxisStartPoint, xAxisEndPoint, 0xff0000, 'xAxis');
-  
+
   // Calculate dynamic intervals for X-axis
   const totalXSegments = Math.floor(120 / segmentSpacing);
   const targetLabels = 4; // Aim for 4 labels per axis
   const xLabelInterval = Math.max(1, Math.ceil(totalXSegments / targetLabels));
-  const xSegmentInterval = Math.max(1, Math.ceil(totalXSegments / (targetLabels * 2))); // Up to 2x labels worth of segments
-  
+  const xSegmentInterval = Math.max(
+    1,
+    Math.ceil(totalXSegments / (targetLabels * 2))
+  ); // Up to 2x labels worth of segments
+
   // Add X-axis segment markings and labels
   let segmentCount = 0;
   let displayedSegmentCount = 0;
   for (let x = 0; x <= 120; x += segmentSpacing) {
-    
     // Only show segment if it passes the culling interval
     if (segmentCount % xSegmentInterval === 0) {
       const tickHeight = 1;
       const tickGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(x, axisY, cornerZ),
-        new THREE.Vector3(x, axisY + tickHeight, cornerZ)
+        new THREE.Vector3(x, axisY + tickHeight, cornerZ),
       ]);
-      const tickMaterial = new THREE.LineBasicMaterial({ 
-        color: 0xff0000, 
+      const tickMaterial = new THREE.LineBasicMaterial({
+        color: 0xff0000,
         linewidth: 1,
-        depthTest: false // Always render on top
+        depthTest: false, // Always render on top
       });
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
       tickLine.renderOrder = 1001; // High render order to appear on top
       markerGroup.add(tickLine);
-      
+
       // Add number label every other displayed segment (skip 0ft and 100ft)
       if (displayedSegmentCount % 2 === 0) {
         // Use actual coordinate value
-        if (x !== 0 && x !== 120) { // Skip 0yd and 40yd endpoints
+        if (x !== 0 && x !== 120) {
+          // Skip 0yd and 40yd endpoints
           const labelValue = (x / 3).toFixed(1); // Convert to yards
-          const labelText = segmentSpacing >= 5 ? `${labelValue}yd` : `${labelValue}`;
+          const labelText =
+            segmentSpacing >= 5 ? `${labelValue}yd` : `${labelValue}`;
           const labelOffset = cornerZ > 0 ? -2 : 2;
-          markerGroup.add(createTextMarker(labelText, x, axisY + 3, cornerZ + labelOffset, '#ff0000', false)); // false = larger labels
+          markerGroup.add(
+            createTextMarker(
+              labelText,
+              x,
+              axisY + 3,
+              cornerZ + labelOffset,
+              '#ff0000',
+              false
+            )
+          ); // false = larger labels
         }
       }
       displayedSegmentCount++;
     }
     segmentCount++;
   }
-  
+
   // Create Z-axis line (green) - full length across terrain (0 to 120) with dynamic segmentation
   const zAxisStartPoint = new THREE.Vector3(cornerX, axisY, 0);
   const zAxisEndPoint = new THREE.Vector3(cornerX, axisY, 120);
   createSegmentedAxisLine(zAxisStartPoint, zAxisEndPoint, 0x00ff00, 'zAxis');
-  
+
   // Calculate dynamic intervals for Z-axis (same as X-axis)
   const zLabelInterval = xLabelInterval;
   const zSegmentInterval = xSegmentInterval;
-  
+
   // Add Z-axis segment markings and labels
   segmentCount = 0;
   displayedSegmentCount = 0;
   for (let z = 0; z <= 120; z += segmentSpacing) {
-    
     // Only show segment if it passes the culling interval
     if (segmentCount % zSegmentInterval === 0) {
       const tickHeight = 1;
       const tickGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(cornerX, axisY, z),
-        new THREE.Vector3(cornerX, axisY + tickHeight, z)
+        new THREE.Vector3(cornerX, axisY + tickHeight, z),
       ]);
-      const tickMaterial = new THREE.LineBasicMaterial({ 
-        color: 0x00ff00, 
+      const tickMaterial = new THREE.LineBasicMaterial({
+        color: 0x00ff00,
         linewidth: 1,
-        depthTest: false // Always render on top
+        depthTest: false, // Always render on top
       });
       const tickLine = new THREE.Line(tickGeometry, tickMaterial);
       tickLine.renderOrder = 1001; // High render order to appear on top
       markerGroup.add(tickLine);
-      
+
       // Add number label every other displayed segment (skip 0ft and 100ft)
       if (displayedSegmentCount % 2 === 0) {
         // Use actual coordinate value
-        if (z !== 0 && z !== 120) { // Skip 0yd and 40yd endpoints
+        if (z !== 0 && z !== 120) {
+          // Skip 0yd and 40yd endpoints
           const labelValue = (z / 3).toFixed(1); // Convert to yards
-          const labelText = segmentSpacing >= 5 ? `${labelValue}yd` : `${labelValue}`;
+          const labelText =
+            segmentSpacing >= 5 ? `${labelValue}yd` : `${labelValue}`;
           const labelOffset = cornerX > 0 ? -2 : 2;
-          markerGroup.add(createTextMarker(labelText, cornerX + labelOffset, axisY + 3, z, '#00ff00', false)); // false = larger labels
+          markerGroup.add(
+            createTextMarker(
+              labelText,
+              cornerX + labelOffset,
+              axisY + 3,
+              z,
+              '#00ff00',
+              false
+            )
+          ); // false = larger labels
         }
       }
       displayedSegmentCount++;
     }
     segmentCount++;
   }
-  
+
   // Create Y-axis line (blue) - shortened to 20 feet
   const yAxisGeometry = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(cornerX, axisY, cornerZ),
-    new THREE.Vector3(cornerX, axisY + zAxisLength, cornerZ)
+    new THREE.Vector3(cornerX, axisY + zAxisLength, cornerZ),
   ]);
-  const yAxisMaterial = new THREE.LineBasicMaterial({ 
-    color: 0x0000ff, 
+  const yAxisMaterial = new THREE.LineBasicMaterial({
+    color: 0x0000ff,
     linewidth: 3,
-    depthTest: false // Always render on top
+    depthTest: false, // Always render on top
   });
   const yAxisLine = new THREE.Line(yAxisGeometry, yAxisMaterial);
   yAxisLine.renderOrder = 1000; // High render order to appear on top
   markerGroup.add(yAxisLine);
-  
+
   // Y-axis tick marks and labels removed - contour lines provide elevation information
 
   // Add main axis endpoint labels (simple axis names)
-  markerGroup.add(createTextMarker('X', 120 + 6, axisY + 2, cornerZ, '#ff0000'));
-  markerGroup.add(createTextMarker('Z', cornerX, axisY + 2, 120 + 6, '#00ff00'));
-  markerGroup.add(createTextMarker('Y', cornerX - 4, axisY + zAxisLength + 3, cornerZ, '#0000ff'));
+  markerGroup.add(
+    createTextMarker('X', 120 + 6, axisY + 2, cornerZ, '#ff0000')
+  );
+  markerGroup.add(
+    createTextMarker('Z', cornerX, axisY + 2, 120 + 6, '#00ff00')
+  );
+  markerGroup.add(
+    createTextMarker(
+      'Y',
+      cornerX - 4,
+      axisY + zAxisLength + 3,
+      cornerZ,
+      '#0000ff'
+    )
+  );
 }
 
 // Show authentication immediately on startup
@@ -569,21 +641,22 @@ function animate() {
     if (scaleReferences && scaleReferences.markers) {
       updateAxisPosition(scaleReferences.markers, camera);
     }
-    
+
     // Update dynamic contour lines based on camera zoom level
     terrain.updateContoursForZoom();
-    
+
     // Update contour stats display (throttled)
-    if (Date.now() % 30 === 0) { // Update every ~30 frames (about twice per second at 60fps)
+    if (Date.now() % 30 === 0) {
+      // Update every ~30 frames (about twice per second at 60fps)
       updateContourStats();
     }
-    
+
     // Auto-save terrain if needed (throttled to prevent excessive saves)
     terrain.autoSaveIfNeeded();
-  
-  // Update operation preview animation
-  updateOperationPreview();
-    
+
+    // Update operation preview animation
+    updateOperationPreview();
+
     renderer.render(scene, camera);
   } catch (error) {
     console.error('Render error:', error);
@@ -605,10 +678,10 @@ window.addEventListener('beforeunload', () => {
     renderer.dispose();
     (window as any).cutfillRenderer = null;
   }
-  
+
   // Clean up performance optimizer
   performanceOptimizer.dispose();
-  
+
   // Clean up UI systems
   uiPolishSystem.cleanup();
   visualEnhancementSystem.cleanup();
@@ -641,7 +714,7 @@ setTimeout(() => {
     (appElement as HTMLElement).style.zIndex = '1002';
     (appElement as HTMLElement).style.pointerEvents = 'none';
   }
-  
+
   // Hide any auth UI that might be covering
   const authContainers = document.querySelectorAll('#auth-container');
   authContainers.forEach(container => {
@@ -666,7 +739,7 @@ if (appDiv && appDiv.innerHTML.trim() === '') {
       </button>
     </div>
   `;
-  
+
   // Add global function to force initialization
   (window as any).forceInitGame = () => {
     if (!isGameReady) {
@@ -731,41 +804,53 @@ const assignmentUI = new AssignmentUI(assignmentManager);
     terrain.reset();
     terrain.forceCleanRendering();
     console.log('🎯 Terrain reset and cleaned');
-  }
+  },
 };
 
 // Add debugging helper functions
 (window as any).checkAssignmentStatus = () => {
   const assignment = assignmentManager.getCurrentAssignment();
   const progress = assignmentManager.getProgress();
-  
+
   if (!assignment || !progress) {
     console.log("❌ No active assignment. Press 'A' to select one.");
     return;
   }
-  
-  console.log("📋 Current Assignment:", assignment.name);
-  console.log("🎯 Objectives:");
+
+  console.log('📋 Current Assignment:', assignment.name);
+  console.log('🎯 Objectives:');
   progress.objectives.forEach((obj, i) => {
-    console.log(`  ${i + 1}. ${obj.completed ? '✅' : '⏳'} ${obj.description}`);
+    console.log(
+      `  ${i + 1}. ${obj.completed ? '✅' : '⏳'} ${obj.description}`
+    );
     console.log(`     Score: ${obj.score.toFixed(1)}% (Need 80%+ to complete)`);
     if (obj.target && obj.target.width) {
-      console.log(`     Target area: ${obj.target.width}x${obj.target.height} ft at (${obj.target.x}, ${obj.target.z})`);
+      console.log(
+        `     Target area: ${obj.target.width}x${obj.target.height} ft at (${obj.target.x}, ${obj.target.z})`
+      );
       console.log(`     Tolerance: ±${obj.tolerance} ft`);
     }
   });
-  console.log("📊 Overall Score:", progress.currentScore.toFixed(1) + "%");
-  console.log("🗿 Planning Mode:", terrain.isInPlanningMode() ? "ENABLED (press Enter to apply changes)" : "DISABLED");
-  console.log("📏 Volume Data:", progress.volumeData);
+  console.log('📊 Overall Score:', progress.currentScore.toFixed(1) + '%');
+  console.log(
+    '🗿 Planning Mode:',
+    terrain.isInPlanningMode()
+      ? 'ENABLED (press Enter to apply changes)'
+      : 'DISABLED'
+  );
+  console.log('📏 Volume Data:', progress.volumeData);
 };
 
 (window as any).checkTerrain = () => {
   const hasChanges = terrain.hasPendingChanges();
   const planningMode = terrain.isInPlanningMode();
-  console.log("🗿 Terrain Status:");
-  console.log("  Planning Mode:", planningMode ? "ENABLED" : "DISABLED");
-  console.log("  Pending Changes:", hasChanges ? "YES (press Enter to apply)" : "NO");
-  console.log("  Volume Data:", terrain.calculateVolumeDifference());
+  console.log('🗿 Terrain Status:');
+  console.log('  Planning Mode:', planningMode ? 'ENABLED' : 'DISABLED');
+  console.log(
+    '  Pending Changes:',
+    hasChanges ? 'YES (press Enter to apply)' : 'NO'
+  );
+  console.log('  Volume Data:', terrain.calculateVolumeDifference());
 };
 
 // Create progress tracker
@@ -773,17 +858,17 @@ const progressTracker = new ProgressTracker();
 
 // Set up assignment callbacks
 assignmentManager.setCallbacks({
-  onProgressUpdate: (progress) => {
+  onProgressUpdate: progress => {
     updateAssignmentProgress(progress);
   },
-  onObjectiveComplete: (objective) => {
+  onObjectiveComplete: objective => {
     showObjectiveComplete(objective);
   },
-  onAssignmentComplete: (progress) => {
+  onAssignmentComplete: progress => {
     showAssignmentComplete(progress);
     // Award XP for assignment completion
     progressTracker.recordAssignmentCompletion(progress.currentScore);
-  }
+  },
 });
 
 // Set up progress tracker callbacks
@@ -791,12 +876,12 @@ progressTracker.setCallbacks({
   onLevelUp: (newLevel, oldLevel) => {
     showLevelUp(newLevel, oldLevel);
   },
-  onAchievementUnlocked: (achievement) => {
+  onAchievementUnlocked: achievement => {
     showAchievementUnlocked(achievement);
   },
   onXPGained: (xp, source) => {
     showXPGained(xp, source);
-  }
+  },
 });
 
 // Initialize authentication (simplified for testing)
@@ -814,21 +899,21 @@ try {
         initializeGame();
       }
       updateUserInfo(authState.user);
-      
+
       // Set user ID in terrain system for database persistence
       const userId = authState.user.id || authState.user.email || 'guest';
       terrain.setUserId(userId);
-      
+
       // Save any pending modifications that occurred before login
       terrain.savePendingModifications();
-      
+
       // Enable auto-save
       terrain.setAutoSave(true);
     } else {
       // User is not authenticated - show login UI
       isGameReady = false; // Ensure game doesn't start without authentication
       authUI.show();
-      
+
       // Hide main game UI until authenticated
       const appElement = document.querySelector('#app');
       if (appElement) {
@@ -847,16 +932,19 @@ function initializeGame() {
   // Setup game controls and event handlers
   setupGameControls();
   setupUI();
-  
+
   // Initialize volume display
   updateVolumeDisplay();
-  
+
   // Set up periodic UI visibility check
   setInterval(() => {
     const appElement = document.querySelector('#app');
     if (appElement) {
       const computedStyle = window.getComputedStyle(appElement);
-      if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+      if (
+        computedStyle.display === 'none' ||
+        computedStyle.visibility === 'hidden'
+      ) {
         (appElement as HTMLElement).style.display = 'block';
         (appElement as HTMLElement).style.visibility = 'visible';
         (appElement as HTMLElement).style.opacity = '1';
@@ -872,10 +960,19 @@ function updateUserInfo(user: {
 }) {
   const userInfoElement = document.getElementById('user-info');
   if (userInfoElement) {
-    const username = user.user_metadata?.username || user.email || 'Anonymous';
-    userInfoElement.textContent = `👤 ${username}`;
+    // Check if we have guest data first
+    const guestData = localStorage.getItem('guestData');
+    if (guestData) {
+      const parsedGuestData = JSON.parse(guestData);
+      const ageRangeText = parsedGuestData.ageRange ? ` (${parsedGuestData.ageRange})` : '';
+      userInfoElement.textContent = `👤 ${parsedGuestData.username || 'Guest'}${ageRangeText}`;
+    } else {
+      // Regular authenticated user
+      const username = user.user_metadata?.username || user.email || 'Anonymous';
+      userInfoElement.textContent = `👤 ${username}`;
+    }
   }
-  
+
   // Load user progress
   const userId = user.email || 'guest';
   loadUserProgress(userId);
@@ -895,30 +992,31 @@ async function loadUserProgress(userId: string) {
 // Helper function to generate depth limit information for tooltips
 function getDepthLimitInfo(toolName: string, depthLimits: any): string {
   const currentChange = depthLimits.currentDepth;
-  const isAtLimit = (toolName === 'cut' && depthLimits.atCutLimit) || 
-                    (toolName === 'fill' && depthLimits.atFillLimit);
-  
+  const isAtLimit =
+    (toolName === 'cut' && depthLimits.atCutLimit) ||
+    (toolName === 'fill' && depthLimits.atFillLimit);
+
   if (isAtLimit) {
-    return toolName === 'cut' ? 
-      '🚨 5ft Cut Limit Reached!' : 
-      '🚨 5ft Fill Limit Reached!';
+    return toolName === 'cut'
+      ? '🚨 5ft Cut Limit Reached!'
+      : '🚨 5ft Fill Limit Reached!';
   }
-  
+
   if (toolName === 'cut') {
     const remaining = depthLimits.remainingCutDepth;
-    return remaining > 0 ? 
-      `⛏️ ${remaining.toFixed(1)}ft more cut available` : 
-      `⛏️ Can cut ${Math.abs(currentChange - (-5)).toFixed(1)}ft here`;
+    return remaining > 0
+      ? `⛏️ ${remaining.toFixed(1)}ft more cut available`
+      : `⛏️ Can cut ${Math.abs(currentChange - -5).toFixed(1)}ft here`;
   } else {
     const remaining = depthLimits.remainingFillHeight;
-    return remaining > 0 ? 
-      `🏔️ ${remaining.toFixed(1)}ft more fill available` : 
-      `🏔️ Can fill ${(5 - currentChange).toFixed(1)}ft here`;
+    return remaining > 0
+      ? `🏔️ ${remaining.toFixed(1)}ft more fill available`
+      : `🏔️ Can fill ${(5 - currentChange).toFixed(1)}ft here`;
   }
 }
 
 // Processing indicator functions for terrain operations
-function showProcessingIndicator(){
+function showProcessingIndicator() {
   let indicator = document.getElementById('processing-indicator');
   if (!indicator) {
     indicator = document.createElement('div');
@@ -951,7 +1049,7 @@ function showProcessingIndicator(){
       <span>Processing terrain changes...</span>
     `;
     document.body.appendChild(indicator);
-    
+
     // Add CSS animation if not already present
     if (!document.getElementById('spinner-style')) {
       const style = document.createElement('style');
@@ -968,7 +1066,7 @@ function showProcessingIndicator(){
   indicator.style.display = 'flex';
 }
 
-function hideProcessingIndicator(){
+function hideProcessingIndicator() {
   const indicator = document.getElementById('processing-indicator');
   if (indicator) {
     indicator.style.display = 'none';
@@ -979,7 +1077,7 @@ function hideProcessingIndicator(){
 function setupGameControls() {
   // Initialize gesture controls
   gestureControls = new GestureControls(camera, renderer.domElement);
-  
+
   // Set up gesture state change callback
   gestureControls.onGestureChange((state: GestureState) => {
     updateInteractionMode(false, false, state);
@@ -996,26 +1094,28 @@ function setupGameControls() {
 
   // Mouse event handlers
   renderer.domElement.addEventListener('mousedown', event => {
-    if (event.button === 0) { // Left click
+    if (event.button === 0) {
+      // Left click
       isMouseDown = true;
-      
+
       // Check for modifier keys
       if (event.ctrlKey || event.metaKey) {
         // Ctrl + drag = Apply tool
         isModifying = true;
         lastMousePosition = null; // Reset for new modification
         terrain.startModification();
-        
+
         // Start real-time volume tracking
         startRealTimeVolumeUpdates();
-        
+
         // Hide preview when starting to modify
         hideOperationPreview();
       } else {
         // Default: Rotate camera
         isModifying = false;
       }
-    } else if (event.button === 2) { // Right click
+    } else if (event.button === 2) {
+      // Right click
       isMouseDown = true;
       isModifying = false; // Right click is for camera rotation
       // Hide preview during camera rotation
@@ -1029,24 +1129,30 @@ function setupGameControls() {
     // Enhanced hover tooltips for terrain information AND operation preview
     // Hide tooltips when cut or fill tools are engaged (selected) OR when Ctrl is held (modification mode)
     const currentToolName = precisionToolManager.getCurrentToolName();
-    const isCutOrFillToolEngaged = currentToolName === 'cut' || currentToolName === 'fill';
+    const isCutOrFillToolEngaged =
+      currentToolName === 'cut' || currentToolName === 'fill';
     const isCtrlHeld = event.ctrlKey || event.metaKey;
-    
-    if (!isMouseDown && !isModifying && !isCutOrFillToolEngaged && !isCtrlHeld) {
+
+    if (
+      !isMouseDown &&
+      !isModifying &&
+      !isCutOrFillToolEngaged &&
+      !isCtrlHeld
+    ) {
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObject(terrain.getSurfaceMesh());
-      
+
       if (intersects.length > 0) {
         const point = intersects[0].point;
         const layerInfo = terrain.getLayerAtPosition(point.x, point.z);
         const height = point.y;
         const relativeHeight = height - terrain.getTargetElevation();
-        
+
         // Show operation preview when hovering
         showOperationPreview(point);
-        
+
         let tooltip = document.getElementById('terrain-tooltip');
         if (!tooltip) {
           tooltip = document.createElement('div');
@@ -1065,7 +1171,7 @@ function setupGameControls() {
           `;
           document.body.appendChild(tooltip);
         }
-        
+
         // Determine zone type
         let zoneType = '';
         let zoneColor = '';
@@ -1082,25 +1188,37 @@ function setupGameControls() {
           zoneType = 'Cut Zone';
           zoneColor = '#2196F3';
         }
-        
-                // Get current tool info for preview
+
+        // Get current tool info for preview
         const currentTool = precisionToolManager.getCurrentTool();
         const toolSettings = currentTool.getSettings();
-        const toolAction = toolSettings.name === 'cut' ? 'Cut (Remove Earth)' : 'Fill (Add Earth)';
-        
+        const toolAction =
+          toolSettings.name === 'cut'
+            ? 'Cut (Remove Earth)'
+            : 'Fill (Add Earth)';
+
         // Calculate preview volume
         const previewVolume = calculatePreviewVolume(point);
-        const volumeEstimate = toolSettings.name === 'cut' ? previewVolume.cutPreview : previewVolume.fillPreview;
-        
+        const volumeEstimate =
+          toolSettings.name === 'cut'
+            ? previewVolume.cutPreview
+            : previewVolume.fillPreview;
+
         // Get depth limits at this position
         const depthLimits = terrain.getDepthLimitsAtPosition(point.x, point.z);
-        
+
         tooltip.innerHTML = `
           <div style="color: ${zoneColor}; font-weight: bold; margin-bottom: 4px;">🎯 ${zoneType}</div>
           <div><strong>Elevation:</strong> ${(height / 3).toFixed(2)} yd</div>
           <div><strong>Relative:</strong> ${relativeHeight > 0 ? '+' : ''}${(relativeHeight / 3).toFixed(2)} yd</div>
           <div><strong>Material:</strong> ${layerInfo}</div>
-          <div style="margin-top: 4px; padding: 4px; background: rgba(${toolSettings.color.slice(1).match(/.{2}/g)!.map(h => parseInt(h, 16)).join(',')}, 0.2); border-radius: 3px; border-left: 3px solid ${toolSettings.color};">
+          <div style="margin-top: 4px; padding: 4px; background: rgba(${toolSettings.color
+            .slice(1)
+            .match(/.{2}/g)!
+            .map(h => parseInt(h, 16))
+            .join(
+              ','
+            )}, 0.2); border-radius: 3px; border-left: 3px solid ${toolSettings.color};">
             <div style="font-weight: bold; color: ${toolSettings.color};">${toolSettings.icon} ${toolSettings.displayName}</div>
             <div style="font-size: 10px; color: #ccc;">Preview: ${toolAction} Volume (Ctrl+drag to apply)</div>
             <div style="font-size: 10px; color: #ccc;">
@@ -1120,7 +1238,7 @@ function setupGameControls() {
             ${relativeHeight > 0.5 ? '⬆️ Excavate to reduce fill' : relativeHeight < -0.5 ? '⬇️ Add material to cut' : '✅ Near target elevation'}
           </div>
         `;
-        
+
         tooltip.style.display = 'block';
         tooltip.style.left = `${event.clientX + 15}px`;
         tooltip.style.top = `${event.clientY - 10}px`;
@@ -1137,54 +1255,65 @@ function setupGameControls() {
     }
 
     if (isMouseDown) {
-      if (event.buttons === 1) { // Left mouse button is down
+      if (event.buttons === 1) {
+        // Left mouse button is down
         if (event.ctrlKey || event.metaKey || isModifying) {
           // Ctrl/Cmd + drag = Terrain modification
           mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
           mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
           raycaster.setFromCamera(mouse, camera);
-          const intersects = raycaster.intersectObject(terrain.getSurfaceMesh());
+          const intersects = raycaster.intersectObject(
+            terrain.getSurfaceMesh()
+          );
 
           if (intersects.length > 0) {
             const point = intersects[0].point;
-            const direction = lastMousePosition ? point.clone().sub(lastMousePosition).normalize() : undefined;
-            
+            const direction = lastMousePosition
+              ? point.clone().sub(lastMousePosition).normalize()
+              : undefined;
+
             // Apply current tool
             precisionToolManager.applyCurrentTool(
-              point.x, 
-              point.z, 
-              modificationStrength, 
+              point.x,
+              point.z,
+              modificationStrength,
               terrain.getBrushSettings().size
             );
-            
+
             // Save terrain modification to database
             terrain.saveModificationToDatabase(
               point.x,
               point.z,
-              precisionToolManager.getCurrentToolName() === 'cut' ? -modificationStrength : modificationStrength,
+              precisionToolManager.getCurrentToolName() === 'cut'
+                ? -modificationStrength
+                : modificationStrength,
               precisionToolManager.getCurrentToolName()
             );
-            
+
             // Track tool usage for assignment
-            assignmentManager.addToolUsage(precisionToolManager.getCurrentToolName());
-            
+            assignmentManager.addToolUsage(
+              precisionToolManager.getCurrentToolName()
+            );
+
             // Track tool usage for progress
-            progressTracker.recordToolUsage(precisionToolManager.getCurrentToolName());
-            
+            progressTracker.recordToolUsage(
+              precisionToolManager.getCurrentToolName()
+            );
+
             // Track volume movement for progress
             const volumeData = terrain.calculateVolumeDifference();
             const volumeChange = Math.abs(volumeData.cut + volumeData.fill);
             progressTracker.recordVolumeMove(volumeChange / 27); // Convert cubic feet to cubic yards
-            
+
             updateVolumeDisplay();
-            
+
             // Update overlay button states based on terrain state
             updateOverlayButtonStates();
-            
+
             // Start real-time volume updates during modification
             startRealTimeVolumeUpdates();
-            
+
             // Update arrow counts when tools are used
             // Removed: updateArrowCounts();
 
@@ -1192,14 +1321,18 @@ function setupGameControls() {
 
             // Send to multiplayer if in session
             if (multiplayerManager.isInSession()) {
-              multiplayerManager.sendTerrainModification(point.x, point.z, modificationStrength);
+              multiplayerManager.sendTerrainModification(
+                point.x,
+                point.z,
+                modificationStrength
+              );
             }
           }
         } else {
           // Check for modifier keys to determine interaction mode
           const deltaX = event.clientX - lastMouseX;
           const deltaY = event.clientY - lastMouseY;
-          
+
           if (event.shiftKey) {
             // Shift + drag = Pan camera
             gestureControls.handleMousePan(deltaX, deltaY);
@@ -1208,7 +1341,8 @@ function setupGameControls() {
             gestureControls.handleMouseRotation(deltaX, deltaY);
           }
         }
-      } else if (event.buttons === 2) { // Right mouse button is down
+      } else if (event.buttons === 2) {
+        // Right mouse button is down
         // Right click drag = Camera rotation using gesture controls
         const deltaX = event.clientX - lastMouseX;
         const deltaY = event.clientY - lastMouseY;
@@ -1223,8 +1357,11 @@ function setupGameControls() {
 
   // Add keyboard event listeners for modifier key feedback
   document.addEventListener('keyup', event => {
-    if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
-    updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
+    if (
+      !gestureControls.getGestureState().isRotating &&
+      !gestureControls.getGestureState().isZooming
+    ) {
+      updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
     }
   });
 
@@ -1241,26 +1378,33 @@ function setupGameControls() {
 
   // Mouse move to update interaction mode
   renderer.domElement.addEventListener('mousemove', event => {
-    if (!isMouseDown && !gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
+    if (
+      !isMouseDown &&
+      !gestureControls.getGestureState().isRotating &&
+      !gestureControls.getGestureState().isZooming
+    ) {
       updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
     }
-      });
+  });
 
   renderer.domElement.addEventListener('mouseup', () => {
     const wasModifying = isModifying;
     isMouseDown = false;
     isModifying = false;
-    
+
     // Finalize volume updates if we were modifying
     if (wasModifying) {
       // Force a final volume update
       updateVolumeDisplay(true);
       isRealTimeUpdating = false;
     }
-    
+
     // Reset interaction mode when mouse is released (only if not in gesture mode)
-    if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
-    updateInteractionMode(false, false);
+    if (
+      !gestureControls.getGestureState().isRotating &&
+      !gestureControls.getGestureState().isZooming
+    ) {
+      updateInteractionMode(false, false);
     }
   });
 
@@ -1269,13 +1413,16 @@ function setupGameControls() {
     event.preventDefault();
   });
 
-    // Keyboard controls
+  // Keyboard controls
   document.addEventListener('keydown', event => {
     // Update interaction mode display (only if not in gesture mode)
-    if (!gestureControls.getGestureState().isRotating && !gestureControls.getGestureState().isZooming) {
-    updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
+    if (
+      !gestureControls.getGestureState().isRotating &&
+      !gestureControls.getGestureState().isZooming
+    ) {
+      updateInteractionMode(event.shiftKey, event.ctrlKey || event.metaKey);
     }
-    
+
     switch (event.key.toLowerCase()) {
       case 'w':
         terrain.toggleWireframe();
@@ -1309,7 +1456,7 @@ function setupGameControls() {
           terrain.saveCurrentState().then(success => {
             updateVolumeDisplay();
             // Removed: updateArrowCounts();
-            
+
             // Show brief confirmation
             const notification = document.createElement('div');
             notification.style.cssText = `
@@ -1324,9 +1471,11 @@ function setupGameControls() {
               font-size: 14px;
               animation: slideInOut 2s ease-in-out;
             `;
-            notification.textContent = success ? '💾 State Saved to Database!' : '❌ Database Save Failed';
+            notification.textContent = success
+              ? '💾 State Saved to Database!'
+              : '❌ Database Save Failed';
             document.body.appendChild(notification);
-            
+
             setTimeout(() => {
               if (notification.parentNode) {
                 notification.parentNode.removeChild(notification);
@@ -1355,7 +1504,7 @@ function setupGameControls() {
       case 'g':
         terrain.regenerateTerrain();
         updateVolumeDisplay(true); // Force immediate volume update to show 0.00 for new terrain
-        
+
         // Show brief notification
         const notification = document.createElement('div');
         notification.style.cssText = `
@@ -1373,13 +1522,13 @@ function setupGameControls() {
         `;
         notification.innerHTML = '🌍 New terrain generated!';
         document.body.appendChild(notification);
-        
+
         setTimeout(() => {
           if (document.body.contains(notification)) {
             document.body.removeChild(notification);
           }
         }, 2000);
-        
+
         if (multiplayerManager.isInSession()) {
           multiplayerManager.sendTerrainReset();
         }
@@ -1452,15 +1601,19 @@ function setupGameControls() {
             terrain.applyPendingChanges();
             // Update the planning UI buttons
             const refreshPlanButtons = () => {
-              const planControlsDiv = document.getElementById('plan-controls') as HTMLDivElement;
+              const planControlsDiv = document.getElementById(
+                'plan-controls'
+              ) as HTMLDivElement;
               if (planControlsDiv) {
-                planControlsDiv.style.display = terrain.hasPendingChanges() ? 'block' : 'none';
+                planControlsDiv.style.display = terrain.hasPendingChanges()
+                  ? 'block'
+                  : 'none';
               }
             };
             refreshPlanButtons();
             // Force immediate volume update to show new cumulative totals
             updateVolumeDisplay(true);
-            
+
             hideProcessingIndicator();
           }, 10);
         }
@@ -1469,10 +1622,18 @@ function setupGameControls() {
   });
 
   // Brush settings controls
-  const brushSizeSlider = document.getElementById('brush-size') as HTMLInputElement;
-  const brushStrengthSlider = document.getElementById('brush-strength') as HTMLInputElement;
-  const brushShapeSelect = document.getElementById('brush-shape') as HTMLSelectElement;
-  const brushFalloffSelect = document.getElementById('brush-falloff') as HTMLSelectElement;
+  const brushSizeSlider = document.getElementById(
+    'brush-size'
+  ) as HTMLInputElement;
+  const brushStrengthSlider = document.getElementById(
+    'brush-strength'
+  ) as HTMLInputElement;
+  const brushShapeSelect = document.getElementById(
+    'brush-shape'
+  ) as HTMLSelectElement;
+  const brushFalloffSelect = document.getElementById(
+    'brush-falloff'
+  ) as HTMLSelectElement;
 
   if (brushSizeSlider) {
     brushSizeSlider.addEventListener('input', () => {
@@ -1483,7 +1644,9 @@ function setupGameControls() {
 
   if (brushStrengthSlider) {
     brushStrengthSlider.addEventListener('input', () => {
-      terrain.setBrushSettings({ strength: parseFloat(brushStrengthSlider.value) });
+      terrain.setBrushSettings({
+        strength: parseFloat(brushStrengthSlider.value),
+      });
       modificationStrength = parseFloat(brushStrengthSlider.value);
       updateBrushDisplay();
     });
@@ -1491,21 +1654,29 @@ function setupGameControls() {
 
   if (brushShapeSelect) {
     brushShapeSelect.addEventListener('change', () => {
-      terrain.setBrushSettings({ shape: brushShapeSelect.value as 'circle' | 'square' });
+      terrain.setBrushSettings({
+        shape: brushShapeSelect.value as 'circle' | 'square',
+      });
       updateBrushDisplay();
     });
   }
 
   if (brushFalloffSelect) {
     brushFalloffSelect.addEventListener('change', () => {
-      terrain.setBrushSettings({ falloff: brushFalloffSelect.value as 'linear' | 'smooth' | 'sharp' });
+      terrain.setBrushSettings({
+        falloff: brushFalloffSelect.value as 'linear' | 'smooth' | 'sharp',
+      });
       updateBrushDisplay();
     });
   }
 
   // Target elevation controls
-  const targetElevationSlider = document.getElementById('target-elevation') as HTMLInputElement;
-  const targetElevationValue = document.getElementById('target-elevation-value');
+  const targetElevationSlider = document.getElementById(
+    'target-elevation'
+  ) as HTMLInputElement;
+  const targetElevationValue = document.getElementById(
+    'target-elevation-value'
+  );
 
   if (targetElevationSlider && targetElevationValue) {
     targetElevationSlider.addEventListener('input', () => {
@@ -1516,10 +1687,18 @@ function setupGameControls() {
   }
 
   // Contour line controls
-  const toggleContoursBtn = document.getElementById('toggle-contours-btn') as HTMLButtonElement;
-  const contourIntervalSlider = document.getElementById('contour-interval') as HTMLInputElement;
-  const contourIntervalValue = document.getElementById('contour-interval-value');
-  const dynamicContoursCheckbox = document.getElementById('dynamic-contours-checkbox') as HTMLInputElement;
+  const toggleContoursBtn = document.getElementById(
+    'toggle-contours-btn'
+  ) as HTMLButtonElement;
+  const contourIntervalSlider = document.getElementById(
+    'contour-interval'
+  ) as HTMLInputElement;
+  const contourIntervalValue = document.getElementById(
+    'contour-interval-value'
+  );
+  const dynamicContoursCheckbox = document.getElementById(
+    'dynamic-contours-checkbox'
+  ) as HTMLInputElement;
 
   if (toggleContoursBtn) {
     toggleContoursBtn.addEventListener('click', () => {
@@ -1552,13 +1731,13 @@ function setupGameControls() {
       btn.addEventListener('click', () => {
         precisionToolManager.setCurrentTool(toolName);
         updateToolDisplay();
-        
+
         // Update brush settings based on tool defaults
         const tool = precisionToolManager.getCurrentTool();
         const settings = tool.getSettings();
         terrain.setBrushSettings({
           size: settings.defaultSize,
-          strength: settings.defaultStrength
+          strength: settings.defaultStrength,
         });
         updateBrushDisplay();
       });
@@ -1568,9 +1747,15 @@ function setupGameControls() {
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
-  const saveStateBtn = document.getElementById('save-state-btn') as HTMLButtonElement;
-  const loadTerrainBtn = document.getElementById('load-terrain-btn') as HTMLButtonElement;
-  const assignmentsBtn = document.getElementById('assignments-btn') as HTMLButtonElement;
+  const saveStateBtn = document.getElementById(
+    'save-state-btn'
+  ) as HTMLButtonElement;
+  const loadTerrainBtn = document.getElementById(
+    'load-terrain-btn'
+  ) as HTMLButtonElement;
+  const assignmentsBtn = document.getElementById(
+    'assignments-btn'
+  ) as HTMLButtonElement;
 
   if (undoBtn) {
     undoBtn.addEventListener('click', () => {
@@ -1590,9 +1775,10 @@ function setupGameControls() {
     exportBtn.addEventListener('click', () => {
       const terrainData = terrain.exportTerrain();
       const dataStr = JSON.stringify(terrainData, null, 2);
-      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-      
-      const exportFileDefaultName = `terrain_${new Date().toISOString().slice(0,10)}.json`;
+      const dataUri =
+        'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+      const exportFileDefaultName = `terrain_${new Date().toISOString().slice(0, 10)}.json`;
       const linkElement = document.createElement('a');
       linkElement.setAttribute('href', dataUri);
       linkElement.setAttribute('download', exportFileDefaultName);
@@ -1605,7 +1791,7 @@ function setupGameControls() {
       const success = await terrain.saveCurrentState();
       updateVolumeDisplay(); // This will now show 0/0/0
       // Removed: updateArrowCounts(); // This will now show 0 arrows
-      
+
       // Show confirmation message
       const notification = document.createElement('div');
       notification.style.cssText = `
@@ -1620,7 +1806,7 @@ function setupGameControls() {
         font-size: 14px;
         animation: slideInOut 2s ease-in-out;
       `;
-      
+
       if (success) {
         notification.innerHTML = `
           <div style="font-size: 18px; margin-bottom: 5px;">💾 State Saved to Database!</div>
@@ -1634,9 +1820,9 @@ function setupGameControls() {
           <div style="font-size: 12px; color: #ddd; margin-top: 5px;">Local state still updated</div>
         `;
       }
-      
+
       document.body.appendChild(notification);
-      
+
       // Remove notification after 3 seconds
       setTimeout(() => {
         if (document.body.contains(notification)) {
@@ -1654,7 +1840,7 @@ function setupGameControls() {
           alert('No saved terrain states found.');
           return;
         }
-        
+
         // Create a simple selection modal
         const modal = document.createElement('div');
         modal.style.cssText = `
@@ -1669,7 +1855,7 @@ function setupGameControls() {
           justify-content: center;
           z-index: 2000;
         `;
-        
+
         const content = document.createElement('div');
         content.style.cssText = `
           background: #2a2a2a;
@@ -1681,7 +1867,7 @@ function setupGameControls() {
           overflow-y: auto;
           font-family: Arial, sans-serif;
         `;
-        
+
         let html = '<h2>📂 Load Saved Terrain</h2>';
         savedStates.forEach(state => {
           const date = new Date(state.created_at).toLocaleString();
@@ -1691,17 +1877,18 @@ function setupGameControls() {
                  onclick="loadSelectedTerrain('${state.id}')">
               <div style="font-weight: bold;">${state.name}</div>
               <div style="font-size: 12px; color: #ccc;">Created: ${date}</div>
-              ${volume ? `<div style="font-size: 12px; color: #ccc;">Cut: ${(volume.cut/27).toFixed(1)} yd³, Fill: ${(volume.fill/27).toFixed(1)} yd³</div>` : ''}
+              ${volume ? `<div style="font-size: 12px; color: #ccc;">Cut: ${(volume.cut / 27).toFixed(1)} yd³, Fill: ${(volume.fill / 27).toFixed(1)} yd³</div>` : ''}
             </div>
           `;
         });
-        
-        html += '<button onclick="closeLoadModal()" style="margin-top: 15px; padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>';
-        
+
+        html +=
+          '<button onclick="closeLoadModal()" style="margin-top: 15px; padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>';
+
         content.innerHTML = html;
         modal.appendChild(content);
         document.body.appendChild(modal);
-        
+
         // Global functions for the modal
         (window as any).loadSelectedTerrain = async (terrainId: string) => {
           const success = await terrain.loadTerrainFromDatabase(terrainId);
@@ -1710,7 +1897,7 @@ function setupGameControls() {
             // updateArrowCounts();
           }
           document.body.removeChild(modal);
-          
+
           // Show notification
           const notification = document.createElement('div');
           notification.style.cssText = `
@@ -1724,20 +1911,21 @@ function setupGameControls() {
             z-index: 1001;
             font-family: Arial, sans-serif;
           `;
-          notification.textContent = success ? '✅ Terrain Loaded!' : '❌ Load Failed';
+          notification.textContent = success
+            ? '✅ Terrain Loaded!'
+            : '❌ Load Failed';
           document.body.appendChild(notification);
-          
+
           setTimeout(() => {
             if (document.body.contains(notification)) {
               document.body.removeChild(notification);
             }
           }, 3000);
         };
-        
+
         (window as any).closeLoadModal = () => {
           document.body.removeChild(modal);
         };
-        
       } catch (error) {
         console.error('Error loading terrain states:', error);
         alert('Failed to load terrain states.');
@@ -1754,11 +1942,54 @@ function setupGameControls() {
   // Logout button
   const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      // Sign out the user
-      authService.signOut();
+    logoutBtn.addEventListener('click', async () => {
+      // ALWAYS clear Supabase session first
+      try {
+        await authService.signOut();
+        console.log('Signed out of Supabase');
+      } catch (error) {
+        console.log('Error signing out:', error);
+      }
+
+      // Check if user is a guest
+      const guestData = localStorage.getItem('guestData');
+      const isGuest = !!guestData;
+
+      if (isGuest) {
+        // Handle guest logout - show guest registration form
+        localStorage.removeItem('guestData');
+        localStorage.removeItem('hasVisited');
+        
+        // Show logout notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #4CAF50;
+          color: white;
+          padding: 15px;
+          border-radius: 4px;
+          z-index: 1001;
+          font-size: 14px;
+          font-family: Arial, sans-serif;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        `;
+        notification.textContent = '👋 Guest session ended - redirecting to setup';
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+        
+        return;
+      }
+
+      // Handle authenticated user logout - also show guest registration
+      // Clear all data to ensure clean state
+      localStorage.clear();
       
-      // Show a logout notification
+      // Show logout notification
       const notification = document.createElement('div');
       notification.style.cssText = `
         position: fixed;
@@ -1773,30 +2004,36 @@ function setupGameControls() {
         font-family: Arial, sans-serif;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       `;
-      notification.textContent = '👋 Logged out successfully';
+      notification.textContent = '👋 Logged out - redirecting to guest setup';
       document.body.appendChild(notification);
-      
+
       setTimeout(() => {
-        if (document.body.contains(notification)) {
-          document.body.removeChild(notification);
-        }
-      }, 3000);
+        window.location.reload();
+      }, 1500);
     });
   }
 
   // Performance control event listeners
-  const qualitySelector = document.getElementById('quality-selector') as HTMLSelectElement;
-  const autoOptimizeCheckbox = document.getElementById('auto-optimize') as HTMLInputElement;
+  const qualitySelector = document.getElementById(
+    'quality-selector'
+  ) as HTMLSelectElement;
+  const autoOptimizeCheckbox = document.getElementById(
+    'auto-optimize'
+  ) as HTMLInputElement;
 
   if (qualitySelector) {
-    qualitySelector.addEventListener('change', (e) => {
-      const quality = (e.target as HTMLSelectElement).value as 'low' | 'medium' | 'high' | 'ultra';
+    qualitySelector.addEventListener('change', e => {
+      const quality = (e.target as HTMLSelectElement).value as
+        | 'low'
+        | 'medium'
+        | 'high'
+        | 'ultra';
       performanceOptimizer.updateConfig({ renderQuality: quality });
     });
   }
 
   if (autoOptimizeCheckbox) {
-    autoOptimizeCheckbox.addEventListener('change', (e) => {
+    autoOptimizeCheckbox.addEventListener('change', e => {
       const enabled = (e.target as HTMLInputElement).checked;
       // Auto-optimization is controlled by the performance optimizer internally
     });
@@ -1808,7 +2045,7 @@ function setupGameControls() {
     const fpsDisplay = document.getElementById('fps-display');
     if (fpsDisplay) {
       fpsDisplay.textContent = metrics.fps.toFixed(1);
-      
+
       // Color-code FPS
       if (metrics.fps >= 50) {
         fpsDisplay.style.color = '#4CAF50';
@@ -2096,25 +2333,25 @@ function setupUI() {
   updateInteractionMode(false, false); // Initialize with no modifiers
   updateProgressDisplay(); // Initialize progress display
   updateContourStats(); // Initialize contour line stats
-  
+
   // Initialize UI polish system
   uiPolishSystem.initialize();
-  
+
   // Initialize assignment UI
   assignmentUI.initialize();
-  
+
   // Initialize visual enhancement system
   visualEnhancementSystem.initialize();
-  
+
   // Initialize responsive design system
   responsiveDesignSystem.initialize();
-  
+
   // Initialize performance optimization
   performanceOptimizer.initialize(renderer, scene, camera);
-  
+
   // Initialize enhanced accessibility features
   initializeAccessibilityFeatures();
-  
+
   // Ensure UI stays visible with proper z-index
   const appElement = document.querySelector('#app');
   if (appElement) {
@@ -2125,7 +2362,7 @@ function setupUI() {
     (appElement as HTMLElement).style.position = 'relative';
     (appElement as HTMLElement).style.pointerEvents = 'none';
   }
-  
+
   // Hide any auth containers that might be covering the UI
   const authContainers = document.querySelectorAll('#auth-container');
   authContainers.forEach(container => {
@@ -2133,8 +2370,12 @@ function setupUI() {
   });
 
   // Target elevation controls
-  const targetElevationSlider = document.getElementById('target-elevation') as HTMLInputElement;
-  const targetElevationValue = document.getElementById('target-elevation-value');
+  const targetElevationSlider = document.getElementById(
+    'target-elevation'
+  ) as HTMLInputElement;
+  const targetElevationValue = document.getElementById(
+    'target-elevation-value'
+  );
 
   if (targetElevationSlider && targetElevationValue) {
     targetElevationSlider.addEventListener('input', () => {
@@ -2146,7 +2387,9 @@ function setupUI() {
 
   // Tool buttons
 
-  const toggleMenuBtn = document.getElementById('toggle-menu-btn') as HTMLButtonElement;
+  const toggleMenuBtn = document.getElementById(
+    'toggle-menu-btn'
+  ) as HTMLButtonElement;
   const mainPanel = document.getElementById('main-ui-panel') as HTMLDivElement;
   let isMenuVisible = true;
 
@@ -2172,24 +2415,35 @@ function setupUI() {
   toolSection?.appendChild(planControlsDiv);
 
   const saveBtn = document.getElementById('save-plan-btn') as HTMLButtonElement;
-  const cancelBtn = document.getElementById('cancel-plan-btn') as HTMLButtonElement;
+  const cancelBtn = document.getElementById(
+    'cancel-plan-btn'
+  ) as HTMLButtonElement;
 
-  function refreshPlanButtons(){
+  function refreshPlanButtons() {
     const hasPlan = terrain.hasPendingChanges();
     planControlsDiv.style.display = hasPlan ? 'block' : 'none';
 
     const undoEl = document.getElementById('undo-btn') as HTMLButtonElement;
     const redoEl = document.getElementById('redo-btn') as HTMLButtonElement;
 
-    if(undoEl){ undoEl.disabled = hasPlan; undoEl.style.opacity = hasPlan ? '0.4':'1'; }
-    if(redoEl){ redoEl.disabled = hasPlan; redoEl.style.opacity = hasPlan ? '0.4':'1'; }
-    const toolBtns = Array.from(document.querySelectorAll('.tool-btn')) as HTMLButtonElement[];
-    toolBtns.forEach(btn => { btn.disabled = hasPlan; (btn as HTMLButtonElement).style.opacity = hasPlan? '0.4':'1'; });
+    if (undoEl) {
+      undoEl.disabled = hasPlan;
+      undoEl.style.opacity = hasPlan ? '0.4' : '1';
+    }
+    if (redoEl) {
+      redoEl.disabled = hasPlan;
+      redoEl.style.opacity = hasPlan ? '0.4' : '1';
+    }
+    const toolBtns = Array.from(
+      document.querySelectorAll('.tool-btn')
+    ) as HTMLButtonElement[];
+    toolBtns.forEach(btn => {
+      btn.disabled = hasPlan;
+      (btn as HTMLButtonElement).style.opacity = hasPlan ? '0.4' : '1';
+    });
   }
 
-
-
-  saveBtn?.addEventListener('click', ()=>{
+  saveBtn?.addEventListener('click', () => {
     showProcessingIndicator();
     // Use setTimeout to allow UI to update before processing
     setTimeout(() => {
@@ -2197,17 +2451,17 @@ function setupUI() {
       refreshPlanButtons();
       // Force immediate volume update to show new cumulative totals
       updateVolumeDisplay(true);
-      
+
       hideProcessingIndicator();
     }, 10);
   });
-  cancelBtn?.addEventListener('click', ()=>{
+  cancelBtn?.addEventListener('click', () => {
     terrain.discardPendingChanges();
     refreshPlanButtons();
   });
 
   setInterval(refreshPlanButtons, 1000);
-  
+
   // Initialize volume display to show 0,0,0 on fresh load
   updateVolumeDisplay(true);
 }
@@ -2224,57 +2478,74 @@ function updateVolumeDisplay(forceUpdate = false) {
   if (volumeUpdateThrottle && !forceUpdate) {
     clearTimeout(volumeUpdateThrottle);
   }
-  
-  volumeUpdateThrottle = setTimeout(() => {
-    performVolumeUpdate();
-    volumeUpdateThrottle = null;
-  }, forceUpdate ? 0 : 100); // 100ms throttle, immediate if forced
+
+  volumeUpdateThrottle = setTimeout(
+    () => {
+      performVolumeUpdate();
+      volumeUpdateThrottle = null;
+    },
+    forceUpdate ? 0 : 100
+  ); // 100ms throttle, immediate if forced
 }
 
 function performVolumeUpdate() {
   const volumes = terrain.calculateVolumeDifference();
   const info = document.getElementById('volume-info');
-  
+
   if (!info) return;
 
   // Convert volumes from cubic feet to cubic yards (1 yd³ = 27 ft³)
   const cutYards = volumes.cut / 27;
   const fillYards = volumes.fill / 27;
   const netYards = volumes.net / 27;
-  
+
   // Apply precision threshold to eliminate floating point noise
   const PRECISION_THRESHOLD = 0.001; // 0.001 cubic yards threshold
-  
+
   const volumesYards = {
     cut: Math.abs(cutYards) < PRECISION_THRESHOLD ? 0 : Math.max(0, cutYards),
-    fill: Math.abs(fillYards) < PRECISION_THRESHOLD ? 0 : Math.max(0, fillYards),
-    net: Math.abs(netYards) < PRECISION_THRESHOLD ? 0 : netYards
+    fill:
+      Math.abs(fillYards) < PRECISION_THRESHOLD ? 0 : Math.max(0, fillYards),
+    net: Math.abs(netYards) < PRECISION_THRESHOLD ? 0 : netYards,
   };
 
   // Calculate change rates in cubic yards
   const now = Date.now();
   const timeDelta = (now - lastVolumeUpdate) / 1000; // Convert to seconds
-  const cutRate = timeDelta > 0 ? (volumesYards.cut - (lastVolumes.cut / 27)) / timeDelta : 0;
-  const fillRate = timeDelta > 0 ? (volumesYards.fill - (lastVolumes.fill / 27)) / timeDelta : 0;
-  
+  const cutRate =
+    timeDelta > 0 ? (volumesYards.cut - lastVolumes.cut / 27) / timeDelta : 0;
+  const fillRate =
+    timeDelta > 0 ? (volumesYards.fill - lastVolumes.fill / 27) / timeDelta : 0;
+
   // Calculate efficiency metrics
   const totalVolume = volumesYards.cut + volumesYards.fill;
-  const efficiency = totalVolume > 0 ? (Math.min(volumesYards.cut, volumesYards.fill) / Math.max(volumesYards.cut, volumesYards.fill)) * 100 : 0;
+  const efficiency =
+    totalVolume > 0
+      ? (Math.min(volumesYards.cut, volumesYards.fill) /
+          Math.max(volumesYards.cut, volumesYards.fill)) *
+        100
+      : 0;
   const netBalance = Math.abs(volumesYards.net);
-  const balanceStatus = netBalance < 0.1 ? '✅ Balanced' : netBalance < 0.5 ? '⚠️ Minor Imbalance' : '❌ Major Imbalance';
-  
+  const balanceStatus =
+    netBalance < 0.1
+      ? '✅ Balanced'
+      : netBalance < 0.5
+        ? '⚠️ Minor Imbalance'
+        : '❌ Major Imbalance';
+
   // Determine activity status (threshold adjusted for cubic yards)
   const isActive = Math.abs(cutRate) > 0.01 || Math.abs(fillRate) > 0.01;
   const activityIndicator = isActive ? '🔄' : '⏸️';
-  
+
   // Calculate total rate of earthwork
   const totalRate = Math.abs(cutRate) + Math.abs(fillRate);
-  const rateDisplay = totalRate > 0.01 ? `📊 ${totalRate.toFixed(2)} yd³/s` : '';
-  
+  const rateDisplay =
+    totalRate > 0.01 ? `📊 ${totalRate.toFixed(2)} yd³/s` : '';
+
   // Enhanced visual feedback with animations
   const cutColor = cutRate > 0.01 ? '#1976D2' : '#2196F3'; // Brighter when actively cutting
   const fillColor = fillRate > 0.01 ? '#C62828' : '#D32F2F'; // Brighter when actively filling
-  
+
   info.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
       <strong>Volume Analysis</strong>
@@ -2321,7 +2592,7 @@ function performVolumeUpdate() {
 // Enhanced real-time volume updates during operations
 function startRealTimeVolumeUpdates() {
   if (isRealTimeUpdating) return;
-  
+
   isRealTimeUpdating = true;
   const updateInterval = setInterval(() => {
     if (isModifying) {
@@ -2337,30 +2608,33 @@ function startRealTimeVolumeUpdates() {
 }
 
 // Preview volume calculation for operation planning
-function calculatePreviewVolume(point: THREE.Vector3): { cutPreview: number; fillPreview: number } {
+function calculatePreviewVolume(point: THREE.Vector3): {
+  cutPreview: number;
+  fillPreview: number;
+} {
   const currentTool = precisionToolManager.getCurrentTool();
   const toolSettings = currentTool.getSettings();
   const brushSettings = terrain.getBrushSettings();
-  
+
   // Estimate volume change based on brush settings and shape
   const brushRadius = brushSettings.size;
   let brushArea: number;
-  
+
   // Calculate area based on brush shape
   if (brushSettings.shape === 'square') {
     // Square area: (2 * radius)^2
-    brushArea = (brushRadius * 2) * (brushRadius * 2);
+    brushArea = brushRadius * 2 * (brushRadius * 2);
   } else {
     // Circular area: π * radius^2
     brushArea = Math.PI * brushRadius * brushRadius;
   }
-  
+
   const operationDepth = brushSettings.strength * modificationStrength * 3;
   const estimatedVolumeFt3 = brushArea * operationDepth;
-  
+
   // Convert from cubic feet to cubic yards (1 yd³ = 27 ft³)
   const estimatedVolumeYd3 = estimatedVolumeFt3 / 27;
-  
+
   if (toolSettings.name === 'cut') {
     return { cutPreview: estimatedVolumeYd3, fillPreview: 0 };
   } else {
@@ -2374,15 +2648,15 @@ function updateToolDisplay() {
   const toolDescription = document.getElementById('tool-description');
   const currentTool = precisionToolManager.getCurrentTool();
   const currentToolName = precisionToolManager.getCurrentToolName();
-  
+
   if (toolStatus) {
     toolStatus.innerHTML = `Current Tool: ${currentTool.getIcon()} ${currentTool.getDisplayName()}`;
   }
-  
+
   if (toolDescription) {
     toolDescription.textContent = currentTool.getSettings().description;
   }
-  
+
   // Update all tool buttons
   const toolButtons = document.querySelectorAll('.tool-btn');
   toolButtons.forEach(button => {
@@ -2402,16 +2676,22 @@ function updateToolDisplay() {
 
 // Update overlay button states to match terrain overlay visibility
 function updateOverlayButtonStates() {
-  const toggleOverlayBtn = document.getElementById('toggle-overlay-btn') as HTMLButtonElement;
-  const toggleFillOverlayBtn = document.getElementById('toggle-fill-overlay-btn') as HTMLButtonElement;
-  
+  const toggleOverlayBtn = document.getElementById(
+    'toggle-overlay-btn'
+  ) as HTMLButtonElement;
+  const toggleFillOverlayBtn = document.getElementById(
+    'toggle-fill-overlay-btn'
+  ) as HTMLButtonElement;
+
   if (terrain && toggleOverlayBtn && toggleFillOverlayBtn) {
     // Update original overlay button
     const originalVisible = terrain.isOriginalTerrainOverlayVisible();
-    toggleOverlayBtn.textContent = originalVisible ? 'Hide Original' : 'Show Original';
+    toggleOverlayBtn.textContent = originalVisible
+      ? 'Hide Original'
+      : 'Show Original';
     toggleOverlayBtn.style.background = originalVisible ? '#FF4444' : '#4CAF50';
-    
-    // Update fill overlay button  
+
+    // Update fill overlay button
     const fillVisible = terrain.isFillVolumeOverlayVisible();
     toggleFillOverlayBtn.textContent = fillVisible ? 'Hide Fill' : 'Show Fill';
     toggleFillOverlayBtn.style.background = fillVisible ? '#4444FF' : '#4CAF50';
@@ -2421,16 +2701,23 @@ function updateOverlayButtonStates() {
 // Update brush display
 function updateBrushDisplay() {
   const brushSettings = terrain.getBrushSettings();
-  
+
   const sizeValue = document.getElementById('brush-size-value');
   const strengthValue = document.getElementById('brush-strength-value');
   const sizeSlider = document.getElementById('brush-size') as HTMLInputElement;
-  const strengthSlider = document.getElementById('brush-strength') as HTMLInputElement;
-  const shapeSelect = document.getElementById('brush-shape') as HTMLSelectElement;
-  const falloffSelect = document.getElementById('brush-falloff') as HTMLSelectElement;
-  
+  const strengthSlider = document.getElementById(
+    'brush-strength'
+  ) as HTMLInputElement;
+  const shapeSelect = document.getElementById(
+    'brush-shape'
+  ) as HTMLSelectElement;
+  const falloffSelect = document.getElementById(
+    'brush-falloff'
+  ) as HTMLSelectElement;
+
   if (sizeValue) sizeValue.textContent = brushSettings.size.toString();
-  if (strengthValue) strengthValue.textContent = brushSettings.strength.toString();
+  if (strengthValue)
+    strengthValue.textContent = brushSettings.strength.toString();
   if (sizeSlider) sizeSlider.value = brushSettings.size.toString();
   if (strengthSlider) strengthSlider.value = brushSettings.strength.toString();
   if (shapeSelect) shapeSelect.value = brushSettings.shape;
@@ -2441,7 +2728,7 @@ function updateBrushDisplay() {
 function updateTerrainStats() {
   const stats = terrain.getStats();
   const statsDiv = document.getElementById('terrain-stats');
-  
+
   if (statsDiv) {
     statsDiv.innerHTML = `
       Vertices: ${stats.vertexCount}<br>
@@ -2455,13 +2742,13 @@ function updateContourStats() {
   const contourSettings = terrain.getContourSettings();
   const dynamicSettings = terrain.getDynamicContourSettings();
   const statsDiv = document.getElementById('contour-stats');
-  
+
   if (statsDiv) {
     const zoomLevel = Math.round((500 - dynamicSettings.cameraDistance) / 4); // Convert distance to zoom percentage
     const currentInterval = dynamicSettings.currentInterval.toFixed(2);
     const lineCount = contourSettings.count;
     const labelCount = contourSettings.labelCount;
-    
+
     if (dynamicSettings.dynamic) {
       statsDiv.innerHTML = `Contours: ${lineCount} lines, ${labelCount} labels | Current: ${currentInterval} ft | Zoom: ${Math.max(0, zoomLevel)}%`;
     } else {
@@ -2471,12 +2758,16 @@ function updateContourStats() {
 }
 
 // Update interaction mode display
-function updateInteractionMode(shiftKey: boolean, ctrlKey: boolean, gestureState?: GestureState) {
+function updateInteractionMode(
+  shiftKey: boolean,
+  ctrlKey: boolean,
+  gestureState?: GestureState
+) {
   const modeDiv = document.getElementById('interaction-mode');
   if (modeDiv) {
     let statusText = '';
     let statusColor = '#4CAF50';
-    
+
     if (gestureState) {
       // Handle gesture modes
       if (gestureState.gestureMode === 'rotation') {
@@ -2499,14 +2790,14 @@ function updateInteractionMode(shiftKey: boolean, ctrlKey: boolean, gestureState
       statusText = '🔄 Camera rotation mode (Left-drag to rotate)';
       statusColor = '#FF9800';
     }
-    
+
     // Add zoom level indicator
     if (gestureControls) {
       const distance = gestureControls.getDistance();
       const zoomLevel = Math.round(((100 - distance) / 90) * 100); // Convert distance to zoom percentage
       statusText += ` | 🔍 Zoom: ${Math.max(0, zoomLevel)}%`;
     }
-    
+
     modeDiv.innerHTML = statusText;
     modeDiv.style.color = statusColor;
   }
@@ -2516,17 +2807,17 @@ function updateInteractionMode(shiftKey: boolean, ctrlKey: boolean, gestureState
 function updateProgressDisplay() {
   const userProgress = progressTracker.getUserProgress();
   if (!userProgress) return;
-  
+
   const currentLevel = progressTracker.getCurrentLevel();
   const nextLevel = progressTracker.getNextLevel();
   const progressToNext = progressTracker.getProgressToNextLevel();
-  
+
   // Update level display
   const levelDiv = document.getElementById('user-level');
   if (levelDiv && currentLevel) {
     levelDiv.innerHTML = `${currentLevel.badge} Level ${currentLevel.level} - ${currentLevel.title}`;
   }
-  
+
   // Update XP display
   const xpDiv = document.getElementById('user-xp');
   if (xpDiv) {
@@ -2536,13 +2827,13 @@ function updateProgressDisplay() {
       xpDiv.innerHTML = `${userProgress.totalXP} XP (Max Level)`;
     }
   }
-  
+
   // Update progress bar
   const progressBar = document.getElementById('xp-progress-bar');
   if (progressBar) {
     progressBar.style.width = `${progressToNext}%`;
   }
-  
+
   // Update achievement count
   const achievementDiv = document.getElementById('achievement-count');
   if (achievementDiv) {
@@ -2550,7 +2841,7 @@ function updateProgressDisplay() {
     const totalCount = progressTracker.getAchievements().length;
     achievementDiv.innerHTML = `🏆 ${unlockedCount}/${totalCount} Achievements`;
   }
-  
+
   // Update stats
   const statsDiv = document.getElementById('progress-stats');
   if (statsDiv) {
@@ -2594,9 +2885,9 @@ function showAchievements() {
 
   const unlockedAchievements = progressTracker.getUnlockedAchievements();
   const availableAchievements = progressTracker.getAvailableAchievements();
-  
+
   let html = '<h2>🏆 Achievements</h2>';
-  
+
   if (unlockedAchievements.length > 0) {
     html += '<h3 style="color: #4CAF50;">Unlocked</h3>';
     unlockedAchievements.forEach(achievement => {
@@ -2609,7 +2900,7 @@ function showAchievements() {
       `;
     });
   }
-  
+
   if (availableAchievements.length > 0) {
     html += '<h3 style="color: #FF9800;">Available</h3>';
     availableAchievements.forEach(achievement => {
@@ -2623,8 +2914,9 @@ function showAchievements() {
     });
   }
 
-  html += '<button onclick="closeAchievementsModal()" style="margin-top: 15px; padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>';
-  
+  html +=
+    '<button onclick="closeAchievementsModal()" style="margin-top: 15px; padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>';
+
   content.innerHTML = html;
   modal.appendChild(content);
   document.body.appendChild(modal);
@@ -2677,7 +2969,7 @@ function showAssignmentModal(assignments: any[]) {
   `;
 
   let html = '<h2>📋 Available Assignments</h2>';
-  
+
   assignments.forEach((assignment, index) => {
     const difficultyStars = '⭐'.repeat(assignment.difficulty);
     html += `
@@ -2693,8 +2985,9 @@ function showAssignmentModal(assignments: any[]) {
     `;
   });
 
-  html += '<button onclick="closeAssignmentModal()" style="margin-top: 15px; padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>';
-  
+  html +=
+    '<button onclick="closeAssignmentModal()" style="margin-top: 15px; padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>';
+
   content.innerHTML = html;
   modal.appendChild(content);
   document.body.appendChild(modal);
@@ -2716,16 +3009,17 @@ function showAssignmentModal(assignments: any[]) {
 async function startAssignment(assignmentId: string) {
   // Get current user (simplified for demo)
   const userId = 'current-user'; // In real app, get from auth
-  
+
   const started = await assignmentManager.startAssignment(assignmentId, userId);
   if (started) {
     const assignment = assignmentManager.getCurrentAssignment();
     if (assignment) {
-      const currentAssignmentDiv = document.getElementById('current-assignment');
+      const currentAssignmentDiv =
+        document.getElementById('current-assignment');
       if (currentAssignmentDiv) {
         currentAssignmentDiv.innerHTML = `📋 ${assignment.name}`;
       }
-      
+
       const progressDiv = document.getElementById('assignment-progress');
       if (progressDiv) {
         progressDiv.style.display = 'block';
@@ -2739,9 +3033,11 @@ function updateAssignmentProgress(progress: any) {
   const progressDiv = document.getElementById('assignment-progress');
   if (progressDiv) {
     progressDiv.innerHTML = `Progress: ${Math.round(progress.currentScore)}%`;
-    
+
     // Update objective completion
-    const completed = progress.objectives.filter((obj: any) => obj.completed).length;
+    const completed = progress.objectives.filter(
+      (obj: any) => obj.completed
+    ).length;
     const total = progress.objectives.length;
     progressDiv.innerHTML += ` (${completed}/${total} objectives)`;
   }
@@ -2762,15 +3058,15 @@ function showObjectiveComplete(objective: any) {
     font-family: Arial, sans-serif;
     max-width: 300px;
   `;
-  
+
   notification.innerHTML = `
     <strong>🎯 Objective Complete!</strong><br>
     ${objective.description}<br>
     <small>Score: ${Math.round(objective.score)}%</small>
   `;
-  
+
   document.body.appendChild(notification);
-  
+
   // Remove after 4 seconds
   setTimeout(() => {
     if (document.body.contains(notification)) {
@@ -2808,8 +3104,17 @@ function showAssignmentComplete(progress: any) {
 
   const assignment = assignmentManager.getCurrentAssignment();
   const score = Math.round(progress.currentScore);
-  const grade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F';
-  
+  const grade =
+    score >= 90
+      ? 'A'
+      : score >= 80
+        ? 'B'
+        : score >= 70
+          ? 'C'
+          : score >= 60
+            ? 'D'
+            : 'F';
+
   content.innerHTML = `
     <h2>🎉 Assignment Complete!</h2>
     <h3>${assignment?.name}</h3>
@@ -2826,13 +3131,13 @@ function showAssignmentComplete(progress: any) {
 
   (window as any).closeCompletionModal = () => {
     document.body.removeChild(modal);
-    
+
     // Reset assignment display
     const currentAssignmentDiv = document.getElementById('current-assignment');
     if (currentAssignmentDiv) {
       currentAssignmentDiv.innerHTML = 'No assignment selected';
     }
-    
+
     const progressDiv = document.getElementById('assignment-progress');
     if (progressDiv) {
       progressDiv.style.display = 'none';
@@ -2856,7 +3161,7 @@ function showLevelUp(newLevel: any, oldLevel: any) {
     max-width: 300px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   `;
-  
+
   notification.innerHTML = `
     <div style="font-size: 24px; margin-bottom: 10px;">🎉 Level Up!</div>
     <div style="font-size: 20px; margin-bottom: 5px;">${newLevel.badge} ${newLevel.title}</div>
@@ -2865,16 +3170,16 @@ function showLevelUp(newLevel: any, oldLevel: any) {
       Unlocked: ${newLevel.unlocks.join(', ')}
     </div>
   `;
-  
+
   document.body.appendChild(notification);
-  
+
   // Remove after 5 seconds
   setTimeout(() => {
     if (document.body.contains(notification)) {
       document.body.removeChild(notification);
     }
   }, 5000);
-  
+
   // Update progress display
   updateProgressDisplay();
 }
@@ -2894,7 +3199,7 @@ function showAchievementUnlocked(achievement: any) {
     max-width: 300px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   `;
-  
+
   notification.innerHTML = `
     <div style="font-size: 24px; margin-bottom: 10px;">🏆 Achievement Unlocked!</div>
     <div style="font-size: 18px; margin-bottom: 5px;">${achievement.icon} ${achievement.name}</div>
@@ -2903,16 +3208,16 @@ function showAchievementUnlocked(achievement: any) {
       +${achievement.xpReward} XP
     </div>
   `;
-  
+
   document.body.appendChild(notification);
-  
+
   // Remove after 4 seconds
   setTimeout(() => {
     if (document.body.contains(notification)) {
       document.body.removeChild(notification);
     }
   }, 4000);
-  
+
   // Update progress display
   updateProgressDisplay();
 }
@@ -2932,88 +3237,91 @@ function showXPGained(xp: number, source: string) {
     max-width: 250px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   `;
-  
+
   notification.innerHTML = `
     <div style="font-size: 18px; margin-bottom: 5px;">✨ +${xp} XP</div>
     <div style="font-size: 14px; color: #ddd;">${source}</div>
   `;
-  
+
   document.body.appendChild(notification);
-  
+
   // Remove after 2 seconds
   setTimeout(() => {
     if (document.body.contains(notification)) {
       document.body.removeChild(notification);
     }
   }, 2000);
-  
+
   // Update progress display
   updateProgressDisplay();
 }
 
 // Operation Preview System Functions
 function showOperationPreview(point: THREE.Vector3): void {
-  if (!point || (lastPreviewPosition && point.distanceTo(lastPreviewPosition) < 0.5)) {
+  if (
+    !point ||
+    (lastPreviewPosition && point.distanceTo(lastPreviewPosition) < 0.5)
+  ) {
     return; // Don't update if position hasn't changed much
   }
-  
+
   hideOperationPreview(); // Remove existing preview
-  
+
   const currentTool = precisionToolManager.getCurrentTool();
   const toolSettings = currentTool.getSettings();
   const brushSettings = terrain.getBrushSettings();
-  
+
   // Calculate operation depth/height based on strength
   const operationDepth = brushSettings.strength * modificationStrength * 3; // Increased scale for better visibility
   const terrainHeight = point.y;
-  
+
   // Create volumetric preview based on tool type
   let previewGeometry: THREE.BufferGeometry;
   let previewHeight: number;
   let previewY: number;
-  
+
   if (toolSettings.name === 'cut') {
     // Cut operation: Show volume below terrain surface that will be removed
     previewHeight = operationDepth;
-    previewY = terrainHeight - (previewHeight / 2); // Center the volume below surface
-    
+    previewY = terrainHeight - previewHeight / 2; // Center the volume below surface
+
     // Create cut volume geometry
     if (brushSettings.shape === 'circle') {
       previewGeometry = new THREE.CylinderGeometry(
         brushSettings.size * 0.8, // Top radius (smaller for realistic excavation)
-        brushSettings.size,       // Bottom radius 
-        previewHeight,           // Height of cut volume
-        16                       // Radial segments
+        brushSettings.size, // Bottom radius
+        previewHeight, // Height of cut volume
+        16 // Radial segments
       );
     } else {
       previewGeometry = new THREE.BoxGeometry(
-        brushSettings.size * 2,  // Width
-        previewHeight,          // Height of cut volume
-        brushSettings.size * 2   // Depth
+        brushSettings.size * 2, // Width
+        previewHeight, // Height of cut volume
+        brushSettings.size * 2 // Depth
       );
     }
   } else {
     // Fill operation: Show volume above terrain surface that will be added
     previewHeight = operationDepth;
-    previewY = terrainHeight + (previewHeight / 2); // Center the volume above surface
-    
+    previewY = terrainHeight + previewHeight / 2; // Center the volume above surface
+
     // Create fill volume geometry
     if (brushSettings.shape === 'circle') {
       previewGeometry = new THREE.CylinderGeometry(
-        brushSettings.size,       // Top radius
+        brushSettings.size, // Top radius
         brushSettings.size * 0.8, // Bottom radius (smaller at base for realistic fill)
-        previewHeight,           // Height of fill volume
-        16                       // Radial segments
+        previewHeight, // Height of fill volume
+        16 // Radial segments
       );
     } else {
       previewGeometry = new THREE.BoxGeometry(
-        brushSettings.size * 2,  // Width
-        previewHeight,          // Height of fill volume
-        brushSettings.size * 2   // Depth
+        brushSettings.size * 2, // Width
+        previewHeight, // Height of fill volume
+        brushSettings.size * 2 // Depth
       );
     }
   }
-  
+
   // Create preview material with tool-specific properties
   const toolColor = new THREE.Color(toolSettings.color);
   const previewMaterial = new THREE.MeshBasicMaterial({
@@ -3021,33 +3329,36 @@ function showOperationPreview(point: THREE.Vector3): void {
     transparent: true,
     opacity: 0.35,
     wireframe: false,
-    side: THREE.DoubleSide // Show both sides for better volume visualization
+    side: THREE.DoubleSide, // Show both sides for better volume visualization
   });
-  
+
   previewMesh = new THREE.Mesh(previewGeometry, previewMaterial);
   previewMesh.position.set(point.x, previewY, point.z);
-  
+
   // Add wireframe overlay for better volume definition
   const wireframeGeometry = previewGeometry.clone();
   const wireframeMaterial = new THREE.LineBasicMaterial({
     color: toolColor,
     transparent: true,
     opacity: 0.6,
-    linewidth: 1
+    linewidth: 1,
   });
-  
+
   const wireframeHelper = new THREE.WireframeGeometry(wireframeGeometry);
-  const wireframeMesh = new THREE.LineSegments(wireframeHelper, wireframeMaterial);
+  const wireframeMesh = new THREE.LineSegments(
+    wireframeHelper,
+    wireframeMaterial
+  );
   wireframeMesh.position.copy(previewMesh.position);
-  
+
   // Store both meshes for cleanup
   (previewMesh as any).wireframeMesh = wireframeMesh;
-  
+
   // Add subtle pulsing animation for better visibility
   const time = Date.now() * 0.002;
   previewMaterial.opacity = 0.25 + 0.15 * Math.sin(time);
   wireframeMaterial.opacity = 0.4 + 0.2 * Math.sin(time);
-  
+
   scene.add(previewMesh);
   scene.add(wireframeMesh);
   lastPreviewPosition = point.clone();
@@ -3057,7 +3368,7 @@ function showOperationPreview(point: THREE.Vector3): void {
 function hideOperationPreview(): void {
   if (previewMesh) {
     scene.remove(previewMesh);
-    
+
     // Remove wireframe mesh if it exists
     const wireframeMesh = (previewMesh as any).wireframeMesh;
     if (wireframeMesh) {
@@ -3065,15 +3376,21 @@ function hideOperationPreview(): void {
       if (wireframeMesh.geometry) {
         wireframeMesh.geometry.dispose();
       }
-      if (wireframeMesh.material && typeof wireframeMesh.material.dispose === 'function') {
+      if (
+        wireframeMesh.material &&
+        typeof wireframeMesh.material.dispose === 'function'
+      ) {
         wireframeMesh.material.dispose();
       }
     }
-    
+
     if (previewMesh.geometry) {
       previewMesh.geometry.dispose();
     }
-    if (previewMesh.material && typeof (previewMesh.material as THREE.Material).dispose === 'function') {
+    if (
+      previewMesh.material &&
+      typeof (previewMesh.material as THREE.Material).dispose === 'function'
+    ) {
       (previewMesh.material as THREE.Material).dispose();
     }
     previewMesh = null;
@@ -3088,17 +3405,18 @@ function updateOperationPreview(): void {
     const time = Date.now() * 0.002;
     const material = previewMesh.material as THREE.MeshBasicMaterial;
     material.opacity = 0.25 + 0.15 * Math.sin(time);
-    
+
     // Update wireframe opacity if it exists
     const wireframeMesh = (previewMesh as any).wireframeMesh;
     if (wireframeMesh) {
-      const wireframeMaterial = wireframeMesh.material as THREE.LineBasicMaterial;
+      const wireframeMaterial =
+        wireframeMesh.material as THREE.LineBasicMaterial;
       wireframeMaterial.opacity = 0.4 + 0.2 * Math.sin(time);
-      
+
       // Sync rotation
       wireframeMesh.rotation.copy(previewMesh.rotation);
     }
-    
+
     // Gentle rotation for better volume visibility
     previewMesh.rotation.y += 0.008;
   }
@@ -3119,4 +3437,44 @@ function initializeAccessibilityFeatures() {
   console.log('Accessibility features initialized');
 }
 
-  const toolManager = new ToolManager(terrain);
+const toolManager = new ToolManager(terrain);
+
+// Early check for first visit
+if (!localStorage.getItem('hasVisited')) {
+  const guestUI = new GuestUI(() => {
+    localStorage.setItem('hasVisited', 'true');
+    // Treat as guest - skip auth and init game
+    authUI.hide(); // Ensure auth not shown
+    if (!isGameReady) {
+      isGameReady = true;
+      initializeGame();
+    }
+    // Load guest data from localStorage and update UI
+    updateUserInfo({ user_metadata: { username: 'Guest' }, email: 'guest' });
+    // Handle mode
+    const guestData = JSON.parse(localStorage.getItem('guestData') || '{}');
+    if (guestData.mode === 'solo') {
+      multiplayerManager.joinSession('solo_' + Date.now(), guestData.username || 'Guest');
+    } else {
+      // For competition, join a public session or create one
+      multiplayerManager.joinSession('competition_' + Date.now(), guestData.username || 'Guest');
+    }
+    // After session, load Level 1
+    setTimeout(() => {
+      if (assignmentManager && typeof assignmentManager.loadAssignment === 'function') {
+        assignmentManager.loadAssignment(1); // Load level 1
+      }
+    }, 1000); // Delay for session setup
+    // Adjust for age
+    console.log('Adjusting gameplay for age range: ' + guestData.ageRange);
+    if (guestData.ageRange === '8-12') {
+      // Simplify UI example: hide advanced sections
+      const advancedUI = document.querySelector('.advanced-ui');
+      if (advancedUI) (advancedUI as HTMLElement).style.display = 'none';
+    }
+  });
+  guestUI.show();
+} else {
+  // Normal auth flow
+  // ... existing auth init code ...
+}

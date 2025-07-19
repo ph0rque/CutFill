@@ -18,35 +18,38 @@ export class AgeScalingSystem {
       id: 'kids',
       name: 'Young Builders',
       ageRange: '8-12 years',
-      description: 'Simplified mechanics with forgiving tolerances and helpful guidance',
+      description:
+        'Simplified mechanics with forgiving tolerances and helpful guidance',
       toleranceMultiplier: 3.0, // 3x more forgiving
       scoreThresholdMultiplier: 0.7, // Lower score requirements (70% of original)
       timeMultiplier: 2.0, // 2x more time
       hintLevel: 'detailed',
-      complexityLevel: 'simplified'
+      complexityLevel: 'simplified',
     },
     {
       id: 'teens',
-      name: 'STEM Explorers', 
+      name: 'STEM Explorers',
       ageRange: '13-25 years',
-      description: 'Standard mechanics with competitive elements and real-world context',
+      description:
+        'Standard mechanics with competitive elements and real-world context',
       toleranceMultiplier: 1.5, // 1.5x more forgiving
       scoreThresholdMultiplier: 0.85, // Slightly lower requirements (85% of original)
       timeMultiplier: 1.3, // 30% more time
       hintLevel: 'detailed',
-      complexityLevel: 'standard'
+      complexityLevel: 'standard',
     },
     {
       id: 'adults',
       name: 'Professional Practitioners',
       ageRange: '26+ years',
-      description: 'Realistic tolerances with professional-grade precision requirements',
+      description:
+        'Realistic tolerances with professional-grade precision requirements',
       toleranceMultiplier: 1.0, // Standard tolerances
       scoreThresholdMultiplier: 1.0, // Full requirements
       timeMultiplier: 1.0, // Standard time
       hintLevel: 'minimal',
-      complexityLevel: 'advanced'
-    }
+      complexityLevel: 'advanced',
+    },
   ];
 
   private currentAgeGroup: AgeGroup;
@@ -93,11 +96,13 @@ export class AgeScalingSystem {
       return assignment;
     }
 
-    const scaledAssignment: AssignmentConfig = JSON.parse(JSON.stringify(assignment));
-    
+    const scaledAssignment: AssignmentConfig = JSON.parse(
+      JSON.stringify(assignment)
+    );
+
     // Scale objectives - ensure we have objectives array
     if (Array.isArray(scaledAssignment.objectives)) {
-      scaledAssignment.objectives = scaledAssignment.objectives.map(obj => 
+      scaledAssignment.objectives = scaledAssignment.objectives.map(obj =>
         this.scaleObjective(obj)
       );
     } else {
@@ -112,11 +117,15 @@ export class AgeScalingSystem {
 
     // Scale success criteria
     scaledAssignment.successCriteria.minimumScore = Math.round(
-      assignment.successCriteria.minimumScore * this.currentAgeGroup.scoreThresholdMultiplier
+      assignment.successCriteria.minimumScore *
+        this.currentAgeGroup.scoreThresholdMultiplier
     );
 
     // Add age-appropriate hints
-    scaledAssignment.hints = this.getAgeAppropriateHints(assignment, scaledAssignment.hints);
+    scaledAssignment.hints = this.getAgeAppropriateHints(
+      assignment,
+      scaledAssignment.hints
+    );
 
     // Update description with age group context
     scaledAssignment.description = this.addAgeContextToDescription(
@@ -140,14 +149,17 @@ export class AgeScalingSystem {
     const scaledObjective: AssignmentObjective = { ...objective };
 
     // Scale tolerance (make more forgiving for younger users)
-    scaledObjective.tolerance = (objective.tolerance || 0.1) * this.currentAgeGroup.toleranceMultiplier;
+    scaledObjective.tolerance =
+      (objective.tolerance || 0.1) * this.currentAgeGroup.toleranceMultiplier;
 
     // Scale time-based targets
     if (scaledObjective.target && typeof scaledObjective.target === 'object') {
       if ('timeTarget' in scaledObjective.target) {
         scaledObjective.target = {
           ...scaledObjective.target,
-          timeTarget: scaledObjective.target.timeTarget * this.currentAgeGroup.timeMultiplier
+          timeTarget:
+            scaledObjective.target.timeTarget *
+            this.currentAgeGroup.timeMultiplier,
         };
       }
     }
@@ -164,24 +176,24 @@ export class AgeScalingSystem {
   /**
    * Get age-appropriate hints
    */
-  private getAgeAppropriateHints(original: AssignmentConfig, originalHints: string[]): string[] {
+  private getAgeAppropriateHints(
+    original: AssignmentConfig,
+    originalHints: string[]
+  ): string[] {
     const ageGroup = this.currentAgeGroup;
     let hints = [...originalHints];
 
     switch (ageGroup.hintLevel) {
       case 'detailed':
         // Add more helpful hints for kids and teens
-        hints = [
-          ...hints,
-          ...this.getDetailedHints(original)
-        ];
+        hints = [...hints, ...this.getDetailedHints(original)];
         break;
-      
+
       case 'basic':
         // Keep original hints but simplify language
         hints = hints.map(hint => this.simplifyHintLanguage(hint));
         break;
-      
+
       case 'minimal':
         // Keep only essential hints for professionals
         hints = hints.filter(hint => this.isEssentialHint(hint));
@@ -199,13 +211,13 @@ export class AgeScalingSystem {
    */
   private getDetailedHints(assignment: AssignmentConfig): string[] {
     const hints: string[] = [];
-    
+
     if (this.currentAgeGroup.id === 'kids') {
       hints.push(
         '🎯 Take your time - accuracy is more important than speed!',
         '🔄 Use the undo button if you make a mistake',
         '📏 Check the volume display to see your progress',
-        '🎮 Remember: you\'re learning real engineering skills!'
+        "🎮 Remember: you're learning real engineering skills!"
       );
     } else if (this.currentAgeGroup.id === 'teens') {
       hints.push(
@@ -236,8 +248,15 @@ export class AgeScalingSystem {
    * Check if hint is essential for professionals
    */
   private isEssentialHint(hint: string): boolean {
-    const essentialKeywords = ['tolerance', 'grade', 'slope', 'volume', 'balance', 'precision'];
-    return essentialKeywords.some(keyword => 
+    const essentialKeywords = [
+      'tolerance',
+      'grade',
+      'slope',
+      'volume',
+      'balance',
+      'precision',
+    ];
+    return essentialKeywords.some(keyword =>
       hint.toLowerCase().includes(keyword)
     );
   }
@@ -245,7 +264,10 @@ export class AgeScalingSystem {
   /**
    * Adjust objective description for age group
    */
-  private adjustObjectiveDescription(description: string, ageGroup: AgeGroup): string {
+  private adjustObjectiveDescription(
+    description: string,
+    ageGroup: AgeGroup
+  ): string {
     // Safety check - ensure description is a string
     if (!description || typeof description !== 'string') {
       console.warn('Missing or invalid objective description:', description);
@@ -254,7 +276,10 @@ export class AgeScalingSystem {
 
     if (ageGroup.id === 'kids') {
       return description
-        .replace(/±(\d+\.?\d*) inch/g, '±$1 inch (about the width of your thumb)')
+        .replace(
+          /±(\d+\.?\d*) inch/g,
+          '±$1 inch (about the width of your thumb)'
+        )
         .replace(/\d+%/g, match => `${match} (very close!)`);
     } else if (ageGroup.id === 'teens') {
       // Add real-world context
@@ -264,14 +289,17 @@ export class AgeScalingSystem {
         return `${description} (Essential for flood prevention and environmental protection!)`;
       }
     }
-    
+
     return description;
   }
 
   /**
    * Add age context to assignment description
    */
-  private addAgeContextToDescription(description: string, ageGroup: AgeGroup): string {
+  private addAgeContextToDescription(
+    description: string,
+    ageGroup: AgeGroup
+  ): string {
     const prefix = this.getAgeAppropriatePrefix(ageGroup);
     return `${prefix} ${description}`;
   }
@@ -302,18 +330,21 @@ export class AgeScalingSystem {
     hintsLevel: string;
   } {
     const group = this.currentAgeGroup;
-    
+
     return {
-      toleranceAdjustment: group.toleranceMultiplier > 1 
-        ? `${Math.round((group.toleranceMultiplier - 1) * 100)}% more forgiving`
-        : 'Standard precision',
-      timeAdjustment: group.timeMultiplier > 1
-        ? `${Math.round((group.timeMultiplier - 1) * 100)}% more time`
-        : 'Standard time limits',
-      scoringAdjustment: group.scoreThresholdMultiplier < 1
-        ? `${Math.round((1 - group.scoreThresholdMultiplier) * 100)}% lower score requirements`
-        : 'Standard scoring',
-      hintsLevel: `${group.hintLevel} guidance level`
+      toleranceAdjustment:
+        group.toleranceMultiplier > 1
+          ? `${Math.round((group.toleranceMultiplier - 1) * 100)}% more forgiving`
+          : 'Standard precision',
+      timeAdjustment:
+        group.timeMultiplier > 1
+          ? `${Math.round((group.timeMultiplier - 1) * 100)}% more time`
+          : 'Standard time limits',
+      scoringAdjustment:
+        group.scoreThresholdMultiplier < 1
+          ? `${Math.round((1 - group.scoreThresholdMultiplier) * 100)}% lower score requirements`
+          : 'Standard scoring',
+      hintsLevel: `${group.hintLevel} guidance level`,
     };
   }
 
@@ -323,4 +354,4 @@ export class AgeScalingSystem {
   public resetToDefault(): void {
     this.currentAgeGroup = this.ageGroups[1]; // Default to teens
   }
-} 
+}

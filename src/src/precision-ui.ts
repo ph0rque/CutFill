@@ -14,10 +14,10 @@ export class PrecisionUI {
     this.toolManager = toolManager;
     this.authService = authService;
     this.currentState = toolManager.getWorkflowState();
-    
+
     // Debug: log authService status
     console.log('PrecisionUI: authService passed:', !!authService, authService);
-    
+
     // Create main container
     this.container = document.createElement('div');
     this.container.id = 'precision-tools-ui';
@@ -44,14 +44,14 @@ export class PrecisionUI {
 
     this.updateUI();
     document.body.appendChild(this.container);
-    
+
     // Sync initial label visibility state with terrain
     this.syncLabelVisibility();
   }
 
   private updateUI(): void {
     const stage = this.currentState.stage;
-    
+
     let content = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
         <h2 style="margin: 0; color: #4CAF50;">🏗️ Precision Cut & Fill</h2>
@@ -64,7 +64,7 @@ export class PrecisionUI {
 
     // Progress indicator
     content += this.createProgressIndicator();
-    
+
     // Stage-specific content
     switch (stage) {
       case 'direction':
@@ -98,44 +98,53 @@ export class PrecisionUI {
 
   private createProgressIndicator(): string {
     // Base stages that are always present
-    const baseStages = ['direction', 'magnitude', 'area-mode', 'drawing', 'cross-section'];
-    
+    const baseStages = [
+      'direction',
+      'magnitude',
+      'area-mode',
+      'drawing',
+      'cross-section',
+    ];
+
     // For straight cross-sections, skip deepest-point and go straight to preview
     // For curved/angled cross-sections, include deepest-point before preview
     const allStages = [...baseStages];
-    
+
     // Only add deepest-point stage if cross-section is not straight
     if (this.currentState.crossSection?.wallType !== 'straight') {
       allStages.push('deepest-point');
     }
-    
+
     allStages.push('preview');
-    
+
     const currentIndex = allStages.indexOf(this.currentState.stage);
-    
-    let indicator = '<div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">';
-    indicator += '<div style="font-size: 12px; font-weight: bold; margin-bottom: 5px;">Progress:</div>';
+
+    let indicator =
+      '<div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 4px;">';
+    indicator +=
+      '<div style="font-size: 12px; font-weight: bold; margin-bottom: 5px;">Progress:</div>';
     indicator += '<div style="display: flex; gap: 5px;">';
-    
+
     allStages.forEach((stage, index) => {
       const isActive = index === currentIndex;
       const isCompleted = index < currentIndex;
       const color = isCompleted ? '#4CAF50' : isActive ? '#2196F3' : '#666';
       const symbol = isCompleted ? '✓' : isActive ? '●' : '○';
-      
+
       indicator += `<div style="color: ${color}; font-weight: bold;">${symbol}</div>`;
     });
-    
+
     indicator += '</div>';
     indicator += `<div style="font-size: 11px; color: #ccc; margin-top: 3px;">Step ${currentIndex + 1} of ${allStages.length}</div>`;
-    
+
     // Add explanation for straight cross-sections
     if (this.currentState.crossSection?.wallType === 'straight') {
-      indicator += '<div style="font-size: 10px; color: #999; margin-top: 3px;">⚡ Straight walls: deepest point skipped (uniform depth)</div>';
+      indicator +=
+        '<div style="font-size: 10px; color: #999; margin-top: 3px;">⚡ Straight walls: deepest point skipped (uniform depth)</div>';
     }
-    
+
     indicator += '</div>';
-    
+
     return indicator;
   }
 
@@ -165,7 +174,7 @@ export class PrecisionUI {
     const directionText = direction === 'cut' ? 'Cut Depth' : 'Fill Height';
     const directionIcon = direction === 'cut' ? '⬇️' : '⬆️';
     const directionColor = direction === 'cut' ? '#FF4444' : '#2196F3';
-    
+
     return `
       <div style="margin-bottom: 15px;">
         <h3>Step 2: Set ${directionText}</h3>
@@ -202,7 +211,7 @@ export class PrecisionUI {
   private createAreaModeStage(): string {
     const direction = this.currentState.direction;
     const directionColor = direction === 'cut' ? '#FF4444' : '#2196F3';
-    
+
     return `
       <div style="margin-bottom: 15px;">
         <h3>Step 3: Choose Area Shape</h3>
@@ -236,14 +245,14 @@ export class PrecisionUI {
     const direction = this.currentState.direction;
     const directionColor = direction === 'cut' ? '#FF4444' : '#2196F3';
     const area = this.currentState.area;
-    
+
     let progressInfo = '';
     let totalLength = 0;
     if (area) {
       if (area.type === 'polygon') {
         const vertices = area.vertices.length;
         progressInfo = `Points added: ${vertices}`;
-        
+
         // Calculate total perimeter for segments drawn so far
         if (vertices > 1) {
           for (let i = 0; i < vertices - 1; i++) {
@@ -253,7 +262,7 @@ export class PrecisionUI {
             const dz = end.z - start.z;
             totalLength += Math.sqrt(dx * dx + dz * dz);
           }
-          
+
           if (area.closed && vertices > 2) {
             // Add closing segment for closed polygons
             const start = area.vertices[vertices - 1];
@@ -268,14 +277,14 @@ export class PrecisionUI {
             progressInfo += ` | Length: ${totalLengthYards.toFixed(1)} yd`;
           }
         }
-        
+
         if (vertices >= 3) {
           progressInfo += ' (Ready to close)';
         }
       } else {
         const points = area.points.length;
         progressInfo = `Points added: ${points}`;
-        
+
         // Calculate total line length
         if (points > 1) {
           for (let i = 0; i < points - 1; i++) {
@@ -290,7 +299,7 @@ export class PrecisionUI {
         }
       }
     }
-    
+
     return `
       <div style="margin-bottom: 15px;">
         <h3>Step 4: Draw ${areaMode === 'polygon' ? 'Polygon' : 'Polyline'}</h3>
@@ -306,9 +315,10 @@ export class PrecisionUI {
         <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 6px; margin: 15px 0;">
           <div style="font-weight: bold; margin-bottom: 10px; color: #4CAF50;">📍 Drawing Instructions:</div>
           <div style="font-size: 12px; line-height: 1.4;">
-            ${areaMode === 'polygon' 
-              ? '• Click on the terrain to add polygon vertices<br>• Need at least 3 points to create a polygon<br>• Click on the first point again to close the shape<br>• Or click "Finish Drawing" when ready'
-              : '• Click on the terrain to add line points<br>• Create a path for linear excavation<br>• Adjust thickness as needed<br>• Click "Finish Drawing" when ready'
+            ${
+              areaMode === 'polygon'
+                ? '• Click on the terrain to add polygon vertices<br>• Need at least 3 points to create a polygon<br>• Click on the first point again to close the shape<br>• Or click "Finish Drawing" when ready'
+                : '• Click on the terrain to add line points<br>• Create a path for linear excavation<br>• Adjust thickness as needed<br>• Click "Finish Drawing" when ready'
             }
           </div>
         </div>
@@ -332,10 +342,11 @@ export class PrecisionUI {
   }
 
   private createPolylineControls(): string {
-    const currentThickness = this.currentState.area?.type === 'polyline' 
-      ? (this.currentState.area as any).thickness 
-      : 5;
-    
+    const currentThickness =
+      this.currentState.area?.type === 'polyline'
+        ? (this.currentState.area as any).thickness
+        : 5;
+
     return `
       <div style="margin: 15px 0; padding: 10px; background: rgba(255,152,0,0.2); border-radius: 4px;">
         <div style="font-weight: bold; margin-bottom: 10px; color: #FF9800;">🔧 Polyline Settings</div>
@@ -363,7 +374,7 @@ export class PrecisionUI {
   private createCrossSectionStage(): string {
     const direction = this.currentState.direction;
     const directionColor = direction === 'cut' ? '#FF4444' : '#2196F3';
-    
+
     return `
       <div style="margin-bottom: 15px;">
         <h3>Step 5: Configure Cross-Section</h3>
@@ -418,7 +429,7 @@ export class PrecisionUI {
     const direction = this.currentState.direction;
     const directionColor = direction === 'cut' ? '#FF4444' : '#2196F3';
     const wallType = this.currentState.crossSection?.wallType || 'straight';
-    
+
     return `
       <div style="margin-bottom: 15px;">
         <h3>Step 6: Position ${direction === 'cut' ? 'Deepest' : 'Highest'} Point</h3>
@@ -441,11 +452,12 @@ export class PrecisionUI {
         <div style="background: rgba(${direction === 'cut' ? '255,68,68' : '33,150,243'}, 0.1); padding: 15px; border-radius: 6px; margin: 15px 0;">
           <div style="font-weight: bold; margin-bottom: 8px; color: ${directionColor};">💡 Cross-Section Effect:</div>
           <div style="font-size: 11px; line-height: 1.5;">
-            ${wallType === 'straight' ? 
-              `<strong>Straight walls:</strong> Full ${(this.currentState.magnitude! / 3).toFixed(1)} yd ${direction === 'cut' ? 'depth' : 'height'} throughout the entire area.` :
-              wallType === 'curved' ?
-              `<strong>Curved walls:</strong> Maximum ${(this.currentState.magnitude! / 3).toFixed(1)} yd at this point, smoothly tapering with a cosine curve toward the edges.` :
-              `<strong>Angled walls:</strong> Maximum ${(this.currentState.magnitude! / 3).toFixed(1)} yd at this point, with 45° linear slopes extending outward.`
+            ${
+              wallType === 'straight'
+                ? `<strong>Straight walls:</strong> Full ${(this.currentState.magnitude! / 3).toFixed(1)} yd ${direction === 'cut' ? 'depth' : 'height'} throughout the entire area.`
+                : wallType === 'curved'
+                  ? `<strong>Curved walls:</strong> Maximum ${(this.currentState.magnitude! / 3).toFixed(1)} yd at this point, smoothly tapering with a cosine curve toward the edges.`
+                  : `<strong>Angled walls:</strong> Maximum ${(this.currentState.magnitude! / 3).toFixed(1)} yd at this point, with 45° linear slopes extending outward.`
             }
           </div>
         </div>
@@ -456,7 +468,7 @@ export class PrecisionUI {
   private createPreviewStage(): string {
     const direction = this.currentState.direction;
     const directionColor = direction === 'cut' ? '#FF4444' : '#2196F3';
-    
+
     return `
       <div style="margin-bottom: 15px;">
         <h3>Step 6: Preview & Execute</h3>
@@ -504,7 +516,9 @@ export class PrecisionUI {
   }
 
   confirmMagnitude(): void {
-    const slider = document.getElementById('magnitude-slider') as HTMLInputElement;
+    const slider = document.getElementById(
+      'magnitude-slider'
+    ) as HTMLInputElement;
     if (slider) {
       this.toolManager.setMagnitude(parseFloat(slider.value));
     }
@@ -522,9 +536,11 @@ export class PrecisionUI {
   }
 
   setMagnitudePreset(value: number): void {
-    const slider = document.getElementById('magnitude-slider') as HTMLInputElement;
+    const slider = document.getElementById(
+      'magnitude-slider'
+    ) as HTMLInputElement;
     const display = document.getElementById('magnitude-value');
-    
+
     if (slider && display) {
       slider.value = value.toString();
       this.updateMagnitudeDisplay(slider.value);
@@ -542,7 +558,9 @@ export class PrecisionUI {
   }
 
   updateThickness(): void {
-    const slider = document.getElementById('thickness-slider') as HTMLInputElement;
+    const slider = document.getElementById(
+      'thickness-slider'
+    ) as HTMLInputElement;
     const display = document.getElementById('thickness-value');
     if (slider && display) {
       const thickness = parseFloat(slider.value);
@@ -552,7 +570,9 @@ export class PrecisionUI {
   }
 
   setThicknessPreset(value: number): void {
-    const slider = document.getElementById('thickness-slider') as HTMLInputElement;
+    const slider = document.getElementById(
+      'thickness-slider'
+    ) as HTMLInputElement;
     const display = document.getElementById('thickness-value');
     if (slider && display) {
       slider.value = value.toString();
@@ -577,7 +597,7 @@ export class PrecisionUI {
   setCrossSection(wallType: 'straight' | 'curved' | 'angled'): void {
     const config: CrossSectionConfig = {
       wallType,
-      deepestPoint: { x: 0, z: 0 } // Will be set by clicking on terrain
+      deepestPoint: { x: 0, z: 0 }, // Will be set by clicking on terrain
     };
     this.toolManager.setCrossSection(config);
   }
@@ -585,17 +605,20 @@ export class PrecisionUI {
   async executeOperation(): Promise<void> {
     // Show loading spinner
     this.showLoadingSpinner();
-    
+
     try {
       // Small delay to ensure spinner is visible
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       const success = await this.toolManager.executeOperation();
-      
+
       if (success) {
         // Operation successful
         this.hideLoadingSpinner();
-        this.showNotification('✅ Operation completed successfully!', '#4CAF50');
+        this.showNotification(
+          '✅ Operation completed successfully!',
+          '#4CAF50'
+        );
       } else {
         this.hideLoadingSpinner();
         this.showNotification('❌ Failed to execute operation', '#F44336');
@@ -613,23 +636,23 @@ export class PrecisionUI {
 
   toggleLabels(): void {
     this.labelsVisible = !this.labelsVisible;
-    
+
     // Access the scaleReferences from the global window object
     const scaleReferences = (window as any).scaleReferences;
     if (scaleReferences && scaleReferences.markers) {
       scaleReferences.markers.visible = this.labelsVisible;
     }
-    
+
     // Access terrain instance to control contour labels
     const terrain = this.toolManager.getTerrain();
     if (terrain) {
       terrain.setContourLabelsVisible(this.labelsVisible);
     }
-    
+
     // Show notification
     const status = this.labelsVisible ? 'shown' : 'hidden';
     this.showNotification(`📍 All labels ${status}`, '#4CAF50');
-    
+
     // Update button appearance
     this.updateLabelsButton();
   }
@@ -697,11 +720,15 @@ export class PrecisionUI {
 
     // Get current game data
     const terrain = this.toolManager.getTerrain();
-    const volumeData = terrain ? terrain.calculateVolumeDifference() : { cut: 0, fill: 0, net: 0 };
-    const terrainStats = terrain ? terrain.getStats() : { vertexCount: 0, triangleCount: 0 };
-    
+    const volumeData = terrain
+      ? terrain.calculateVolumeDifference()
+      : { cut: 0, fill: 0, net: 0 };
+    const terrainStats = terrain
+      ? terrain.getStats()
+      : { vertexCount: 0, triangleCount: 0 };
+
     // Build popover content
-    let content = `
+    const content = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #4CAF50; padding-bottom: 15px;">
         <h2 style="margin: 0; color: #4CAF50;">🎮 CutFill Game Info</h2>
         <button onclick="document.getElementById('game-info-popover').remove()" style="padding: 8px 12px; background: #F44336; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">✖ Close</button>
@@ -801,17 +828,51 @@ export class PrecisionUI {
    * Update dynamic information in the popover
    */
   private updatePopoverInfo(): void {
-    // Update user info
-    const userInfoElement = document.getElementById('user-info');
-    const userInfo = userInfoElement ? userInfoElement.textContent : 'Guest';
-    const popoverUserInfo = document.getElementById('popover-user-info');
-    if (popoverUserInfo) {
-      popoverUserInfo.textContent = userInfo || 'Guest';
+    // Check if guest data exists and use it for user info
+    const guestData = localStorage.getItem('guestData');
+    if (guestData) {
+      const parsedGuestData = JSON.parse(guestData);
+      const ageRangeText = parsedGuestData.ageRange ? ` (${parsedGuestData.ageRange})` : '';
+      const guestDisplayText = `${parsedGuestData.username || 'Guest'}${ageRangeText}`;
+      
+      const popoverUserInfo = document.getElementById('popover-user-info');
+      if (popoverUserInfo) {
+        popoverUserInfo.textContent = guestDisplayText;
+      }
+      
+      // Also add age range to the profile section if not already displayed
+      const profileSection = popoverUserInfo?.closest('div[style*="border-left: 4px solid #4CAF50"]');
+      if (profileSection && parsedGuestData.ageRange) {
+        const existingAgeDiv = profileSection.querySelector('#guest-age-info');
+        if (!existingAgeDiv) {
+          const ageDiv = document.createElement('div');
+          ageDiv.id = 'guest-age-info';
+          ageDiv.innerHTML = `<div><strong>Age Range:</strong> ${parsedGuestData.ageRange}</div>`;
+          ageDiv.style.fontSize = '14px';
+          ageDiv.style.lineHeight = '1.6';
+          
+          // Insert after user info
+          const userInfoLine = profileSection.querySelector('div:first-child');
+          if (userInfoLine && userInfoLine.nextSibling) {
+            userInfoLine.parentNode?.insertBefore(ageDiv, userInfoLine.nextSibling);
+          }
+        }
+      }
+    } else {
+      // Fallback to regular user info display
+      const userInfoElement = document.getElementById('user-info');
+      const userInfo = userInfoElement ? userInfoElement.textContent : 'Guest';
+      const popoverUserInfo = document.getElementById('popover-user-info');
+      if (popoverUserInfo) {
+        popoverUserInfo.textContent = userInfo || 'Guest';
+      }
     }
 
     // Update level info
     const levelElement = document.getElementById('user-level');
-    const levelInfo = levelElement ? levelElement.textContent : '🌱 Level 1 - Apprentice';
+    const levelInfo = levelElement
+      ? levelElement.textContent
+      : '🌱 Level 1 - Apprentice';
     const popoverLevel = document.getElementById('popover-user-level');
     if (popoverLevel) {
       popoverLevel.textContent = levelInfo || '🌱 Level 1 - Apprentice';
@@ -827,34 +888,51 @@ export class PrecisionUI {
 
     // Update achievement info
     const achievementElement = document.getElementById('achievement-count');
-    const achievementInfo = achievementElement ? achievementElement.textContent : '🏆 0/16 Achievements';
+    const achievementInfo = achievementElement
+      ? achievementElement.textContent
+      : '🏆 0/16 Achievements';
     const popoverAchievements = document.getElementById('popover-achievements');
     if (popoverAchievements) {
-      popoverAchievements.textContent = achievementInfo?.replace('🏆 ', '') || '0/16 Unlocked';
+      popoverAchievements.textContent =
+        achievementInfo?.replace('🏆 ', '') || '0/16 Unlocked';
     }
 
     // Update current assignment
     const assignmentElement = document.getElementById('current-assignment');
-    const assignmentInfo = assignmentElement ? assignmentElement.textContent : 'No assignment selected';
-    const popoverAssignment = document.getElementById('popover-current-assignment');
+    const assignmentInfo = assignmentElement
+      ? assignmentElement.textContent
+      : 'No assignment selected';
+    const popoverAssignment = document.getElementById(
+      'popover-current-assignment'
+    );
     if (popoverAssignment) {
       popoverAssignment.textContent = assignmentInfo || 'None Selected';
     }
 
     // Update assignment progress
     const progressElement = document.getElementById('assignment-progress');
-    const progressInfo = progressElement ? progressElement.textContent : 'Progress: 0%';
-    const popoverProgress = document.getElementById('popover-assignment-progress');
+    const progressInfo = progressElement
+      ? progressElement.textContent
+      : 'Progress: 0%';
+    const popoverProgress = document.getElementById(
+      'popover-assignment-progress'
+    );
     if (popoverProgress) {
-      popoverProgress.textContent = progressInfo?.replace('Progress: ', '') || '0%';
+      popoverProgress.textContent =
+        progressInfo?.replace('Progress: ', '') || '0%';
     }
 
     // Update current objective
     const objectiveElement = document.getElementById('objective-text');
-    const objectiveInfo = objectiveElement ? objectiveElement.textContent : 'Select an assignment to begin';
-    const popoverObjective = document.getElementById('popover-current-objective');
+    const objectiveInfo = objectiveElement
+      ? objectiveElement.textContent
+      : 'Select an assignment to begin';
+    const popoverObjective = document.getElementById(
+      'popover-current-objective'
+    );
     if (popoverObjective) {
-      popoverObjective.textContent = objectiveInfo || 'Select an assignment to begin';
+      popoverObjective.textContent =
+        objectiveInfo || 'Select an assignment to begin';
     }
   }
 
@@ -879,7 +957,9 @@ export class PrecisionUI {
    */
   showAssignments(): void {
     // Trigger assignments display
-    const assignmentsBtn = document.getElementById('assignments-btn') as HTMLButtonElement;
+    const assignmentsBtn = document.getElementById(
+      'assignments-btn'
+    ) as HTMLButtonElement;
     if (assignmentsBtn) {
       assignmentsBtn.click();
     }
@@ -906,14 +986,15 @@ export class PrecisionUI {
     if (terrain) {
       const terrainData = terrain.exportTerrain();
       const dataStr = JSON.stringify(terrainData, null, 2);
-      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-      
-      const exportFileDefaultName = `terrain_${new Date().toISOString().slice(0,10)}.json`;
+      const dataUri =
+        'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+      const exportFileDefaultName = `terrain_${new Date().toISOString().slice(0, 10)}.json`;
       const linkElement = document.createElement('a');
       linkElement.setAttribute('href', dataUri);
       linkElement.setAttribute('download', exportFileDefaultName);
       linkElement.click();
-      
+
       this.showNotification('📤 Terrain exported', '#607D8B');
     }
     document.getElementById('game-info-popover')?.remove();
@@ -988,7 +1069,7 @@ export class PrecisionUI {
     `;
     notification.textContent = message;
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
       if (document.body.contains(notification)) {
         document.body.removeChild(notification);
@@ -1016,15 +1097,17 @@ export class PrecisionUI {
     }
   }
 
-public setThickness(value: number): void {
+  public setThickness(value: number): void {
     this.currentThickness = value;
-    const slider = document.getElementById('thickness-slider') as HTMLInputElement;
+    const slider = document.getElementById(
+      'thickness-slider'
+    ) as HTMLInputElement;
     const display = document.getElementById('thickness-value');
-    
+
     if (slider) {
       slider.value = value.toString();
     }
-    
+
     if (display) {
       display.textContent = `${(value / 3).toFixed(1)} yd`;
     }
@@ -1032,28 +1115,49 @@ public setThickness(value: number): void {
 
   public logout(): void {
     console.log('PrecisionUI.logout() called');
-    console.log('this.authService:', this.authService);
-    
-    if (!this.authService) {
-      console.error('AuthService is null or undefined');
-      this.showNotification('Auth service not available', '#F44336');
+
+    // ALWAYS clear Supabase session to ensure clean logout
+    if (this.authService) {
+      this.authService.signOut().catch(error => {
+        console.log('Error signing out of Supabase:', error);
+      });
+    }
+
+    // Check if user is a guest
+    const guestData = localStorage.getItem('guestData');
+    const isGuest = !!guestData;
+
+    if (isGuest) {
+      // Handle guest logout - show guest registration form again
+      this.showNotification('👋 Logging out...', '#4CAF50');
+      
+      // Clear guest data AND hasVisited flag to show guest registration form
+      localStorage.removeItem('guestData');
+      localStorage.removeItem('hasVisited');
+      
+      // Close any open popovers
+      document.getElementById('game-info-popover')?.remove();
+      
+      // Reload to show guest registration form
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+      
       return;
     }
 
-    console.log('Calling authService.signOut()');
-    // Call the signOut method from the auth service
-    this.authService.signOut()
-      .then(() => {
-        this.showNotification('👋 You have been logged out.', '#4CAF50');
-        document.getElementById('game-info-popover')?.remove();
-        // Small delay to show the notification before reloading
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      })
-      .catch((error) => {
-        console.error('Logout error:', error);
-        this.showNotification('❌ Logout failed', '#F44336');
-      });
+    // Handle authenticated user logout - also show guest registration instead of auth UI
+    this.showNotification('👋 You have been logged out.', '#4CAF50');
+    
+    // Clear all auth data and show guest registration
+    localStorage.removeItem('hasVisited');
+    localStorage.clear(); // Clear all localStorage to ensure clean state
+    
+    document.getElementById('game-info-popover')?.remove();
+    
+    // Reload to show guest registration form
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   }
-} 
+}

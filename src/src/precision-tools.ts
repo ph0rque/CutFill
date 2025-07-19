@@ -35,7 +35,14 @@ export interface CutFillOperation {
 }
 
 // UI workflow state management
-export type WorkflowStage = 'direction' | 'magnitude' | 'area-mode' | 'drawing' | 'cross-section' | 'deepest-point' | 'preview';
+export type WorkflowStage =
+  | 'direction'
+  | 'magnitude'
+  | 'area-mode'
+  | 'drawing'
+  | 'cross-section'
+  | 'deepest-point'
+  | 'preview';
 
 export interface WorkflowState {
   stage: WorkflowStage;
@@ -59,14 +66,18 @@ export class PrecisionToolManager {
     fov: number;
   } | null = null;
   private showLengthLabels: boolean = true;
-  
-  constructor(terrain: Terrain, scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
+
+  constructor(
+    terrain: Terrain,
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera
+  ) {
     this.terrain = terrain;
     this.scene = scene;
     this.camera = camera;
     this.workflowState = {
       stage: 'direction',
-      isDrawing: false
+      isDrawing: false,
     };
   }
 
@@ -95,14 +106,15 @@ export class PrecisionToolManager {
   setAreaMode(mode: 'polygon' | 'polyline'): void {
     this.workflowState.areaMode = mode;
     this.workflowState.stage = 'drawing';
-    this.workflowState.area = mode === 'polygon' 
-      ? { type: 'polygon', vertices: [], closed: false }
-      : { type: 'polyline', points: [], thickness: 5 }; // Default 5ft thickness
+    this.workflowState.area =
+      mode === 'polygon'
+        ? { type: 'polygon', vertices: [], closed: false }
+        : { type: 'polyline', points: [], thickness: 5 }; // Default 5ft thickness
     this.workflowState.isDrawing = true;
-    
+
     // Automatically switch to top-down view for drawing
     this.switchToTopDownView();
-    
+
     this.updateUI();
   }
 
@@ -114,7 +126,7 @@ export class PrecisionToolManager {
     if (!this.originalCameraState) {
       this.originalCameraState = {
         position: this.camera.position.clone(),
-        fov: this.camera.fov
+        fov: this.camera.fov,
       };
     }
 
@@ -122,18 +134,18 @@ export class PrecisionToolManager {
     // Terrain is 120ft x 120ft from (0,0) to (120,120), so center is at (60, 0, 60)
     this.camera.position.set(60, 200, 60); // High above center of terrain for better overview
     this.camera.lookAt(60, 0, 60); // Look down at center of terrain
-    
+
     // Update camera target for main-precision.ts controls
     if ((window as any).cameraTarget) {
       (window as any).cameraTarget.set(60, 0, 60);
     }
-    
+
     // Reduce FOV significantly to minimize perspective distortion (more orthographic-like)
     this.camera.fov = 20; // Very narrow FOV for minimal perspective distortion
     this.camera.updateProjectionMatrix();
-    
+
     console.log('📐 Switched to top-down view for precise area drawing');
-    
+
     // Show user notification about camera change
     this.showCameraChangeNotification();
   }
@@ -146,15 +158,15 @@ export class PrecisionToolManager {
       this.camera.position.copy(this.originalCameraState.position);
       this.camera.fov = this.originalCameraState.fov;
       this.camera.updateProjectionMatrix();
-      
+
       // Restore camera target for main-precision.ts controls
       if ((window as any).cameraTarget) {
         (window as any).cameraTarget.set(0, 0, 0);
       }
-      
+
       this.originalCameraState = null;
       console.log('🔄 Restored original camera view');
-      
+
       // Show restoration notification
       this.showCameraRestoreNotification();
     }
@@ -179,12 +191,12 @@ export class PrecisionToolManager {
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       animation: slideDown 0.3s ease-out;
     `;
-    
+
     notification.innerHTML = `
       🔄 <strong>Camera View Restored</strong><br>
       <span style="font-size: 12px;">Back to normal 3D perspective</span>
     `;
-    
+
     // Add animation styles if not already present
     if (!document.querySelector('style[data-camera-animations]')) {
       const style = document.createElement('style');
@@ -197,9 +209,9 @@ export class PrecisionToolManager {
       `;
       document.head.appendChild(style);
     }
-    
+
     document.body.appendChild(notification);
-    
+
     // Auto-remove after 2 seconds (shorter than the top-down notification)
     setTimeout(() => {
       if (document.body.contains(notification)) {
@@ -215,21 +227,21 @@ export class PrecisionToolManager {
     // Clear drawing state
     this.workflowState = {
       stage: 'direction',
-      isDrawing: false
+      isDrawing: false,
     };
-    
+
     // Clear any preview operation
     this.clearPreview();
-    
+
     // Clear drawing helpers
     this.clearDrawingHelpers();
-    
+
     // Restore camera view
     this.restoreOriginalView();
-    
+
     // Update UI
     this.updateUI();
-    
+
     console.log('Workflow reset, camera restored');
   }
 
@@ -256,24 +268,27 @@ export class PrecisionToolManager {
 
     if (this.workflowState.area.type === 'polygon') {
       const polygon = this.workflowState.area as PolygonArea;
-      
+
       // Check if clicking on first point to close polygon
       if (polygon.vertices.length > 2) {
         const firstPoint = polygon.vertices[0];
-        const distance = Math.sqrt((x - firstPoint.x) ** 2 + (z - firstPoint.z) ** 2);
-        if (distance < 2) { // Within 2 feet of first point
+        const distance = Math.sqrt(
+          (x - firstPoint.x) ** 2 + (z - firstPoint.z) ** 2
+        );
+        if (distance < 2) {
+          // Within 2 feet of first point
           polygon.closed = true;
           this.workflowState.isDrawing = false;
           this.workflowState.stage = 'cross-section';
-          
+
           // Update visualization to show the closing line
           this.updateDrawingVisualization();
-          
+
           this.updateUI();
           return true;
         }
       }
-      
+
       polygon.vertices.push(point);
     } else {
       const polyline = this.workflowState.area as PolylineArea;
@@ -302,7 +317,7 @@ export class PrecisionToolManager {
   setCrossSection(config: CrossSectionConfig): void {
     console.log('Setting cross-section configuration:', config);
     this.workflowState.crossSection = config;
-    
+
     // For straight walls, skip deepest point selection since depth is uniform
     if (config.wallType === 'straight') {
       // Set a default deepest point (not actually used for straight cuts)
@@ -313,11 +328,11 @@ export class PrecisionToolManager {
       // For curved and angled cross-sections, we need a deepest point
       this.workflowState.stage = 'deepest-point';
     }
-    
+
     console.log('Updated workflow state:', {
       stage: this.workflowState.stage,
       crossSection: this.workflowState.crossSection,
-      skippedDeepestPoint: config.wallType === 'straight'
+      skippedDeepestPoint: config.wallType === 'straight',
     });
     this.updateUI();
   }
@@ -328,23 +343,23 @@ export class PrecisionToolManager {
     console.log('Current workflow state:', {
       stage: this.workflowState.stage,
       crossSection: this.workflowState.crossSection,
-      area: this.workflowState.area
+      area: this.workflowState.area,
     });
-    
+
     if (!this.workflowState.crossSection) {
       console.error('No cross-section configuration found');
       return;
     }
-    
+
     if (!this.workflowState.area) {
       console.error('No area drawn');
       return;
     }
-    
+
     // Validate that the point is within the drawn area
     const area = this.workflowState.area;
     let isValidPoint = false;
-    
+
     if (area.type === 'polygon') {
       const polygon = area as PolygonArea;
       if (polygon.vertices.length < 3) {
@@ -363,20 +378,20 @@ export class PrecisionToolManager {
       isValidPoint = this.isPointNearPolyline({ x, z }, polyline);
       console.log('Point near polyline check:', isValidPoint);
     }
-    
+
     if (!isValidPoint) {
       console.warn('Deepest point must be within the drawn area');
       this.showAreaValidationMessage();
       return;
     }
-    
+
     this.workflowState.crossSection.deepestPoint = { x, z };
     this.workflowState.stage = 'preview';
     this.createPreview();
     this.updateUI();
-    
+
     console.log('Deepest point set successfully at:', { x, z });
-    
+
     // Add visual indicator for deepest point
     this.addDeepestPointMarker(x, z);
   }
@@ -385,21 +400,21 @@ export class PrecisionToolManager {
   private addDeepestPointMarker(x: number, z: number): void {
     // Remove any existing deepest point markers
     this.clearDeepestPointMarkers();
-    
+
     const terrainHeight = this.terrain.getHeightAtPosition(x, z);
     const markerHeight = 2; // 2 feet above terrain
-    
+
     // Create a small sphere marker
     const markerGeometry = new THREE.SphereGeometry(0.5, 8, 8);
-    const markerMaterial = new THREE.MeshBasicMaterial({ 
+    const markerMaterial = new THREE.MeshBasicMaterial({
       color: this.workflowState.direction === 'cut' ? 0xff0000 : 0x00ff00,
       transparent: true,
-      opacity: 0.8
+      opacity: 0.8,
     });
     const marker = new THREE.Mesh(markerGeometry, markerMaterial);
     marker.position.set(x, terrainHeight + markerHeight, z);
     marker.name = 'deepest-point-marker';
-    
+
     // Add pulsing animation
     const animate = () => {
       if (marker.parent) {
@@ -408,16 +423,22 @@ export class PrecisionToolManager {
       }
     };
     animate();
-    
+
     this.drawingHelpers.push(marker);
     this.scene.add(marker);
-    
-    console.log('Added deepest point marker at:', { x, y: terrainHeight + markerHeight, z });
+
+    console.log('Added deepest point marker at:', {
+      x,
+      y: terrainHeight + markerHeight,
+      z,
+    });
   }
 
   // Clear deepest point markers
   private clearDeepestPointMarkers(): void {
-    const markersToRemove = this.drawingHelpers.filter(helper => helper.name === 'deepest-point-marker');
+    const markersToRemove = this.drawingHelpers.filter(
+      helper => helper.name === 'deepest-point-marker'
+    );
     markersToRemove.forEach(marker => {
       this.scene.remove(marker);
       const index = this.drawingHelpers.indexOf(marker);
@@ -445,7 +466,7 @@ export class PrecisionToolManager {
       direction: this.workflowState.direction!,
       magnitude: this.workflowState.magnitude!,
       area: this.workflowState.area!,
-      crossSection: this.workflowState.crossSection!
+      crossSection: this.workflowState.crossSection!,
     };
 
     // Create preview geometry based on area type and cross-section
@@ -454,7 +475,7 @@ export class PrecisionToolManager {
       color: operation.direction === 'cut' ? 0xff4444 : 0x2196f3,
       transparent: true,
       opacity: 0.6,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
     });
 
     operation.previewMesh = new THREE.Mesh(previewGeometry, previewMaterial);
@@ -462,71 +483,95 @@ export class PrecisionToolManager {
     this.workflowState.previewOperation = operation;
   }
 
-  private createPreviewGeometry(operation: CutFillOperation): THREE.BufferGeometry {
+  private createPreviewGeometry(
+    operation: CutFillOperation
+  ): THREE.BufferGeometry {
     const { area, crossSection, magnitude, direction } = operation;
-    
+
     if (area.type === 'polygon') {
-      return this.createPolygonGeometry(area as PolygonArea, crossSection, magnitude, direction);
+      return this.createPolygonGeometry(
+        area as PolygonArea,
+        crossSection,
+        magnitude,
+        direction
+      );
     } else {
-      return this.createPolylineGeometry(area as PolylineArea, crossSection, magnitude, direction);
+      return this.createPolylineGeometry(
+        area as PolylineArea,
+        crossSection,
+        magnitude,
+        direction
+      );
     }
   }
 
   private createPolygonGeometry(
-    polygon: PolygonArea, 
-    crossSection: CrossSectionConfig, 
-    magnitude: number, 
+    polygon: PolygonArea,
+    crossSection: CrossSectionConfig,
+    magnitude: number,
     direction: 'cut' | 'fill'
   ): THREE.BufferGeometry {
     if (polygon.vertices.length === 0) return new THREE.BufferGeometry();
-    
+
     // Debug logging
     console.log('Creating polygon geometry for vertices:', polygon.vertices);
     console.log('Polygon closed:', polygon.closed);
     console.log('Cross-section type:', crossSection.wallType);
-    
+
     // For cross-section previews, create custom geometry instead of simple extrusion
     if (crossSection.wallType !== 'straight') {
-      return this.createPolygonCrossSectionGeometry(polygon, crossSection, magnitude, direction);
+      return this.createPolygonCrossSectionGeometry(
+        polygon,
+        crossSection,
+        magnitude,
+        direction
+      );
     }
-    
+
     // For straight walls, use the existing simple extrusion
     // Create shape in the coordinate system that will align correctly after rotation
     const shape = new THREE.Shape();
-    
+
     // Start with first vertex - flip Z coordinate to account for rotation
     const firstVertex = polygon.vertices[0];
     shape.moveTo(firstVertex.x, -firstVertex.z);
-    
+
     // Add all other vertices with flipped Z
     for (let i = 1; i < polygon.vertices.length; i++) {
       const vertex = polygon.vertices[i];
       shape.lineTo(vertex.x, -vertex.z);
     }
-    
+
     // Always close the shape for a proper polygon
     shape.closePath();
 
-    console.log('Shape created with', polygon.vertices.length, 'vertices (Z-flipped for rotation)');
+    console.log(
+      'Shape created with',
+      polygon.vertices.length,
+      'vertices (Z-flipped for rotation)'
+    );
 
     // Calculate the base elevation (highest point for cut, lowest for fill)
-    const baseElevation = this.calculateBaseElevation(polygon.vertices, direction);
+    const baseElevation = this.calculateBaseElevation(
+      polygon.vertices,
+      direction
+    );
     console.log('Base elevation:', baseElevation, 'for direction:', direction);
-    
+
     // Create extruded geometry with simpler settings
     const extrudeSettings = {
       depth: magnitude,
       bevelEnabled: false,
       steps: 1,
-      curveSegments: 12
+      curveSegments: 12,
     };
 
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     console.log('Extruded geometry created');
-    
+
     // Position the geometry correctly
     geometry.rotateX(-Math.PI / 2); // Rotate to align with terrain (XY plane to XZ plane)
-    
+
     // Translate to correct elevation
     if (direction === 'cut') {
       geometry.translate(0, baseElevation - magnitude, 0);
@@ -547,54 +592,78 @@ export class PrecisionToolManager {
   ): THREE.BufferGeometry {
     const positions: number[] = [];
     const indices: number[] = [];
-    
+
     // Find bounding box and center
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
     for (const vertex of polygon.vertices) {
       minX = Math.min(minX, vertex.x);
       maxX = Math.max(maxX, vertex.x);
       minZ = Math.min(minZ, vertex.z);
       maxZ = Math.max(maxZ, vertex.z);
     }
-    
+
     // Sample points within polygon for surface and depth calculation
     const step = 1.0; // 1 foot resolution for preview
     let vertexIndex = 0;
-    const vertexGrid: { x: number, z: number, surfaceY: number, adjustedMagnitude: number, index: number }[][] = [];
-    
+    const vertexGrid: {
+      x: number;
+      z: number;
+      surfaceY: number;
+      adjustedMagnitude: number;
+      index: number;
+    }[][] = [];
+
     // Build grid of sample points
     for (let x = minX; x <= maxX; x += step) {
-      const row: typeof vertexGrid[0] = [];
+      const row: (typeof vertexGrid)[0] = [];
       for (let z = minZ; z <= maxZ; z += step) {
         if (this.isPointInPolygon({ x, z }, polygon.vertices)) {
           const surfaceY = this.terrain.getHeightAtPosition(x, z);
-          
+
           // Calculate adjusted magnitude based on cross-section
           let adjustedMagnitude = magnitude;
-          
+
           if (crossSection.wallType !== 'straight') {
-            const distanceToEdge = this.calculateDistanceToPolygonEdge({ x, z }, polygon.vertices);
-            const maxDistanceToEdge = this.calculateMaxDistanceToEdge(polygon.vertices);
-            const normalizedDistance = Math.min(1, distanceToEdge / maxDistanceToEdge);
-            
+            const distanceToEdge = this.calculateDistanceToPolygonEdge(
+              { x, z },
+              polygon.vertices
+            );
+            const maxDistanceToEdge = this.calculateMaxDistanceToEdge(
+              polygon.vertices
+            );
+            const normalizedDistance = Math.min(
+              1,
+              distanceToEdge / maxDistanceToEdge
+            );
+
             if (crossSection.wallType === 'curved') {
               // Make curve more pronounced in preview
-              const curveFactor = Math.cos((1 - normalizedDistance) * Math.PI / 2);
+              const curveFactor = Math.cos(
+                ((1 - normalizedDistance) * Math.PI) / 2
+              );
               adjustedMagnitude = magnitude * curveFactor;
             } else if (crossSection.wallType === 'angled') {
               // Make angled slope more visible in preview
               const maxSlopeDistance = Math.abs(magnitude) * 2; // Same as actual implementation
               if (distanceToEdge < maxSlopeDistance) {
-                const slopeFactor = (distanceToEdge / maxSlopeDistance);
+                const slopeFactor = distanceToEdge / maxSlopeDistance;
                 adjustedMagnitude = magnitude * slopeFactor;
               } else {
                 // Gradual transition like in actual implementation
-                const transitionFactor = Math.max(0, 1 - (distanceToEdge - maxSlopeDistance) / (maxSlopeDistance * 0.5));
+                const transitionFactor = Math.max(
+                  0,
+                  1 -
+                    (distanceToEdge - maxSlopeDistance) /
+                      (maxSlopeDistance * 0.5)
+                );
                 adjustedMagnitude = magnitude * transitionFactor * 0.1;
               }
             }
           }
-          
+
           if (direction === 'fill') {
             // Bottom vertex (on surface)
             positions.push(x, surfaceY, z);
@@ -606,7 +675,7 @@ export class PrecisionToolManager {
             // Bottom vertex (surface - adjusted magnitude)
             positions.push(x, surfaceY - adjustedMagnitude, z);
           }
-          
+
           row.push({ x, z, surfaceY, adjustedMagnitude, index: vertexIndex });
           vertexIndex += 2; // 2 vertices per point (top and bottom)
         } else {
@@ -615,7 +684,7 @@ export class PrecisionToolManager {
       }
       vertexGrid.push(row);
     }
-    
+
     // Create faces between adjacent points
     for (let i = 0; i < vertexGrid.length - 1; i++) {
       for (let j = 0; j < vertexGrid[i].length - 1; j++) {
@@ -623,14 +692,14 @@ export class PrecisionToolManager {
         const right = vertexGrid[i + 1][j];
         const down = vertexGrid[i][j + 1];
         const diag = vertexGrid[i + 1][j + 1];
-        
+
         if (current && right && down && diag) {
           // Create triangular faces for the quad
           if (direction === 'fill') {
             // Bottom face (surface)
             indices.push(current.index, right.index, down.index);
             indices.push(right.index, diag.index, down.index);
-            
+
             // Top face
             indices.push(current.index + 1, down.index + 1, right.index + 1);
             indices.push(right.index + 1, down.index + 1, diag.index + 1);
@@ -638,24 +707,27 @@ export class PrecisionToolManager {
             // Top face (surface)
             indices.push(current.index, down.index, right.index);
             indices.push(right.index, down.index, diag.index);
-            
+
             // Bottom face
             indices.push(current.index + 1, right.index + 1, down.index + 1);
             indices.push(right.index + 1, diag.index + 1, down.index + 1);
           }
-          
+
           // Side faces (connect top and bottom)
           indices.push(current.index, current.index + 1, right.index);
           indices.push(right.index, current.index + 1, right.index + 1);
         }
       }
     }
-    
+
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    
+
     return geometry;
   }
 
@@ -668,7 +740,11 @@ export class PrecisionToolManager {
     if (polyline.points.length < 2) return new THREE.BufferGeometry();
 
     // For surface-following polylines, create custom geometry instead of using ExtrudeGeometry
-    return this.createSurfaceFollowingPolylineGeometry(polyline, magnitude, direction);
+    return this.createSurfaceFollowingPolylineGeometry(
+      polyline,
+      magnitude,
+      direction
+    );
   }
 
   private createSurfaceFollowingPolylineGeometry(
@@ -679,70 +755,77 @@ export class PrecisionToolManager {
     const positions: number[] = [];
     const indices: number[] = [];
     const halfThickness = polyline.thickness / 2;
-    
+
     // Get cross-section configuration
-    const crossSection = this.workflowState.crossSection || { wallType: 'straight', deepestPoint: { x: 0, z: 0 } };
-    
+    const crossSection = this.workflowState.crossSection || {
+      wallType: 'straight',
+      deepestPoint: { x: 0, z: 0 },
+    };
+
     // Create segments between each pair of points
     let vertexIndex = 0;
-    
+
     for (let i = 0; i < polyline.points.length - 1; i++) {
       const start = polyline.points[i];
       const end = polyline.points[i + 1];
-      
+
       // Calculate direction and perpendicular vectors
       const dx = end.x - start.x;
       const dz = end.z - start.z;
       const length = Math.sqrt(dx * dx + dz * dz);
       const normalizedX = dx / length;
       const normalizedZ = dz / length;
-      
+
       // Perpendicular vector for thickness
       const perpX = -normalizedZ;
       const perpZ = normalizedX;
-      
+
       // Sample points along the segment
       const steps = Math.max(10, Math.floor(length * 2));
-      
+
       for (let step = 0; step <= steps; step++) {
         const t = step / steps;
         const centerX = start.x + normalizedX * t * length;
         const centerZ = start.z + normalizedZ * t * length;
         const surfaceY = this.terrain.getHeightAtPosition(centerX, centerZ);
-        
+
         // Create vertices for left and right edges of thickness
         const leftX = centerX + perpX * halfThickness;
         const leftZ = centerZ + perpZ * halfThickness;
         const rightX = centerX - perpX * halfThickness;
         const rightZ = centerZ - perpZ * halfThickness;
-        
+
         const leftSurfaceY = this.terrain.getHeightAtPosition(leftX, leftZ);
         const rightSurfaceY = this.terrain.getHeightAtPosition(rightX, rightZ);
-        
+
         // Calculate adjusted magnitude for cross-section (at edges - worst case for angled)
         let leftMagnitude = magnitude;
         let rightMagnitude = magnitude;
-        
+
         if (crossSection.wallType === 'curved') {
           // At edges, curveFactor = cos(π/2) = 0
           const curveFactor = Math.cos(Math.PI / 2);
           leftMagnitude = rightMagnitude = magnitude * curveFactor; // This will be 0 at edges
           // But we want some magnitude at edges for visibility, so use a softer curve
-          const softerCurveFactor = Math.cos(0.8 * Math.PI / 2); // ~0.31 at edges
+          const softerCurveFactor = Math.cos((0.8 * Math.PI) / 2); // ~0.31 at edges
           leftMagnitude = rightMagnitude = magnitude * softerCurveFactor;
         } else if (crossSection.wallType === 'angled') {
           // For 45-degree slopes, at halfThickness distance, magnitude should be reduced
           const maxSlopeDistance = Math.abs(magnitude) * 2; // Match actual implementation
           if (halfThickness <= maxSlopeDistance) {
-            const slopeFactor = (maxSlopeDistance - halfThickness) / maxSlopeDistance;
+            const slopeFactor =
+              (maxSlopeDistance - halfThickness) / maxSlopeDistance;
             leftMagnitude = rightMagnitude = magnitude * slopeFactor;
           } else {
             // Gradual transition like actual implementation
-            const transitionFactor = Math.max(0, 1 - (halfThickness - maxSlopeDistance) / (maxSlopeDistance * 0.5));
+            const transitionFactor = Math.max(
+              0,
+              1 - (halfThickness - maxSlopeDistance) / (maxSlopeDistance * 0.5)
+            );
             leftMagnitude = rightMagnitude = magnitude * transitionFactor * 0.1;
           }
         }
-        
+
         if (direction === 'fill') {
           // Bottom vertices (on surface)
           positions.push(leftX, leftSurfaceY, leftZ);
@@ -758,25 +841,25 @@ export class PrecisionToolManager {
           positions.push(leftX, leftSurfaceY - leftMagnitude, leftZ);
           positions.push(rightX, rightSurfaceY - rightMagnitude, rightZ);
         }
-        
+
         // Create faces if not the first step
         if (step > 0) {
           const prevBase = vertexIndex - 4;
           const currBase = vertexIndex;
-          
+
           if (direction === 'fill') {
             // Bottom face (surface)
             indices.push(prevBase, currBase, prevBase + 1);
             indices.push(currBase, currBase + 1, prevBase + 1);
-            
+
             // Top face
             indices.push(prevBase + 2, prevBase + 3, currBase + 2);
             indices.push(currBase + 2, prevBase + 3, currBase + 3);
-            
+
             // Left side face
             indices.push(prevBase, prevBase + 2, currBase);
             indices.push(currBase, prevBase + 2, currBase + 2);
-            
+
             // Right side face
             indices.push(prevBase + 1, currBase + 1, prevBase + 3);
             indices.push(currBase + 1, prevBase + 3, prevBase + 3);
@@ -784,36 +867,42 @@ export class PrecisionToolManager {
             // Top face (surface)
             indices.push(prevBase, prevBase + 1, currBase);
             indices.push(currBase, prevBase + 1, currBase + 1);
-            
+
             // Bottom face
             indices.push(prevBase + 2, currBase + 2, prevBase + 3);
             indices.push(currBase + 2, currBase + 3, prevBase + 3);
-            
+
             // Left side face
             indices.push(prevBase, currBase, prevBase + 2);
             indices.push(currBase, currBase + 2, prevBase + 2);
-            
+
             // Right side face
             indices.push(prevBase + 1, prevBase + 3, currBase + 1);
             indices.push(currBase + 1, prevBase + 3, currBase + 3);
           }
         }
-        
+
         vertexIndex += 4;
       }
     }
-    
+
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    
+
     return geometry;
   }
 
-  private calculateBaseElevation(points: PrecisionPoint[], direction: 'cut' | 'fill'): number {
+  private calculateBaseElevation(
+    points: PrecisionPoint[],
+    direction: 'cut' | 'fill'
+  ): number {
     let elevation = direction === 'cut' ? -Infinity : Infinity;
-    
+
     for (const point of points) {
       const terrainHeight = this.terrain.getHeightAtPosition(point.x, point.z);
       if (direction === 'cut') {
@@ -822,7 +911,7 @@ export class PrecisionToolManager {
         elevation = Math.min(elevation, terrainHeight); // Lowest point for fills
       }
     }
-    
+
     return elevation;
   }
 
@@ -832,40 +921,40 @@ export class PrecisionToolManager {
 
     console.log('Starting operation execution...');
     const operation = this.workflowState.previewOperation;
-    
+
     // Store initial volume data for tracking
     const initialVolumes = this.terrain.calculateVolumeDifference();
-    
+
     try {
       // Apply the operation to the terrain
       console.log('Applying operation to terrain...');
       await this.applyOperationToTerrain(operation);
       console.log('Operation applied successfully');
-      
+
       // Calculate volume changes for progress tracking
       const finalVolumes = this.terrain.calculateVolumeDifference();
       const volumeChange = {
         cut: finalVolumes.cut - initialVolumes.cut,
         fill: finalVolumes.fill - initialVolumes.fill,
-        net: finalVolumes.net - initialVolumes.net
+        net: finalVolumes.net - initialVolumes.net,
       };
-      
+
       console.log('Volume changes:', {
         cut: `${(volumeChange.cut / 27).toFixed(2)} yd³`,
         fill: `${(volumeChange.fill / 27).toFixed(2)} yd³`,
-        net: `${(volumeChange.net / 27).toFixed(2)} yd³`
+        net: `${(volumeChange.net / 27).toFixed(2)} yd³`,
       });
-      
+
       // Update volume display
       this.updateVolumeDisplay();
-      
+
       // Track progress if available
       this.trackProgress(operation, volumeChange);
-      
+
       // Clear the workflow and return to start
       this.clearWorkflow();
       console.log('Workflow cleared, operation complete');
-      
+
       return true;
     } catch (error) {
       console.error('Error during operation execution:', error);
@@ -887,9 +976,9 @@ export class PrecisionToolManager {
         const volumesYards = {
           cut: Math.max(0, volumes.cut / 27),
           fill: Math.max(0, volumes.fill / 27),
-          net: volumes.net / 27
+          net: volumes.net / 27,
         };
-        
+
         volumeInfo.innerHTML = `
           <strong>Volume Analysis:</strong><br>
           Cut: ${volumesYards.cut.toFixed(2)} yd³<br>
@@ -904,31 +993,47 @@ export class PrecisionToolManager {
   private trackProgress(operation: CutFillOperation, volumeChange: any): void {
     try {
       // Track volume movement for progress (convert cubic feet to cubic yards)
-      const totalVolumeChange = Math.abs(volumeChange.cut) + Math.abs(volumeChange.fill);
+      const totalVolumeChange =
+        Math.abs(volumeChange.cut) + Math.abs(volumeChange.fill);
       const volumeYards = totalVolumeChange / 27;
-      
+
       // Access global progress tracker if available
-      if (typeof (window as any).progressTracker === 'object' && (window as any).progressTracker) {
+      if (
+        typeof (window as any).progressTracker === 'object' &&
+        (window as any).progressTracker
+      ) {
         (window as any).progressTracker.recordVolumeMove(volumeYards);
-        console.log('Recorded volume movement for progress:', volumeYards.toFixed(2), 'yd³');
+        console.log(
+          'Recorded volume movement for progress:',
+          volumeYards.toFixed(2),
+          'yd³'
+        );
       }
-      
+
       // Track tool usage
-      const toolType = operation.area.type === 'polygon' ? 'precision-polygon' : 'precision-polyline';
-      if (typeof (window as any).progressTracker === 'object' && (window as any).progressTracker) {
+      const toolType =
+        operation.area.type === 'polygon'
+          ? 'precision-polygon'
+          : 'precision-polyline';
+      if (
+        typeof (window as any).progressTracker === 'object' &&
+        (window as any).progressTracker
+      ) {
         (window as any).progressTracker.recordToolUsage(toolType);
         console.log('Recorded tool usage:', toolType);
       }
-      
+
       // Track assignment progress if available
-      if (typeof (window as any).assignmentManager === 'object' && (window as any).assignmentManager) {
+      if (
+        typeof (window as any).assignmentManager === 'object' &&
+        (window as any).assignmentManager
+      ) {
         (window as any).assignmentManager.addToolUsage(operation.direction);
         console.log('Recorded assignment tool usage:', operation.direction);
       }
-      
+
       // Show volume change notification
       this.showVolumeChangeNotification(volumeChange);
-      
     } catch (error) {
       console.warn('Error tracking progress:', error);
     }
@@ -936,9 +1041,11 @@ export class PrecisionToolManager {
 
   // Show notification about volume changes
   private showVolumeChangeNotification(volumeChange: any): void {
-    const totalVolumeYards = (Math.abs(volumeChange.cut) + Math.abs(volumeChange.fill)) / 27;
-    
-    if (totalVolumeYards > 0.1) { // Only show for significant changes
+    const totalVolumeYards =
+      (Math.abs(volumeChange.cut) + Math.abs(volumeChange.fill)) / 27;
+
+    if (totalVolumeYards > 0.1) {
+      // Only show for significant changes
       const notification = document.createElement('div');
       notification.style.cssText = `
         position: fixed;
@@ -953,17 +1060,17 @@ export class PrecisionToolManager {
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         animation: slideInOut 3s ease-in-out;
       `;
-      
+
       const direction = this.workflowState.direction;
       const icon = direction === 'cut' ? '⛏️' : '🏔️';
-      
+
       notification.innerHTML = `
         ${icon} <strong>Operation Complete!</strong><br>
         <span style="font-size: 12px;">Volume changed: ${totalVolumeYards.toFixed(2)} yd³</span>
       `;
-      
+
       document.body.appendChild(notification);
-      
+
       setTimeout(() => {
         if (document.body.contains(notification)) {
           document.body.removeChild(notification);
@@ -972,121 +1079,178 @@ export class PrecisionToolManager {
     }
   }
 
-  private async applyOperationToTerrain(operation: CutFillOperation): Promise<void> {
+  private async applyOperationToTerrain(
+    operation: CutFillOperation
+  ): Promise<void> {
     const { area, magnitude, direction, crossSection } = operation;
     const multiplier = direction === 'cut' ? -1 : 1;
-    
+
     console.log('Terrain operation details:', {
       direction,
       magnitude,
       multiplier,
-      areaType: area.type
+      areaType: area.type,
     });
-    
+
     // Small delay to ensure loading spinner is visible
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     if (area.type === 'polygon') {
-      await this.applyPolygonOperation(area as PolygonArea, magnitude * multiplier, crossSection);
+      await this.applyPolygonOperation(
+        area as PolygonArea,
+        magnitude * multiplier,
+        crossSection
+      );
     } else {
-      await this.applyPolylineOperation(area as PolylineArea, magnitude * multiplier, crossSection);
+      await this.applyPolylineOperation(
+        area as PolylineArea,
+        magnitude * multiplier,
+        crossSection
+      );
     }
   }
 
-  private async applyPolygonOperation(polygon: PolygonArea, signedMagnitude: number, crossSection: CrossSectionConfig): Promise<void> {
+  private async applyPolygonOperation(
+    polygon: PolygonArea,
+    signedMagnitude: number,
+    crossSection: CrossSectionConfig
+  ): Promise<void> {
     console.log('Applying polygon operation:', {
       vertices: polygon.vertices.length,
       magnitude: signedMagnitude,
       wallType: crossSection.wallType,
-      deepestPoint: crossSection.deepestPoint
+      deepestPoint: crossSection.deepestPoint,
     });
-    
+
     if (polygon.vertices.length < 3) {
       console.warn('Not enough vertices for polygon operation');
       return;
     }
-    
+
     // Use appropriate reference elevation based on cross-section type
     let referenceElevation: number;
     if (crossSection.wallType === 'straight') {
       // For straight walls, use base elevation (highest for cut, lowest for fill)
-      referenceElevation = this.calculateBaseElevation(polygon.vertices, signedMagnitude < 0 ? 'cut' : 'fill');
-      console.log('Using base elevation for straight walls:', referenceElevation);
+      referenceElevation = this.calculateBaseElevation(
+        polygon.vertices,
+        signedMagnitude < 0 ? 'cut' : 'fill'
+      );
+      console.log(
+        'Using base elevation for straight walls:',
+        referenceElevation
+      );
     } else if (crossSection.deepestPoint) {
       // For curved/angled walls, use deepest point elevation
-      referenceElevation = this.terrain.getHeightAtPosition(crossSection.deepestPoint.x, crossSection.deepestPoint.z);
-      console.log('Using deepest point elevation as reference:', referenceElevation, 'at position:', crossSection.deepestPoint);
+      referenceElevation = this.terrain.getHeightAtPosition(
+        crossSection.deepestPoint.x,
+        crossSection.deepestPoint.z
+      );
+      console.log(
+        'Using deepest point elevation as reference:',
+        referenceElevation,
+        'at position:',
+        crossSection.deepestPoint
+      );
     } else {
       // Fallback to calculated base elevation if no deepest point specified
-      referenceElevation = this.calculateBaseElevation(polygon.vertices, signedMagnitude < 0 ? 'cut' : 'fill');
-      console.log('Using calculated base elevation as reference:', referenceElevation);
+      referenceElevation = this.calculateBaseElevation(
+        polygon.vertices,
+        signedMagnitude < 0 ? 'cut' : 'fill'
+      );
+      console.log(
+        'Using calculated base elevation as reference:',
+        referenceElevation
+      );
     }
-    
+
     // Find bounding box and center point
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minZ = Infinity,
+      maxZ = -Infinity;
     for (const vertex of polygon.vertices) {
       minX = Math.min(minX, vertex.x);
       maxX = Math.max(maxX, vertex.x);
       minZ = Math.min(minZ, vertex.z);
       maxZ = Math.max(maxZ, vertex.z);
     }
-    
+
     const centerX = (minX + maxX) / 2;
     const centerZ = (minZ + maxZ) / 2;
-    
+
     console.log('Polygon bounding box:', { minX, maxX, minZ, maxZ });
     console.log('Polygon center:', { centerX, centerZ });
-    
+
     // Safety check for reasonable bounds
     const area = (maxX - minX) * (maxZ - minZ);
-    if (area > 10000) { // Larger than 100x100 terrain
+    if (area > 10000) {
+      // Larger than 100x100 terrain
       console.warn('Polygon area too large, aborting operation');
       return;
     }
-    
+
     // Sample points within the bounding box and check if they're inside the polygon
     const step = 0.5; // More precise sampling for better polygon fit
     let modifiedPoints = 0;
     const maxPoints = 10000; // Safety limit
-    
+
     // Calculate target elevation from reference point
     const targetElevation = referenceElevation + signedMagnitude;
-    console.log('Target elevation:', targetElevation, '(reference:', referenceElevation, '+ magnitude:', signedMagnitude, ')');
-    
+    console.log(
+      'Target elevation:',
+      targetElevation,
+      '(reference:',
+      referenceElevation,
+      '+ magnitude:',
+      signedMagnitude,
+      ')'
+    );
+
     for (let x = minX; x <= maxX; x += step) {
       for (let z = minZ; z <= maxZ; z += step) {
         if (modifiedPoints > maxPoints) {
           console.warn('Reached maximum point limit, stopping operation');
           break;
         }
-        
+
         if (this.isPointInPolygon({ x, z }, polygon.vertices)) {
           // Calculate current terrain height at this position
           const currentHeight = this.terrain.getHeightAtPosition(x, z);
-          
+
           // Calculate distance-based magnitude for cross-section effects
           let adjustedTargetElevation = targetElevation;
-          
+
           if (crossSection.wallType !== 'straight') {
             // Calculate distance from point to polygon edge or deepest point
             let distanceFromReference: number;
             let maxDistanceFromReference: number;
-            
+
             if (crossSection.deepestPoint) {
               // Distance from deepest point
               distanceFromReference = Math.sqrt(
-                (x - crossSection.deepestPoint.x) ** 2 + 
-                (z - crossSection.deepestPoint.z) ** 2
+                (x - crossSection.deepestPoint.x) ** 2 +
+                  (z - crossSection.deepestPoint.z) ** 2
               );
-              maxDistanceFromReference = this.calculateMaxDistanceFromPoint(crossSection.deepestPoint, polygon.vertices);
+              maxDistanceFromReference = this.calculateMaxDistanceFromPoint(
+                crossSection.deepestPoint,
+                polygon.vertices
+              );
             } else {
               // Distance from polygon edge (fallback)
-              distanceFromReference = this.calculateDistanceToPolygonEdge({ x, z }, polygon.vertices);
-              maxDistanceFromReference = this.calculateMaxDistanceToEdge(polygon.vertices);
+              distanceFromReference = this.calculateDistanceToPolygonEdge(
+                { x, z },
+                polygon.vertices
+              );
+              maxDistanceFromReference = this.calculateMaxDistanceToEdge(
+                polygon.vertices
+              );
             }
-            
-            const normalizedDistance = Math.min(1, distanceFromReference / maxDistanceFromReference);
-            
+
+            const normalizedDistance = Math.min(
+              1,
+              distanceFromReference / maxDistanceFromReference
+            );
+
             // Debug logging for first few points
             if (modifiedPoints < 5) {
               console.log('Cross-section debug:', {
@@ -1095,102 +1259,120 @@ export class PrecisionToolManager {
                 distanceFromReference,
                 maxDistanceFromReference,
                 normalizedDistance,
-                originalMagnitude: signedMagnitude
+                originalMagnitude: signedMagnitude,
               });
             }
-            
+
             if (crossSection.wallType === 'curved') {
               // Smooth curved transition using cosine function - make more pronounced
               // Full magnitude at deepest point (normalizedDistance = 0), tapering outward
-              const curveFactor = Math.cos(normalizedDistance * Math.PI / 2);
+              const curveFactor = Math.cos((normalizedDistance * Math.PI) / 2);
               const adjustedMagnitude = signedMagnitude * curveFactor;
               adjustedTargetElevation = referenceElevation + adjustedMagnitude;
-              
+
               if (modifiedPoints < 5) {
                 console.log('Curved calculation:', {
                   curveFactor,
                   adjustedMagnitude,
-                  adjustedTargetElevation
+                  adjustedTargetElevation,
                 });
               }
             } else if (crossSection.wallType === 'angled') {
               // Linear 45-degree slope from deepest point outward - make more aggressive
               const maxSlopeDistance = Math.abs(signedMagnitude) * 2; // Double the slope distance for more visible effect
-              
+
               if (distanceFromReference < maxSlopeDistance) {
                 // Within slope range - apply linear scaling
-                const slopeFactor = (maxSlopeDistance - distanceFromReference) / maxSlopeDistance;
+                const slopeFactor =
+                  (maxSlopeDistance - distanceFromReference) / maxSlopeDistance;
                 const adjustedMagnitude = signedMagnitude * slopeFactor;
-                adjustedTargetElevation = referenceElevation + adjustedMagnitude;
-                
+                adjustedTargetElevation =
+                  referenceElevation + adjustedMagnitude;
+
                 if (modifiedPoints < 5) {
                   console.log('Angled calculation:', {
                     maxSlopeDistance,
                     slopeFactor,
                     adjustedMagnitude,
-                    adjustedTargetElevation
+                    adjustedTargetElevation,
                   });
                 }
               } else {
                 // Beyond slope range - gradually transition to current terrain (not abrupt)
-                const transitionFactor = Math.max(0, 1 - (distanceFromReference - maxSlopeDistance) / (maxSlopeDistance * 0.5));
-                const adjustedMagnitude = signedMagnitude * transitionFactor * 0.1; // Small residual effect
-                adjustedTargetElevation = referenceElevation + adjustedMagnitude;
-                
+                const transitionFactor = Math.max(
+                  0,
+                  1 -
+                    (distanceFromReference - maxSlopeDistance) /
+                      (maxSlopeDistance * 0.5)
+                );
+                const adjustedMagnitude =
+                  signedMagnitude * transitionFactor * 0.1; // Small residual effect
+                adjustedTargetElevation =
+                  referenceElevation + adjustedMagnitude;
+
                 if (modifiedPoints < 5) {
                   console.log('Angled transition:', {
                     transitionFactor,
                     adjustedMagnitude,
-                    adjustedTargetElevation
+                    adjustedTargetElevation,
                   });
                 }
               }
             }
           }
-          
+
           // Calculate height change needed
           let heightChange = adjustedTargetElevation - currentHeight;
-          
+
           // Apply depth limits to prevent excessive cuts/fills
           const originalHeight = this.terrain.getOriginalHeightAtPosition(x, z);
           const proposedNewHeight = currentHeight + heightChange;
           const changeFromOriginal = proposedNewHeight - originalHeight;
-          
+
           // DEPTH LIMITS: First ensure we don't exceed the user-specified magnitude
           const userSpecifiedLimit = Math.abs(signedMagnitude); // The exact depth/height user requested
-          const maxAllowedChange = signedMagnitude < 0 ? -userSpecifiedLimit : userSpecifiedLimit;
-          
+          const maxAllowedChange =
+            signedMagnitude < 0 ? -userSpecifiedLimit : userSpecifiedLimit;
+
           // Secondary limits: Prevent cuts deeper than 20 feet or fills higher than 20 feet
-          const maxCutDepth = -6.67;  // 6.67 yards below original terrain (was 20 feet)
+          const maxCutDepth = -6.67; // 6.67 yards below original terrain (was 20 feet)
           const maxFillHeight = 6.67; // 6.67 yards above original terrain (was 20 feet)
           const terrainBlockBottom = -25.0; // Don't cut through the terrain block bottom
-          
+
           let limitedNewHeight = proposedNewHeight;
-          
+
           // First, apply user-specified limits (most restrictive for polygons)
-          if (signedMagnitude < 0) { // Cut operation
+          if (signedMagnitude < 0) {
+            // Cut operation
             const maxAllowedCutHeight = originalHeight + maxAllowedChange;
             limitedNewHeight = Math.max(maxAllowedCutHeight, limitedNewHeight);
-          } else { // Fill operation  
+          } else {
+            // Fill operation
             const maxAllowedFillHeight = originalHeight + maxAllowedChange;
             limitedNewHeight = Math.min(maxAllowedFillHeight, limitedNewHeight);
           }
-          
+
           // Then apply safety limits (secondary)
           if (changeFromOriginal < maxCutDepth) {
             // Limit cut to 20 feet below original
-            limitedNewHeight = Math.max(limitedNewHeight, originalHeight + maxCutDepth);
+            limitedNewHeight = Math.max(
+              limitedNewHeight,
+              originalHeight + maxCutDepth
+            );
           } else if (changeFromOriginal > maxFillHeight) {
             // Limit fill to 20 feet above original
-            limitedNewHeight = Math.min(limitedNewHeight, originalHeight + maxFillHeight);
+            limitedNewHeight = Math.min(
+              limitedNewHeight,
+              originalHeight + maxFillHeight
+            );
           }
-          
+
           // Finally, ensure we don't cut through the terrain block bottom
           limitedNewHeight = Math.max(terrainBlockBottom, limitedNewHeight);
-          
+
           // Recalculate the actual height change after applying limits
           heightChange = limitedNewHeight - currentHeight;
-          
+
           // Only apply if the change is significant (avoid tiny adjustments)
           if (Math.abs(heightChange) > 0.1) {
             this.terrain.modifyHeightAtPosition(x, z, heightChange);
@@ -1200,9 +1382,15 @@ export class PrecisionToolManager {
       }
       if (modifiedPoints > maxPoints) break;
     }
-    
-    console.log('Modified', modifiedPoints, 'terrain points for polygon with', crossSection.wallType, 'cross-section');
-    
+
+    console.log(
+      'Modified',
+      modifiedPoints,
+      'terrain points for polygon with',
+      crossSection.wallType,
+      'cross-section'
+    );
+
     // Create overlays for fill operations
     if (signedMagnitude > 0) {
       // For fill operations, create visual overlay to show what was filled
@@ -1211,75 +1399,81 @@ export class PrecisionToolManager {
     }
   }
 
-  private async applyPolylineOperation(polyline: PolylineArea, signedMagnitude: number, crossSection: CrossSectionConfig): Promise<void> {
+  private async applyPolylineOperation(
+    polyline: PolylineArea,
+    signedMagnitude: number,
+    crossSection: CrossSectionConfig
+  ): Promise<void> {
     console.log('Applying polyline operation:', {
       points: polyline.points.length,
       thickness: polyline.thickness,
       magnitude: signedMagnitude,
       wallType: crossSection.wallType,
-      deepestPoint: crossSection.deepestPoint
+      deepestPoint: crossSection.deepestPoint,
     });
-    
+
     if (polyline.points.length < 2) {
       console.warn('Not enough points for polyline operation');
       return;
     }
-    
+
     const halfThickness = polyline.thickness / 2;
     let modifiedPoints = 0;
-    
+
     for (let i = 0; i < polyline.points.length - 1; i++) {
       const start = polyline.points[i];
       const end = polyline.points[i + 1];
-      
+
       // Create line segment and apply modifications perpendicular to it
-      const direction = { 
-        x: end.x - start.x, 
-        z: end.z - start.z 
+      const direction = {
+        x: end.x - start.x,
+        z: end.z - start.z,
       };
       const length = Math.sqrt(direction.x ** 2 + direction.z ** 2);
-      const normalized = { 
-        x: direction.x / length, 
-        z: direction.z / length 
+      const normalized = {
+        x: direction.x / length,
+        z: direction.z / length,
       };
-      const perpendicular = { 
-        x: -normalized.z, 
-        z: normalized.x 
+      const perpendicular = {
+        x: -normalized.z,
+        z: normalized.x,
       };
-      
+
       // Sample along the line segment
       const step = 0.5;
       for (let t = 0; t <= length; t += step) {
         const centerX = start.x + normalized.x * t;
         const centerZ = start.z + normalized.z * t;
-        
+
         // Apply modifications across the thickness
         for (let w = -halfThickness; w <= halfThickness; w += step) {
           const x = centerX + perpendicular.x * w;
           const z = centerZ + perpendicular.z * w;
-          
+
           // Calculate current terrain height at this specific position
           const currentHeight = this.terrain.getHeightAtPosition(x, z);
-          
+
           // For surface-following operations, use ORIGINAL terrain height as reference to prevent stacking
-          const originalTerrainHeight = this.terrain.getOriginalHeightAtPosition(x, z);
+          const originalTerrainHeight =
+            this.terrain.getOriginalHeightAtPosition(x, z);
           const localReferenceElevation = originalTerrainHeight;
-          
+
           // Calculate distance from deepest point for cross-section effects
           let distanceFromReference: number;
           if (crossSection.deepestPoint) {
             distanceFromReference = Math.sqrt(
-              (x - crossSection.deepestPoint.x) ** 2 + 
-              (z - crossSection.deepestPoint.z) ** 2
+              (x - crossSection.deepestPoint.x) ** 2 +
+                (z - crossSection.deepestPoint.z) ** 2
             );
           } else {
             // Fallback: distance from center line
             distanceFromReference = Math.abs(w);
           }
-          
+
           // Calculate adjusted magnitude based on cross-section type and distance
-          let adjustedTargetElevation = localReferenceElevation + signedMagnitude;
-          
+          let adjustedTargetElevation =
+            localReferenceElevation + signedMagnitude;
+
           if (crossSection.wallType === 'straight') {
             // Straight walls: full depth/height throughout thickness, relative to local surface
             adjustedTargetElevation = localReferenceElevation + signedMagnitude;
@@ -1288,72 +1482,98 @@ export class PrecisionToolManager {
             let normalizedDistance: number;
             if (crossSection.deepestPoint) {
               // Calculate max distance along the polyline for normalization
-              const maxDistanceFromDeepest = this.calculateMaxDistanceFromPointToPolyline(crossSection.deepestPoint, polyline);
-              normalizedDistance = Math.min(1, distanceFromReference / maxDistanceFromDeepest);
+              const maxDistanceFromDeepest =
+                this.calculateMaxDistanceFromPointToPolyline(
+                  crossSection.deepestPoint,
+                  polyline
+                );
+              normalizedDistance = Math.min(
+                1,
+                distanceFromReference / maxDistanceFromDeepest
+              );
             } else {
               normalizedDistance = Math.abs(w) / halfThickness;
             }
-            
-            const curveFactor = Math.cos(normalizedDistance * Math.PI / 2);
+
+            const curveFactor = Math.cos((normalizedDistance * Math.PI) / 2);
             const adjustedMagnitude = signedMagnitude * curveFactor;
-            adjustedTargetElevation = localReferenceElevation + adjustedMagnitude;
+            adjustedTargetElevation =
+              localReferenceElevation + adjustedMagnitude;
           } else if (crossSection.wallType === 'angled') {
             // Angled cross-section: 45-degree linear slopes from deepest point
             const maxSlopeDistance = Math.abs(signedMagnitude) * 2; // Make more aggressive like polygon
-            
+
             if (distanceFromReference <= maxSlopeDistance) {
               // Within slope range: linear scaling from deepest point
-              const slopeFactor = (maxSlopeDistance - distanceFromReference) / maxSlopeDistance;
+              const slopeFactor =
+                (maxSlopeDistance - distanceFromReference) / maxSlopeDistance;
               const adjustedMagnitude = signedMagnitude * slopeFactor;
-              adjustedTargetElevation = localReferenceElevation + adjustedMagnitude;
+              adjustedTargetElevation =
+                localReferenceElevation + adjustedMagnitude;
             } else {
               // Beyond slope range: gradual transition (not abrupt cutoff)
-              const transitionFactor = Math.max(0, 1 - (distanceFromReference - maxSlopeDistance) / (maxSlopeDistance * 0.5));
-              const adjustedMagnitude = signedMagnitude * transitionFactor * 0.1;
-              adjustedTargetElevation = localReferenceElevation + adjustedMagnitude;
+              const transitionFactor = Math.max(
+                0,
+                1 -
+                  (distanceFromReference - maxSlopeDistance) /
+                    (maxSlopeDistance * 0.5)
+              );
+              const adjustedMagnitude =
+                signedMagnitude * transitionFactor * 0.1;
+              adjustedTargetElevation =
+                localReferenceElevation + adjustedMagnitude;
             }
           }
-          
+
           // Calculate height change needed
           let heightChange = adjustedTargetElevation - currentHeight;
-          
+
           // Apply depth limits to prevent excessive cuts/fills
           const originalHeight = this.terrain.getOriginalHeightAtPosition(x, z);
           const proposedNewHeight = currentHeight + heightChange;
           const changeFromOriginal = proposedNewHeight - originalHeight;
-          
+
           // DEPTH LIMITS: First ensure we don't exceed the user-specified magnitude
           const userSpecifiedLimit = Math.abs(signedMagnitude); // The exact depth/height user requested
-          const maxAllowedChange = signedMagnitude < 0 ? -userSpecifiedLimit : userSpecifiedLimit;
-          
+          const maxAllowedChange =
+            signedMagnitude < 0 ? -userSpecifiedLimit : userSpecifiedLimit;
+
           // Secondary limits: Prevent cuts deeper than 20 feet or fills higher than 20 feet
-          const maxCutDepth = -6.67;  // 6.67 yards below original terrain (was 20 feet)
+          const maxCutDepth = -6.67; // 6.67 yards below original terrain (was 20 feet)
           const maxFillHeight = 6.67; // 6.67 yards above original terrain (was 20 feet)
           const terrainBlockBottom = -25.0; // Don't cut through the terrain block bottom
-          
+
           let limitedNewHeight = proposedNewHeight;
-          
+
           // First, apply user-specified limits (most restrictive for polylines)
-          if (signedMagnitude < 0) { // Cut operation
+          if (signedMagnitude < 0) {
+            // Cut operation
             const maxAllowedCutHeight = originalHeight + maxAllowedChange;
             limitedNewHeight = Math.max(maxAllowedCutHeight, limitedNewHeight);
-          } else { // Fill operation  
+          } else {
+            // Fill operation
             const maxAllowedFillHeight = originalHeight + maxAllowedChange;
             limitedNewHeight = Math.min(maxAllowedFillHeight, limitedNewHeight);
           }
-          
+
           // Then apply safety limits (secondary)
           if (changeFromOriginal < maxCutDepth) {
             // Limit cut to 20 feet below original
-            limitedNewHeight = Math.max(limitedNewHeight, originalHeight + maxCutDepth);
+            limitedNewHeight = Math.max(
+              limitedNewHeight,
+              originalHeight + maxCutDepth
+            );
           } else if (changeFromOriginal > maxFillHeight) {
             // Limit fill to 20 feet above original
-            limitedNewHeight = Math.min(limitedNewHeight, originalHeight + maxFillHeight);
+            limitedNewHeight = Math.min(
+              limitedNewHeight,
+              originalHeight + maxFillHeight
+            );
           }
-          
+
           // Finally, ensure we don't cut through the terrain block bottom
           limitedNewHeight = Math.max(terrainBlockBottom, limitedNewHeight);
-          
+
           // Debug excessive cuts for first few points in polylines
           if (modifiedPoints < 3 && signedMagnitude < 0) {
             const originalCalculatedCut = proposedNewHeight - originalHeight;
@@ -1363,13 +1583,13 @@ export class PrecisionToolManager {
               originalCalculated: `${(Math.abs(originalCalculatedCut) / 3).toFixed(1)} yards`,
               actualApplied: `${(Math.abs(actualAppliedCut) / 3).toFixed(1)} yards`,
               limited: originalCalculatedCut !== actualAppliedCut,
-              crossSectionType: crossSection.wallType
+              crossSectionType: crossSection.wallType,
             });
           }
-          
+
           // Recalculate the actual height change after applying limits
           heightChange = limitedNewHeight - currentHeight;
-          
+
           // Only apply if the change is significant (avoid tiny adjustments)
           if (Math.abs(heightChange) > 0.1) {
             this.terrain.modifyHeightAtPosition(x, z, heightChange);
@@ -1378,38 +1598,62 @@ export class PrecisionToolManager {
         }
       }
     }
-    
-    console.log('Modified', modifiedPoints, 'terrain points along polyline with', crossSection.wallType, 'cross-section following surface');
-    
+
+    console.log(
+      'Modified',
+      modifiedPoints,
+      'terrain points along polyline with',
+      crossSection.wallType,
+      'cross-section following surface'
+    );
+
     // Create overlays for fill operations
     if (signedMagnitude > 0) {
       // For fill operations, create visual overlay to show what was filled
-      this.terrain.createPolylineFillOverlay(polyline.points, polyline.thickness);
+      this.terrain.createPolylineFillOverlay(
+        polyline.points,
+        polyline.thickness
+      );
       console.log('Created fill overlay for polyline operation');
     }
   }
 
   // Utility methods for polygon operations
-  private isPointInPolygon(point: PrecisionPoint, vertices: PrecisionPoint[]): boolean {
+  private isPointInPolygon(
+    point: PrecisionPoint,
+    vertices: PrecisionPoint[]
+  ): boolean {
     let inside = false;
     for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
-      if (((vertices[i].z > point.z) !== (vertices[j].z > point.z)) &&
-          (point.x < (vertices[j].x - vertices[i].x) * (point.z - vertices[i].z) / (vertices[j].z - vertices[i].z) + vertices[i].x)) {
+      if (
+        vertices[i].z > point.z !== vertices[j].z > point.z &&
+        point.x <
+          ((vertices[j].x - vertices[i].x) * (point.z - vertices[i].z)) /
+            (vertices[j].z - vertices[i].z) +
+            vertices[i].x
+      ) {
         inside = !inside;
       }
     }
     return inside;
   }
 
-  private distanceToPolygonEdge(point: PrecisionPoint, vertices: PrecisionPoint[]): number {
+  private distanceToPolygonEdge(
+    point: PrecisionPoint,
+    vertices: PrecisionPoint[]
+  ): number {
     let minDistance = Infinity;
-    
+
     for (let i = 0; i < vertices.length; i++) {
       const j = (i + 1) % vertices.length;
-      const distance = this.distanceToLineSegment(point, vertices[i], vertices[j]);
+      const distance = this.distanceToLineSegment(
+        point,
+        vertices[i],
+        vertices[j]
+      );
       minDistance = Math.min(minDistance, distance);
     }
-    
+
     return minDistance;
   }
 
@@ -1417,28 +1661,35 @@ export class PrecisionToolManager {
     // Find the maximum distance from any vertex to the polygon center
     const center = this.getPolygonCenter(vertices);
     let maxDistance = 0;
-    
+
     for (const vertex of vertices) {
-      const distance = Math.sqrt((vertex.x - center.x) ** 2 + (vertex.z - center.z) ** 2);
+      const distance = Math.sqrt(
+        (vertex.x - center.x) ** 2 + (vertex.z - center.z) ** 2
+      );
       maxDistance = Math.max(maxDistance, distance);
     }
-    
+
     return maxDistance;
   }
 
   private getPolygonCenter(vertices: PrecisionPoint[]): PrecisionPoint {
-    let centerX = 0, centerZ = 0;
+    let centerX = 0,
+      centerZ = 0;
     for (const vertex of vertices) {
       centerX += vertex.x;
       centerZ += vertex.z;
     }
     return {
       x: centerX / vertices.length,
-      z: centerZ / vertices.length
+      z: centerZ / vertices.length,
     };
   }
 
-  private distanceToLineSegment(point: PrecisionPoint, lineStart: PrecisionPoint, lineEnd: PrecisionPoint): number {
+  private distanceToLineSegment(
+    point: PrecisionPoint,
+    lineStart: PrecisionPoint,
+    lineEnd: PrecisionPoint
+  ): number {
     const A = point.x - lineStart.x;
     const B = point.z - lineStart.z;
     const C = lineEnd.x - lineStart.x;
@@ -1469,80 +1720,106 @@ export class PrecisionToolManager {
   }
 
   // Helper method to calculate distance from a point to the nearest polygon edge
-  private calculateDistanceToPolygonEdge(point: PrecisionPoint, vertices: PrecisionPoint[]): number {
+  private calculateDistanceToPolygonEdge(
+    point: PrecisionPoint,
+    vertices: PrecisionPoint[]
+  ): number {
     let minDistance = Infinity;
-    
+
     for (let i = 0; i < vertices.length; i++) {
       const start = vertices[i];
       const end = vertices[(i + 1) % vertices.length];
-      
+
       const distance = this.pointToLineSegmentDistance(point, start, end);
       minDistance = Math.min(minDistance, distance);
     }
-    
+
     return minDistance;
   }
 
   // Helper method to calculate maximum possible distance to edge within polygon
   private calculateMaxDistanceToEdge(vertices: PrecisionPoint[]): number {
     // Find the center point and maximum distance from center to any edge
-    let centerX = 0, centerZ = 0;
+    let centerX = 0,
+      centerZ = 0;
     for (const vertex of vertices) {
       centerX += vertex.x;
       centerZ += vertex.z;
     }
     centerX /= vertices.length;
     centerZ /= vertices.length;
-    
-    return this.calculateDistanceToPolygonEdge({ x: centerX, z: centerZ }, vertices);
+
+    return this.calculateDistanceToPolygonEdge(
+      { x: centerX, z: centerZ },
+      vertices
+    );
   }
 
   // Helper method to calculate distance from point to line segment
-  private pointToLineSegmentDistance(point: PrecisionPoint, start: PrecisionPoint, end: PrecisionPoint): number {
+  private pointToLineSegmentDistance(
+    point: PrecisionPoint,
+    start: PrecisionPoint,
+    end: PrecisionPoint
+  ): number {
     const dx = end.x - start.x;
     const dz = end.z - start.z;
     const length = Math.sqrt(dx * dx + dz * dz);
-    
+
     if (length === 0) {
       // Line segment is actually a point
       return Math.sqrt((point.x - start.x) ** 2 + (point.z - start.z) ** 2);
     }
-    
+
     // Calculate parameter t for closest point on line segment
-    const t = Math.max(0, Math.min(1, 
-      ((point.x - start.x) * dx + (point.z - start.z) * dz) / (length * length)
-    ));
-    
+    const t = Math.max(
+      0,
+      Math.min(
+        1,
+        ((point.x - start.x) * dx + (point.z - start.z) * dz) /
+          (length * length)
+      )
+    );
+
     // Find closest point on line segment
     const closestX = start.x + t * dx;
     const closestZ = start.z + t * dz;
-    
+
     // Return distance from point to closest point
     return Math.sqrt((point.x - closestX) ** 2 + (point.z - closestZ) ** 2);
   }
 
   // Helper method to calculate maximum distance from a specific point to polygon vertices
-  private calculateMaxDistanceFromPoint(point: PrecisionPoint, vertices: PrecisionPoint[]): number {
+  private calculateMaxDistanceFromPoint(
+    point: PrecisionPoint,
+    vertices: PrecisionPoint[]
+  ): number {
     let maxDistance = 0;
-    
+
     for (const vertex of vertices) {
-      const distance = Math.sqrt((point.x - vertex.x) ** 2 + (point.z - vertex.z) ** 2);
+      const distance = Math.sqrt(
+        (point.x - vertex.x) ** 2 + (point.z - vertex.z) ** 2
+      );
       maxDistance = Math.max(maxDistance, distance);
     }
-    
+
     return maxDistance;
   }
 
   // Helper method to calculate maximum distance from a point to any point along a polyline
-  private calculateMaxDistanceFromPointToPolyline(point: PrecisionPoint, polyline: PolylineArea): number {
+  private calculateMaxDistanceFromPointToPolyline(
+    point: PrecisionPoint,
+    polyline: PolylineArea
+  ): number {
     let maxDistance = 0;
-    
+
     // Check distance to all polyline points
     for (const polylinePoint of polyline.points) {
-      const distance = Math.sqrt((point.x - polylinePoint.x) ** 2 + (point.z - polylinePoint.z) ** 2);
+      const distance = Math.sqrt(
+        (point.x - polylinePoint.x) ** 2 + (point.z - polylinePoint.z) ** 2
+      );
       maxDistance = Math.max(maxDistance, distance);
     }
-    
+
     // Also check distance to line segments for more accuracy
     for (let i = 0; i < polyline.points.length - 1; i++) {
       const start = polyline.points[i];
@@ -1550,7 +1827,7 @@ export class PrecisionToolManager {
       const distance = this.pointToLineSegmentDistance(point, start, end);
       maxDistance = Math.max(maxDistance, distance);
     }
-    
+
     // Add half thickness to account for the width of the polyline
     return maxDistance + polyline.thickness / 2;
   }
@@ -1558,9 +1835,9 @@ export class PrecisionToolManager {
   // Visualization methods
   private updateDrawingVisualization(): void {
     this.clearDrawingHelpers();
-    
+
     if (!this.workflowState.area) return;
-    
+
     if (this.workflowState.area.type === 'polygon') {
       this.visualizePolygon(this.workflowState.area as PolygonArea);
     } else {
@@ -1571,53 +1848,61 @@ export class PrecisionToolManager {
   /**
    * Create a text sprite for displaying length labels
    */
-  private createTextSprite(text: string, color: string = '#ffffff'): THREE.Sprite {
+  private createTextSprite(
+    text: string,
+    color: string = '#ffffff'
+  ): THREE.Sprite {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
-    
+
     // Dynamic canvas size based on camera distance (matching contour labels)
-    const cameraDistance = this.camera ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50)) : 100;
+    const cameraDistance = this.camera
+      ? this.camera.position.distanceTo(new THREE.Vector3(50, 0, 50))
+      : 100;
     const scale = Math.max(0.5, Math.min(1.5, 100 / cameraDistance)); // Scale text based on distance
-    
+
     canvas.width = 96 * scale; // Match contour labels
     canvas.height = 40 * scale; // Match contour labels
-    
+
     // Style matching contour labels
     context.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Semi-transparent black background
     context.fillRect(0, 0, canvas.width, canvas.height);
-    
+
     // Add border matching the label color
     context.strokeStyle = color;
     context.lineWidth = 1;
     context.strokeRect(0, 0, canvas.width, canvas.height);
-    
+
     // Add text - white text like contour labels
     context.fillStyle = '#FFFFFF'; // White text for good contrast
     context.font = `bold ${20 * scale}px Arial`; // Dynamic font size like contour labels
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.fillText(text, canvas.width / 2, canvas.height / 2);
-    
+
     // Create texture and material
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ 
+    const material = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,
       depthTest: false, // Always render on top like contour labels
-      depthWrite: false
+      depthWrite: false,
     });
-    
+
     const sprite = new THREE.Sprite(material);
     sprite.scale.set(8 * scale, 4 * scale, 1); // Match contour labels scaling
     sprite.renderOrder = 1003; // Match contour labels render order
-    
+
     return sprite;
   }
 
   /**
    * Calculate the distance between two points in feet
    */
-  private calculateSegmentLength(point1: PrecisionPoint, point2: PrecisionPoint): number {
+  private calculateSegmentLength(
+    point1: PrecisionPoint,
+    point2: PrecisionPoint
+  ): number {
     const dx = point2.x - point1.x;
     const dz = point2.z - point1.z;
     return Math.sqrt(dx * dx + dz * dz);
@@ -1625,42 +1910,49 @@ export class PrecisionToolManager {
 
   private visualizePolygon(polygon: PolygonArea): void {
     if (polygon.vertices.length === 0) return;
-    
+
     // Create line visualization
-    const points = polygon.vertices.map(v => new THREE.Vector3(v.x, this.terrain.getHeightAtPosition(v.x, v.z) + 0.5, v.z));
-    
+    const points = polygon.vertices.map(
+      v =>
+        new THREE.Vector3(
+          v.x,
+          this.terrain.getHeightAtPosition(v.x, v.z) + 0.5,
+          v.z
+        )
+    );
+
     const segmentPoints = [...points];
     if (polygon.closed && points.length > 2) {
       segmentPoints.push(points[0]); // Close the loop
     }
-    
+
     const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
-    const material = new THREE.LineBasicMaterial({ 
+    const material = new THREE.LineBasicMaterial({
       color: this.workflowState.direction === 'cut' ? 0xff4444 : 0x2196f3,
-      linewidth: 3
+      linewidth: 3,
     });
-    
+
     const line = new THREE.Line(geometry, material);
     this.drawingHelpers.push(line);
     this.scene.add(line);
-    
+
     // Add vertex markers
     for (const point of points) {
       const sphereGeometry = new THREE.SphereGeometry(0.3, 8, 8);
-      const sphereMaterial = new THREE.MeshBasicMaterial({ 
-        color: this.workflowState.direction === 'cut' ? 0xff6666 : 0x4499ff 
+      const sphereMaterial = new THREE.MeshBasicMaterial({
+        color: this.workflowState.direction === 'cut' ? 0xff6666 : 0x4499ff,
       });
       const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
       sphere.position.copy(point);
       this.drawingHelpers.push(sphere);
       this.scene.add(sphere);
     }
-    
+
     // Add length labels for each segment (if enabled)
     if (this.showLengthLabels) {
       for (let i = 0; i < polygon.vertices.length; i++) {
         let nextIndex: number;
-        
+
         if (polygon.closed) {
           // For closed polygons, include the segment back to the first vertex
           nextIndex = (i + 1) % polygon.vertices.length;
@@ -1669,25 +1961,26 @@ export class PrecisionToolManager {
           if (i === polygon.vertices.length - 1) break;
           nextIndex = i + 1;
         }
-        
+
         const start = polygon.vertices[i];
         const end = polygon.vertices[nextIndex];
-        
+
         // Calculate segment length
         const length = this.calculateSegmentLength(start, end);
-        
+
         // Calculate midpoint for label placement
         const midX = (start.x + end.x) / 2;
         const midZ = (start.z + end.z) / 2;
         const midY = this.terrain.getHeightAtPosition(midX, midZ) + 2; // Raised above terrain
-        
+
         // Create length label
         const lengthInYards = length / 3; // Convert to yards
         const lengthText = `${lengthInYards.toFixed(1)} yd`;
-        const labelColor = this.workflowState.direction === 'cut' ? '#FF6666' : '#66AAFF';
+        const labelColor =
+          this.workflowState.direction === 'cut' ? '#FF6666' : '#66AAFF';
         const labelSprite = this.createTextSprite(lengthText, labelColor);
         labelSprite.position.set(midX, midY, midZ);
-        
+
         this.drawingHelpers.push(labelSprite);
         this.scene.add(labelSprite);
       }
@@ -1696,69 +1989,83 @@ export class PrecisionToolManager {
 
   private visualizePolyline(polyline: PolylineArea): void {
     if (polyline.points.length === 0) return;
-    
+
     // Create line visualization
-    const points = polyline.points.map(p => new THREE.Vector3(p.x, this.terrain.getHeightAtPosition(p.x, p.z) + 0.5, p.z));
-    
+    const points = polyline.points.map(
+      p =>
+        new THREE.Vector3(
+          p.x,
+          this.terrain.getHeightAtPosition(p.x, p.z) + 0.5,
+          p.z
+        )
+    );
+
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ 
+    const material = new THREE.LineBasicMaterial({
       color: this.workflowState.direction === 'cut' ? 0xff4444 : 0x2196f3,
-      linewidth: 3
+      linewidth: 3,
     });
-    
+
     const line = new THREE.Line(geometry, material);
     this.drawingHelpers.push(line);
     this.scene.add(line);
-    
+
     // Add vertex markers
     for (const point of points) {
       const sphereGeometry = new THREE.SphereGeometry(0.3, 8, 8);
-      const sphereMaterial = new THREE.MeshBasicMaterial({ 
-        color: this.workflowState.direction === 'cut' ? 0xff6666 : 0x4499ff 
+      const sphereMaterial = new THREE.MeshBasicMaterial({
+        color: this.workflowState.direction === 'cut' ? 0xff6666 : 0x4499ff,
       });
       const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
       sphere.position.copy(point);
       this.drawingHelpers.push(sphere);
       this.scene.add(sphere);
     }
-    
+
     // Add length labels for each segment (if enabled)
     if (this.showLengthLabels) {
       for (let i = 0; i < polyline.points.length - 1; i++) {
         const start = polyline.points[i];
         const end = polyline.points[i + 1];
-        
+
         // Calculate segment length
         const length = this.calculateSegmentLength(start, end);
-        
+
         // Calculate midpoint for label placement
         const midX = (start.x + end.x) / 2;
         const midZ = (start.z + end.z) / 2;
         const midY = this.terrain.getHeightAtPosition(midX, midZ) + 2; // Raised above terrain
-        
+
         // Create length label
         const lengthInYards = length / 3; // Convert to yards
         const lengthText = `${lengthInYards.toFixed(1)} yd`;
-        const labelColor = this.workflowState.direction === 'cut' ? '#FF6666' : '#66AAFF';
+        const labelColor =
+          this.workflowState.direction === 'cut' ? '#FF6666' : '#66AAFF';
         const labelSprite = this.createTextSprite(lengthText, labelColor);
         labelSprite.position.set(midX, midY, midZ);
-        
+
         this.drawingHelpers.push(labelSprite);
         this.scene.add(labelSprite);
       }
     }
-    
+
     // Visualize thickness if more than one point
     if (points.length > 1) {
       // Create a tube geometry to show thickness
       const path = new THREE.CatmullRomCurve3(points);
-      const tubeGeometry = new THREE.TubeGeometry(path, Math.max(10, points.length * 5), polyline.thickness / 2, 8, false);
-      const tubeMaterial = new THREE.MeshBasicMaterial({ 
+      const tubeGeometry = new THREE.TubeGeometry(
+        path,
+        Math.max(10, points.length * 5),
+        polyline.thickness / 2,
+        8,
+        false
+      );
+      const tubeMaterial = new THREE.MeshBasicMaterial({
         color: this.workflowState.direction === 'cut' ? 0xff4444 : 0x2196f3,
         transparent: true,
-        opacity: 0.3
+        opacity: 0.3,
       });
-      
+
       const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
       this.drawingHelpers.push(tube);
       this.scene.add(tube);
@@ -1777,7 +2084,7 @@ export class PrecisionToolManager {
       this.scene.remove(this.workflowState.previewOperation.previewMesh);
       this.workflowState.previewOperation.previewMesh = undefined;
     }
-    
+
     // Also clear any fill overlays that were created during operation execution
     this.clearFillOverlays();
   }
@@ -1786,9 +2093,9 @@ export class PrecisionToolManager {
    * Clear fill overlays from terrain after operation execution
    */
   private clearFillOverlays(): void {
-    // Clear fill overlays from terrain 
+    // Clear fill overlays from terrain
     this.terrain.clearFillOverlays();
-    
+
     // Show a brief notification that overlays were cleared
     this.showOverlayClearedNotification();
   }
@@ -1799,13 +2106,13 @@ export class PrecisionToolManager {
   private clearAllArtifacts(): void {
     // Clear fill overlays
     this.terrain.clearFillOverlays();
-    
-    // Clear cut overlays 
+
+    // Clear cut overlays
     this.terrain.cleanupAllOverlays();
-    
+
     // Force terrain to regenerate contours and colors to fix any visual issues
     this.terrain.forceCompleteUpdate();
-    
+
     console.log('🧹 All visual artifacts cleared');
   }
 
@@ -1827,9 +2134,9 @@ export class PrecisionToolManager {
       z-index: 1002;
       animation: fadeInOut 2s ease-in-out;
     `;
-    
+
     notification.innerHTML = `✨ Preview cleared`;
-    
+
     // Add fade animation styles if not already present
     if (!document.querySelector('style[data-overlay-animations]')) {
       const style = document.createElement('style');
@@ -1844,9 +2151,9 @@ export class PrecisionToolManager {
       `;
       document.head.appendChild(style);
     }
-    
+
     document.body.appendChild(notification);
-    
+
     // Auto-remove after animation completes
     setTimeout(() => {
       if (document.body.contains(notification)) {
@@ -1861,12 +2168,12 @@ export class PrecisionToolManager {
     this.clearAllArtifacts();
     this.workflowState = {
       stage: 'direction',
-      isDrawing: false
+      isDrawing: false,
     };
-    
+
     // Don't automatically restore camera view - let user control when to exit top-down mode
     // this.restoreOriginalView();
-    
+
     this.updateUI();
   }
 
@@ -1884,25 +2191,28 @@ export class PrecisionToolManager {
     // This will be called whenever the workflow state changes
     // The UI update will be handled in the main application
     const event = new CustomEvent('precision-tool-state-changed', {
-      detail: this.workflowState
+      detail: this.workflowState,
     });
     window.dispatchEvent(event);
   }
 
   // Check if a point is near a polyline (within its thickness)
-  private isPointNearPolyline(point: PrecisionPoint, polyline: PolylineArea): boolean {
+  private isPointNearPolyline(
+    point: PrecisionPoint,
+    polyline: PolylineArea
+  ): boolean {
     const halfThickness = polyline.thickness / 2;
-    
+
     for (let i = 0; i < polyline.points.length - 1; i++) {
       const start = polyline.points[i];
       const end = polyline.points[i + 1];
       const distance = this.pointToLineSegmentDistance(point, start, end);
-      
+
       if (distance <= halfThickness) {
         return true;
       }
     }
-    
+
     return false;
   }
 
@@ -1925,16 +2235,16 @@ export class PrecisionToolManager {
       box-shadow: 0 4px 12px rgba(0,0,0,0.4);
       border: 2px solid #ff6666;
     `;
-    
+
     message.innerHTML = `
       ⚠️ <strong>Invalid Position</strong><br>
       <span style="font-size: 14px; font-weight: normal;">
         Please click within your drawn ${this.workflowState.area?.type} area
       </span>
     `;
-    
+
     document.body.appendChild(message);
-    
+
     setTimeout(() => {
       if (document.body.contains(message)) {
         document.body.removeChild(message);
@@ -1961,7 +2271,7 @@ export class PrecisionToolManager {
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       animation: slideDown 0.3s ease-out;
     `;
-    
+
     notification.innerHTML = `
       📐 <strong>Top-Down View Active</strong><br>
       <span style="font-size: 12px;">Camera positioned for precise area drawing<br>
@@ -1969,7 +2279,7 @@ export class PrecisionToolManager {
       ↕️ Shift+drag to pan around<br>
       📹 Press 'V' to return to 3D view</span>
     `;
-    
+
     // Add animation styles if not already present
     if (!document.querySelector('style[data-camera-animations]')) {
       const style = document.createElement('style');
@@ -1982,9 +2292,9 @@ export class PrecisionToolManager {
       `;
       document.head.appendChild(style);
     }
-    
+
     document.body.appendChild(notification);
-    
+
     // Auto-remove after 3 seconds
     setTimeout(() => {
       if (document.body.contains(notification)) {
@@ -1997,7 +2307,11 @@ export class PrecisionToolManager {
    * Check if currently in top-down drawing mode
    */
   public isInTopDownMode(): boolean {
-    return this.workflowState.stage === 'drawing' && this.workflowState.isDrawing && this.originalCameraState !== null;
+    return (
+      this.workflowState.stage === 'drawing' &&
+      this.workflowState.isDrawing &&
+      this.originalCameraState !== null
+    );
   }
 
   /**
@@ -2005,18 +2319,21 @@ export class PrecisionToolManager {
    */
   public handleTopDownZoom(direction: 'in' | 'out', amount: number = 20): void {
     if (!this.isInTopDownMode()) return;
-    
+
     const delta = direction === 'in' ? -amount : amount;
     this.camera.position.y += delta;
-    
+
     // Clamp camera height for top-down view
-    this.camera.position.y = Math.max(50, Math.min(400, this.camera.position.y));
-    
+    this.camera.position.y = Math.max(
+      50,
+      Math.min(400, this.camera.position.y)
+    );
+
     // Ensure camera stays centered and looking down
     this.camera.position.x = 60;
     this.camera.position.z = 60;
     this.camera.lookAt(60, 0, 60);
-    
+
     // Show zoom level feedback
     this.showZoomFeedback();
   }
@@ -2026,17 +2343,17 @@ export class PrecisionToolManager {
    */
   public showZoomFeedback(): void {
     if (!this.isInTopDownMode()) return;
-    
+
     // Calculate zoom percentage (50 = closest, 400 = furthest)
     const height = this.camera.position.y;
-    const zoomPercent = Math.round((400 - height) / (400 - 50) * 100);
-    
+    const zoomPercent = Math.round(((400 - height) / (400 - 50)) * 100);
+
     // Remove any existing zoom indicator
     const existingIndicator = document.getElementById('zoom-indicator');
     if (existingIndicator) {
       existingIndicator.remove();
     }
-    
+
     // Create zoom level indicator
     const indicator = document.createElement('div');
     indicator.id = 'zoom-indicator';
@@ -2053,10 +2370,10 @@ export class PrecisionToolManager {
       z-index: 1002;
       transition: opacity 0.3s ease;
     `;
-    
+
     indicator.innerHTML = `🔍 ${zoomPercent}%`;
     document.body.appendChild(indicator);
-    
+
     // Auto-remove after 1 second
     setTimeout(() => {
       if (document.getElementById('zoom-indicator')) {
@@ -2076,7 +2393,7 @@ export class PrecisionToolManager {
   public exitTopDownMode(): void {
     if (this.isInTopDownMode()) {
       this.restoreOriginalView();
-      
+
       // Show exit notification
       const notification = document.createElement('div');
       notification.style.cssText = `
@@ -2093,12 +2410,12 @@ export class PrecisionToolManager {
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         animation: slideDown 0.3s ease-out;
       `;
-      
+
       notification.innerHTML = `
         📹 <strong>3D View Restored</strong><br>
         <span style="font-size: 12px;">Manually exited top-down mode</span>
       `;
-      
+
       // Add animation styles if not already present
       if (!document.querySelector('style[data-camera-animations]')) {
         const style = document.createElement('style');
@@ -2111,9 +2428,9 @@ export class PrecisionToolManager {
         `;
         document.head.appendChild(style);
       }
-      
+
       document.body.appendChild(notification);
-      
+
       // Auto-remove after 2 seconds
       setTimeout(() => {
         if (document.body.contains(notification)) {
@@ -2122,4 +2439,4 @@ export class PrecisionToolManager {
       }, 2000);
     }
   }
-} 
+}

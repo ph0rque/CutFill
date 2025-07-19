@@ -12,7 +12,13 @@ export interface Achievement {
 }
 
 export interface AchievementCondition {
-  type: 'volume_moved' | 'assignments_completed' | 'tool_usage' | 'accuracy' | 'time_spent' | 'streak';
+  type:
+    | 'volume_moved'
+    | 'assignments_completed'
+    | 'tool_usage'
+    | 'accuracy'
+    | 'time_spent'
+    | 'streak';
   threshold: number;
   toolType?: string;
   assignmentType?: string;
@@ -94,7 +100,7 @@ export class ProgressTracker {
         description: 'Move your first cubic yard of earth',
         icon: '🚜',
         condition: { type: 'volume_moved', threshold: 1 },
-        xpReward: 50
+        xpReward: 50,
       },
       {
         id: 'earth_mover',
@@ -102,7 +108,7 @@ export class ProgressTracker {
         description: 'Move 100 cubic yards of earth',
         icon: '🏔️',
         condition: { type: 'volume_moved', threshold: 100 },
-        xpReward: 200
+        xpReward: 200,
       },
       {
         id: 'mountain_mover',
@@ -110,9 +116,9 @@ export class ProgressTracker {
         description: 'Move 1000 cubic yards of earth',
         icon: '⛰️',
         condition: { type: 'volume_moved', threshold: 1000 },
-        xpReward: 500
+        xpReward: 500,
       },
-      
+
       // Assignment-based achievements
       {
         id: 'first_assignment',
@@ -120,15 +126,19 @@ export class ProgressTracker {
         description: 'Complete your first assignment',
         icon: '📋',
         condition: { type: 'assignments_completed', threshold: 1 },
-        xpReward: 100
+        xpReward: 100,
       },
       {
         id: 'foundation_expert',
         name: 'Foundation Expert',
         description: 'Complete 5 foundation assignments',
         icon: '🏗️',
-        condition: { type: 'assignments_completed', threshold: 5, assignmentType: 'foundation' },
-        xpReward: 300
+        condition: {
+          type: 'assignments_completed',
+          threshold: 5,
+          assignmentType: 'foundation',
+        },
+        xpReward: 300,
       },
       {
         id: 'assignment_streak',
@@ -136,9 +146,9 @@ export class ProgressTracker {
         description: 'Complete 5 assignments in a row',
         icon: '🔥',
         condition: { type: 'streak', threshold: 5 },
-        xpReward: 250
+        xpReward: 250,
       },
-      
+
       // Tool mastery achievements
       {
         id: 'excavator_novice',
@@ -146,7 +156,7 @@ export class ProgressTracker {
         description: 'Use the excavator 50 times',
         icon: '🚜',
         condition: { type: 'tool_usage', threshold: 50, toolType: 'excavator' },
-        xpReward: 150
+        xpReward: 150,
       },
       {
         id: 'cut_operator',
@@ -154,7 +164,7 @@ export class ProgressTracker {
         description: 'Use the cut tool 100 times',
         icon: '⛏️',
         condition: { type: 'tool_usage', threshold: 100, toolType: 'cut' },
-        xpReward: 200
+        xpReward: 200,
       },
       {
         id: 'fill_master',
@@ -162,7 +172,7 @@ export class ProgressTracker {
         description: 'Use the fill tool 75 times',
         icon: '🏔️',
         condition: { type: 'tool_usage', threshold: 75, toolType: 'fill' },
-        xpReward: 250
+        xpReward: 250,
       },
       {
         id: 'tool_master',
@@ -170,9 +180,9 @@ export class ProgressTracker {
         description: 'Use each tool at least 25 times',
         icon: '🔧',
         condition: { type: 'tool_usage', threshold: 25 },
-        xpReward: 400
+        xpReward: 400,
       },
-      
+
       // Accuracy achievements
       {
         id: 'precision_worker',
@@ -180,7 +190,7 @@ export class ProgressTracker {
         description: 'Maintain 85% accuracy average',
         icon: '🎯',
         condition: { type: 'accuracy', threshold: 85 },
-        xpReward: 300
+        xpReward: 300,
       },
       {
         id: 'perfectionist',
@@ -188,9 +198,9 @@ export class ProgressTracker {
         description: 'Maintain 95% accuracy average',
         icon: '⭐',
         condition: { type: 'accuracy', threshold: 95 },
-        xpReward: 500
+        xpReward: 500,
       },
-      
+
       // Time-based achievements
       {
         id: 'dedicated_learner',
@@ -198,7 +208,7 @@ export class ProgressTracker {
         description: 'Spend 2 hours learning',
         icon: '📚',
         condition: { type: 'time_spent', threshold: 120 },
-        xpReward: 200
+        xpReward: 200,
       },
       {
         id: 'earthwork_enthusiast',
@@ -206,9 +216,9 @@ export class ProgressTracker {
         description: 'Spend 10 hours practicing',
         icon: '🏆',
         condition: { type: 'time_spent', threshold: 600 },
-        xpReward: 750
+        xpReward: 750,
       },
-      
+
       // Hidden achievements
       {
         id: 'night_owl',
@@ -217,7 +227,7 @@ export class ProgressTracker {
         icon: '🦉',
         condition: { type: 'assignments_completed', threshold: 1 },
         xpReward: 100,
-        hidden: true
+        hidden: true,
       },
       {
         id: 'speed_demon',
@@ -226,8 +236,8 @@ export class ProgressTracker {
         icon: '⚡',
         condition: { type: 'assignments_completed', threshold: 1 },
         xpReward: 200,
-        hidden: true
-      }
+        hidden: true,
+      },
     ];
   }
 
@@ -239,7 +249,7 @@ export class ProgressTracker {
         title: 'Apprentice',
         description: 'Just starting your earthwork journey',
         unlocks: ['Basic assignments'],
-        badge: '🌱'
+        badge: '🌱',
       },
       {
         level: 2,
@@ -247,7 +257,7 @@ export class ProgressTracker {
         title: 'Helper',
         description: 'Learning the basics of earthwork',
         unlocks: ['Intermediate assignments'],
-        badge: '🔧'
+        badge: '🔧',
       },
       {
         level: 3,
@@ -255,7 +265,7 @@ export class ProgressTracker {
         title: 'Operator',
         description: 'Competent with basic tools',
         unlocks: ['Advanced brush settings'],
-        badge: '🚜'
+        badge: '🚜',
       },
       {
         level: 4,
@@ -263,7 +273,7 @@ export class ProgressTracker {
         title: 'Technician',
         description: 'Skilled earthwork technician',
         unlocks: ['Complex assignments', 'Custom terrain'],
-        badge: '⚙️'
+        badge: '⚙️',
       },
       {
         level: 5,
@@ -271,7 +281,7 @@ export class ProgressTracker {
         title: 'Specialist',
         description: 'Specialized in earthwork operations',
         unlocks: ['Expert assignments', 'Team projects'],
-        badge: '🎖️'
+        badge: '🎖️',
       },
       {
         level: 6,
@@ -279,7 +289,7 @@ export class ProgressTracker {
         title: 'Supervisor',
         description: 'Can supervise earthwork projects',
         unlocks: ['Supervisor assignments', 'Project management'],
-        badge: '👷'
+        badge: '👷',
       },
       {
         level: 7,
@@ -287,7 +297,7 @@ export class ProgressTracker {
         title: 'Engineer',
         description: 'Professional earthwork engineer',
         unlocks: ['Engineering challenges', 'Design tools'],
-        badge: '👨‍💼'
+        badge: '👨‍💼',
       },
       {
         level: 8,
@@ -295,7 +305,7 @@ export class ProgressTracker {
         title: 'Project Manager',
         description: 'Can manage large earthwork projects',
         unlocks: ['Management assignments', 'Resource planning'],
-        badge: '📊'
+        badge: '📊',
       },
       {
         level: 9,
@@ -303,7 +313,7 @@ export class ProgressTracker {
         title: 'Senior Engineer',
         description: 'Expert in all aspects of earthwork',
         unlocks: ['Senior challenges', 'Mentoring'],
-        badge: '🏅'
+        badge: '🏅',
       },
       {
         level: 10,
@@ -311,8 +321,8 @@ export class ProgressTracker {
         title: 'Master',
         description: 'Master of earthwork engineering',
         unlocks: ['Master challenges', 'Custom content creation'],
-        badge: '👑'
-      }
+        badge: '👑',
+      },
     ];
   }
 
@@ -324,7 +334,8 @@ export class ProgressTracker {
         .eq('user_id', userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') { // Not found error
+      if (error && error.code !== 'PGRST116') {
+        // Not found error
         console.error('Error loading user progress:', error);
         return null;
       }
@@ -351,7 +362,7 @@ export class ProgressTracker {
         achievements: data.achievements || [],
         unlockedLevels: data.unlocked_levels || [1],
         lastActiveDate: new Date(data.last_active_date || Date.now()),
-        preferences: data.preferences || this.getDefaultPreferences()
+        preferences: data.preferences || this.getDefaultPreferences(),
       };
 
       return this.userProgress;
@@ -368,7 +379,7 @@ export class ProgressTracker {
       currentXP: 0,
       totalXP: 0,
       assignmentsCompleted: 0,
-              totalVolumeMovedCubicYards: 0,
+      totalVolumeMovedCubicYards: 0,
       toolUsageStats: {},
       averageAccuracy: 0,
       totalTimeSpentMinutes: 0,
@@ -377,7 +388,7 @@ export class ProgressTracker {
       achievements: [],
       unlockedLevels: [1],
       lastActiveDate: new Date(),
-      preferences: this.getDefaultPreferences()
+      preferences: this.getDefaultPreferences(),
     };
   }
 
@@ -388,7 +399,7 @@ export class ProgressTracker {
       notifications: true,
       autoSave: true,
       measurementUnits: 'imperial',
-      themes: ['default']
+      themes: ['default'],
     };
   }
 
@@ -406,7 +417,7 @@ export class ProgressTracker {
   private calculateAverageAccuracy(accuracyHistory: any): number {
     if (!accuracyHistory || !Array.isArray(accuracyHistory)) return 0;
     if (accuracyHistory.length === 0) return 0;
-    
+
     const sum = accuracyHistory.reduce((acc, score) => acc + score, 0);
     return sum / accuracyHistory.length;
   }
@@ -434,9 +445,8 @@ export class ProgressTracker {
 
     this.isSaving = true;
     try {
-      const { error } = await supabase
-        .from('user_progress')
-        .upsert({
+      const { error } = await supabase.from('user_progress').upsert(
+        {
           user_id: this.userProgress.userId,
           level: this.userProgress.level,
           experience: this.userProgress.totalXP,
@@ -448,11 +458,13 @@ export class ProgressTracker {
           achievements: this.userProgress.achievements,
           last_active_date: this.userProgress.lastActiveDate.toISOString(),
           preferences: this.userProgress.preferences,
-          updated_at: new Date().toISOString()
-        }, {
+          updated_at: new Date().toISOString(),
+        },
+        {
           onConflict: 'user_id', // Specify the conflict column
-          ignoreDuplicates: false // Update on conflict instead of ignoring
-        });
+          ignoreDuplicates: false, // Update on conflict instead of ignoring
+        }
+      );
 
       if (error) {
         console.error('Error saving user progress:', error);
@@ -475,11 +487,15 @@ export class ProgressTracker {
     const newLevel = this.calculateLevel(this.userProgress.totalXP);
     if (newLevel > oldLevel) {
       this.userProgress.level = newLevel;
-      this.userProgress.currentXP = this.userProgress.totalXP - this.getXPForLevel(newLevel);
-      
+      this.userProgress.currentXP =
+        this.userProgress.totalXP - this.getXPForLevel(newLevel);
+
       const levelData = this.levels.find(l => l.level === newLevel);
       if (levelData && this.callbacks.onLevelUp) {
-        this.callbacks.onLevelUp(levelData, this.levels.find(l => l.level === oldLevel) || this.levels[0]);
+        this.callbacks.onLevelUp(
+          levelData,
+          this.levels.find(l => l.level === oldLevel) || this.levels[0]
+        );
       }
     }
 
@@ -508,23 +524,24 @@ export class ProgressTracker {
     if (!this.userProgress) return;
 
     // Update tool usage stats
-    this.userProgress.toolUsageStats[toolName] = (this.userProgress.toolUsageStats[toolName] || 0) + 1;
-    
+    this.userProgress.toolUsageStats[toolName] =
+      (this.userProgress.toolUsageStats[toolName] || 0) + 1;
+
     // Award small XP for tool usage
     this.awardXP(5, `Using ${toolName}`);
-    
+
     // Debounced save will handle persistence
     this.saveUserProgress();
   }
 
-    public async recordVolumeMove(cubicYards: number): Promise<void> {
+  public async recordVolumeMove(cubicYards: number): Promise<void> {
     if (!this.userProgress) return;
-    
+
     this.userProgress.totalVolumeMovedCubicYards += cubicYards;
-    
+
     // Award XP for volume moved (1 XP per cubic yard)
     this.awardXP(Math.floor(cubicYards), 'Moving terrain');
-    
+
     // Debounced save will handle persistence
     this.saveUserProgress();
   }
@@ -534,11 +551,18 @@ export class ProgressTracker {
 
     this.userProgress.assignmentsCompleted++;
     this.userProgress.currentStreak++;
-    this.userProgress.longestStreak = Math.max(this.userProgress.longestStreak, this.userProgress.currentStreak);
-    
+    this.userProgress.longestStreak = Math.max(
+      this.userProgress.longestStreak,
+      this.userProgress.currentStreak
+    );
+
     // Update average accuracy
-    this.userProgress.averageAccuracy = (this.userProgress.averageAccuracy * (this.userProgress.assignmentsCompleted - 1) + accuracy) / this.userProgress.assignmentsCompleted;
-    
+    this.userProgress.averageAccuracy =
+      (this.userProgress.averageAccuracy *
+        (this.userProgress.assignmentsCompleted - 1) +
+        accuracy) /
+      this.userProgress.assignmentsCompleted;
+
     await this.checkAchievements();
     await this.awardXP(100, 'Assignment Completion');
   }
@@ -560,10 +584,10 @@ export class ProgressTracker {
       if (this.isAchievementUnlocked(achievement)) {
         this.userProgress.achievements.push(achievement.id);
         achievement.unlockedAt = new Date();
-        
+
         // Award XP for achievement without recursive save
         this.userProgress.totalXP += achievement.xpReward;
-        
+
         if (this.callbacks.onAchievementUnlocked) {
           this.callbacks.onAchievementUnlocked(achievement);
         }
@@ -576,30 +600,49 @@ export class ProgressTracker {
 
     switch (achievement.condition.type) {
       case 'volume_moved':
-        return this.userProgress.totalVolumeMovedCubicYards >= achievement.condition.threshold;
-      
+        return (
+          this.userProgress.totalVolumeMovedCubicYards >=
+          achievement.condition.threshold
+        );
+
       case 'assignments_completed':
-        return this.userProgress.assignmentsCompleted >= achievement.condition.threshold;
-      
+        return (
+          this.userProgress.assignmentsCompleted >=
+          achievement.condition.threshold
+        );
+
       case 'tool_usage':
         if (achievement.condition.toolType) {
-          const usage = this.userProgress.toolUsageStats[achievement.condition.toolType] || 0;
+          const usage =
+            this.userProgress.toolUsageStats[achievement.condition.toolType] ||
+            0;
           return usage >= achievement.condition.threshold;
         } else {
           // Check if all tools meet the threshold
           const tools = ['cut', 'fill'];
-          return tools.every(tool => (this.userProgress!.toolUsageStats[tool] || 0) >= achievement.condition.threshold);
+          return tools.every(
+            tool =>
+              (this.userProgress!.toolUsageStats[tool] || 0) >=
+              achievement.condition.threshold
+          );
         }
-      
+
       case 'accuracy':
-        return this.userProgress.averageAccuracy >= achievement.condition.threshold;
-      
+        return (
+          this.userProgress.averageAccuracy >= achievement.condition.threshold
+        );
+
       case 'time_spent':
-        return this.userProgress.totalTimeSpentMinutes >= achievement.condition.threshold;
-      
+        return (
+          this.userProgress.totalTimeSpentMinutes >=
+          achievement.condition.threshold
+        );
+
       case 'streak':
-        return this.userProgress.currentStreak >= achievement.condition.threshold;
-      
+        return (
+          this.userProgress.currentStreak >= achievement.condition.threshold
+        );
+
       default:
         return false;
     }
@@ -615,12 +658,16 @@ export class ProgressTracker {
 
   public getUnlockedAchievements(): Achievement[] {
     if (!this.userProgress) return [];
-    return this.achievements.filter(a => this.userProgress!.achievements.includes(a.id));
+    return this.achievements.filter(a =>
+      this.userProgress!.achievements.includes(a.id)
+    );
   }
 
   public getAvailableAchievements(): Achievement[] {
     if (!this.userProgress) return [];
-    return this.achievements.filter(a => !a.hidden && !this.userProgress!.achievements.includes(a.id));
+    return this.achievements.filter(
+      a => !a.hidden && !this.userProgress!.achievements.includes(a.id)
+    );
   }
 
   public getLevels(): UserLevel[] {
@@ -634,19 +681,23 @@ export class ProgressTracker {
 
   public getNextLevel(): UserLevel | null {
     if (!this.userProgress) return null;
-    return this.levels.find(l => l.level === this.userProgress!.level + 1) || null;
+    return (
+      this.levels.find(l => l.level === this.userProgress!.level + 1) || null
+    );
   }
 
   public getProgressToNextLevel(): number {
     if (!this.userProgress) return 0;
-    
+
     const nextLevel = this.getNextLevel();
     if (!nextLevel) return 100; // Max level
-    
+
     const currentLevelXP = this.getXPForLevel(this.userProgress.level);
     const nextLevelXP = nextLevel.xpRequired;
-    const progress = (this.userProgress.totalXP - currentLevelXP) / (nextLevelXP - currentLevelXP);
-    
+    const progress =
+      (this.userProgress.totalXP - currentLevelXP) /
+      (nextLevelXP - currentLevelXP);
+
     return Math.min(100, Math.max(0, progress * 100));
   }
 
@@ -668,7 +719,7 @@ export class ProgressTracker {
       volumeMoved: 0,
       accuracyScore: 0,
       xpEarned: 0,
-      completed: false
+      completed: false,
     };
   }
 
@@ -676,10 +727,13 @@ export class ProgressTracker {
     if (this.currentSession) {
       this.currentSession.endTime = new Date();
       this.currentSession.completed = true;
-      
-      const sessionTimeMinutes = (this.currentSession.endTime.getTime() - this.currentSession.startTime.getTime()) / (1000 * 60);
+
+      const sessionTimeMinutes =
+        (this.currentSession.endTime.getTime() -
+          this.currentSession.startTime.getTime()) /
+        (1000 * 60);
       this.recordSessionTime(sessionTimeMinutes);
-      
+
       this.currentSession = null;
     }
   }
@@ -687,4 +741,4 @@ export class ProgressTracker {
   public getCurrentSession(): SessionActivity | null {
     return this.currentSession;
   }
-} 
+}

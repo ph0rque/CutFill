@@ -26,6 +26,9 @@ app.use(express.json());
 const gameSessions = new Map();
 const playerSessions = new Map();
 
+// Global active users for username uniqueness (Set of usernames)
+const activeUsers = new Set();
+
 // Enhanced game session class
 class GameSession {
   constructor(id, options = {}) {
@@ -94,6 +97,8 @@ class GameSession {
       contribution: 0
     };
     
+    playerData.ageRange = playerData.ageRange || ''; // Add ageRange property
+
     this.players.set(playerId, playerData);
     return true;
   }
@@ -267,7 +272,8 @@ io.on('connection', (socket) => {
       joinedAt: Date.now(),
       lastActiveAt: Date.now(),
       currentTool: 'excavator',
-      status: 'active'
+      status: 'active',
+      ageRange: data.ageRange || '',
     };
 
     if (session.addPlayer(socket.id, playerData)) {
@@ -623,7 +629,30 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Handle disconnection
+  // Handle guest registration
+  socket.on('register-guest', (data) => {
+    const { desiredUsername, ageRange, mode } = data;
+    let username = desiredUsername.trim();
+    if (activeUsers.has(username)) {
+      // Suggest alternative
+      let n = 2;
+      let suggested = `${username}${n}`;
+      while (activeUsers.has(suggested)) {
+        n++;
+        suggested = `${username}${n}`;
+      }
+      socket.emit('username-taken', { suggestedUsername: suggested });
+      console.log(`Username ${username} taken, suggested ${suggested}`);
+    } else {
+      // Register
+      activeUsers.add(username);
+      const tempGuestId = `guest_${Math.random().toString(36).substr(2, 9)}`;
+      socket.emit('guest-registered', { username, tempGuestId, ageRange, mode });
+      console.log(`Guest registered: ${username} with ID ${tempGuestId}`);
+    }
+  });
+
+  // Handle disconnection (remove from activeUsers if guest)
   socket.on('disconnect', () => {
     const sessionId = playerSessions.get(socket.id);
     if (sessionId) {
@@ -653,6 +682,10 @@ io.on('connection', (socket) => {
       }
       
       playerSessions.delete(socket.id);
+      if (removedPlayer && removedPlayer.id.startsWith('guest_')) {
+        activeUsers.delete(removedPlayer.name);
+        console.log(`Removed guest username: ${removedPlayer.name}`);
+      }
     }
 
     console.log(`Player disconnected: ${socket.id}`);

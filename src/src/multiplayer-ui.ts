@@ -1,5 +1,9 @@
 import { EnhancedMultiplayerManager } from './multiplayer-enhanced';
-import type { GameSession, PlayerData, ChatMessage } from './multiplayer-enhanced';
+import type {
+  GameSession,
+  PlayerData,
+  ChatMessage,
+} from './multiplayer-enhanced';
 
 export class MultiplayerUI {
   private multiplayerManager: EnhancedMultiplayerManager;
@@ -14,14 +18,16 @@ export class MultiplayerUI {
 
   private setupCallbacks(): void {
     this.multiplayerManager.setCallbacks({
-      onSessionJoined: (session, player) => this.onSessionJoined(session, player),
-      onSessionUpdated: (session) => this.onSessionUpdated(session),
-      onPlayerJoined: (player) => this.onPlayerJoined(player),
-      onPlayerLeft: (playerId) => this.onPlayerLeft(playerId),
-      onPlayerUpdated: (player) => this.onPlayerUpdated(player),
-      onChatMessage: (message) => this.onChatMessage(message),
-      onPermissionDenied: (action, reason) => this.onPermissionDenied(action, reason),
-      onError: (error) => this.onError(error)
+      onSessionJoined: (session, player) =>
+        this.onSessionJoined(session, player),
+      onSessionUpdated: session => this.onSessionUpdated(session),
+      onPlayerJoined: player => this.onPlayerJoined(player),
+      onPlayerLeft: playerId => this.onPlayerLeft(playerId),
+      onPlayerUpdated: player => this.onPlayerUpdated(player),
+      onChatMessage: message => this.onChatMessage(message),
+      onPermissionDenied: (action, reason) =>
+        this.onPermissionDenied(action, reason),
+      onError: error => this.onError(error),
     });
   }
 
@@ -33,7 +39,7 @@ export class MultiplayerUI {
     this.createChatSystem();
     this.createPlayerManagement();
     this.createSessionLobby();
-    
+
     this.isInitialized = true;
   }
 
@@ -180,19 +186,25 @@ export class MultiplayerUI {
 
   private setupSessionControlEvents(): void {
     // Create session
-    document.getElementById('create-session-btn')?.addEventListener('click', () => {
-      this.showCreateSessionModal();
-    });
+    document
+      .getElementById('create-session-btn')
+      ?.addEventListener('click', () => {
+        this.showCreateSessionModal();
+      });
 
     // Join session
-    document.getElementById('join-session-btn')?.addEventListener('click', () => {
-      this.showJoinSessionModal();
-    });
+    document
+      .getElementById('join-session-btn')
+      ?.addEventListener('click', () => {
+        this.showJoinSessionModal();
+      });
 
     // Leave session
-    document.getElementById('leave-session-btn')?.addEventListener('click', () => {
-      this.multiplayerManager.leaveSession();
-    });
+    document
+      .getElementById('leave-session-btn')
+      ?.addEventListener('click', () => {
+        this.multiplayerManager.leaveSession();
+      });
   }
 
   private setupChatEvents(): void {
@@ -208,7 +220,7 @@ export class MultiplayerUI {
     };
 
     sendBtn?.addEventListener('click', sendMessage);
-    chatInput?.addEventListener('keypress', (e) => {
+    chatInput?.addEventListener('keypress', e => {
       if (e.key === 'Enter') {
         sendMessage();
       }
@@ -261,18 +273,26 @@ export class MultiplayerUI {
     };
 
     (window as any).createSession = () => {
-      const nameInput = document.getElementById('session-name') as HTMLInputElement;
-      const maxPlayersSelect = document.getElementById('max-players') as HTMLSelectElement;
-      const isPublicCheckbox = document.getElementById('is-public') as HTMLInputElement;
-      const allowSpectatorsCheckbox = document.getElementById('allow-spectators') as HTMLInputElement;
+      const nameInput = document.getElementById(
+        'session-name'
+      ) as HTMLInputElement;
+      const maxPlayersSelect = document.getElementById(
+        'max-players'
+      ) as HTMLSelectElement;
+      const isPublicCheckbox = document.getElementById(
+        'is-public'
+      ) as HTMLInputElement;
+      const allowSpectatorsCheckbox = document.getElementById(
+        'allow-spectators'
+      ) as HTMLInputElement;
 
       const options = {
         name: nameInput.value || 'My Session',
         maxPlayers: parseInt(maxPlayersSelect.value),
         isPublic: isPublicCheckbox.checked,
         settings: {
-          allowSpectators: allowSpectatorsCheckbox.checked
-        }
+          allowSpectators: allowSpectatorsCheckbox.checked,
+        },
       };
 
       this.multiplayerManager.createSession(options);
@@ -304,8 +324,12 @@ export class MultiplayerUI {
     modal.style.display = 'flex';
 
     (window as any).joinSession = () => {
-      const sessionIdInput = document.getElementById('session-id') as HTMLInputElement;
-      const playerNameInput = document.getElementById('player-name') as HTMLInputElement;
+      const sessionIdInput = document.getElementById(
+        'session-id'
+      ) as HTMLInputElement;
+      const playerNameInput = document.getElementById(
+        'player-name'
+      ) as HTMLInputElement;
 
       const sessionId = sessionIdInput.value.trim();
       const playerName = playerNameInput.value.trim() || 'Player';
@@ -323,12 +347,16 @@ export class MultiplayerUI {
     this.updateSessionInfo(session);
     this.updatePlayersList(session);
     this.showMultiplayerPanel();
-    
+
     // Show leave button, hide join buttons
-    const leaveBtn = document.getElementById('leave-session-btn') as HTMLElement;
-    const createBtn = document.getElementById('create-session-btn') as HTMLElement;
+    const leaveBtn = document.getElementById(
+      'leave-session-btn'
+    ) as HTMLElement;
+    const createBtn = document.getElementById(
+      'create-session-btn'
+    ) as HTMLElement;
     const joinBtn = document.getElementById('join-session-btn') as HTMLElement;
-    
+
     leaveBtn.style.display = 'inline-block';
     createBtn.style.display = 'none';
     joinBtn.style.display = 'none';
@@ -364,8 +392,10 @@ export class MultiplayerUI {
     const chatMessages = document.getElementById('chat-messages');
     if (chatMessages) {
       const messageElement = document.createElement('div');
-      const time = new Date(message.timestamp).toLocaleTimeString([], { timeStyle: 'short' });
-      
+      const time = new Date(message.timestamp).toLocaleTimeString([], {
+        timeStyle: 'short',
+      });
+
       let messageColor = '#fff';
       if (message.type === 'system') {
         messageColor = '#888';
@@ -399,7 +429,7 @@ export class MultiplayerUI {
     if (sessionInfo) {
       const player = this.multiplayerManager.getLocalPlayer();
       const roleText = player?.isHost ? '👑 Host' : '👤 Player';
-      
+
       sessionInfo.innerHTML = `
         <div><strong>Session:</strong> ${session.name}</div>
         <div><strong>ID:</strong> ${session.id}</div>
@@ -415,18 +445,20 @@ export class MultiplayerUI {
     if (playersList) {
       const players = Array.from(session.players.values());
       const localPlayer = this.multiplayerManager.getLocalPlayer();
-      
+
       if (players.length === 0) {
-        playersList.innerHTML = '<div style="color: #888; font-style: italic;">No players</div>';
+        playersList.innerHTML =
+          '<div style="color: #888; font-style: italic;">No players</div>';
         return;
       }
 
-      playersList.innerHTML = players.map(player => {
-        const roleIcon = player.isHost ? '👑' : '👤';
-        const statusColor = player.status === 'active' ? '#4CAF50' : '#888';
-        const isLocal = player.id === localPlayer?.id;
-        
-        return `
+      playersList.innerHTML = players
+        .map(player => {
+          const roleIcon = player.isHost ? '👑' : '👤';
+          const statusColor = player.status === 'active' ? '#4CAF50' : '#888';
+          const isLocal = player.id === localPlayer?.id;
+
+          return `
           <div style="display: flex; align-items: center; justify-content: space-between; margin: 5px 0; padding: 5px; background: rgba(255,255,255,0.05); border-radius: 4px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="color: ${statusColor};">${roleIcon}</span>
@@ -438,7 +470,8 @@ export class MultiplayerUI {
             </div>
           </div>
         `;
-      }).join('');
+        })
+        .join('');
     }
   }
 
@@ -455,7 +488,10 @@ export class MultiplayerUI {
     this.uiContainer.style.display = isVisible ? 'none' : 'block';
   }
 
-  private showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
+  private showNotification(
+    message: string,
+    type: 'success' | 'error' | 'info' = 'info'
+  ): void {
     const notification = document.createElement('div');
     notification.style.cssText = `
       position: fixed;
@@ -471,10 +507,10 @@ export class MultiplayerUI {
       max-width: 300px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     `;
-    
+
     notification.textContent = message;
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
       if (document.body.contains(notification)) {
         document.body.removeChild(notification);
@@ -486,7 +522,7 @@ export class MultiplayerUI {
     if (this.uiContainer && document.body.contains(this.uiContainer)) {
       document.body.removeChild(this.uiContainer);
     }
-    
+
     const modal = document.getElementById('session-lobby-modal');
     if (modal && document.body.contains(modal)) {
       document.body.removeChild(modal);
@@ -495,14 +531,24 @@ export class MultiplayerUI {
 
   // Enhanced lobby methods
   private populateLevelSelect(): void {
-    const levelSelect = document.getElementById('level-select') as HTMLSelectElement;
+    const levelSelect = document.getElementById(
+      'level-select'
+    ) as HTMLSelectElement;
     if (!levelSelect) return;
 
     // Get available competitive levels (this would come from AssignmentManager)
     const competitiveLevels = [
-      { id: 'speed_foundation_race', name: '⚡ Speed Foundation Race', levelNumber: 6 },
+      {
+        id: 'speed_foundation_race',
+        name: '⚡ Speed Foundation Race',
+        levelNumber: 6,
+      },
       { id: 'drainage_duel', name: '🌊 Drainage Channel Duel', levelNumber: 7 },
-      { id: 'precision_showdown', name: '🎯 Precision Earthworks Showdown', levelNumber: 8 }
+      {
+        id: 'precision_showdown',
+        name: '🎯 Precision Earthworks Showdown',
+        levelNumber: 8,
+      },
     ];
 
     // Clear existing options except the first one
@@ -522,7 +568,9 @@ export class MultiplayerUI {
     const quickMatchBtn = document.getElementById('quick-match-btn');
     if (quickMatchBtn) {
       quickMatchBtn.addEventListener('click', () => {
-        const levelSelect = document.getElementById('level-select') as HTMLSelectElement;
+        const levelSelect = document.getElementById(
+          'level-select'
+        ) as HTMLSelectElement;
         if (!levelSelect.value) {
           this.showNotification('Please select a level first', 'error');
           return;
@@ -532,10 +580,14 @@ export class MultiplayerUI {
     }
 
     // Create Competitive Match
-    const createCompetitiveBtn = document.getElementById('create-competitive-btn');
+    const createCompetitiveBtn = document.getElementById(
+      'create-competitive-btn'
+    );
     if (createCompetitiveBtn) {
       createCompetitiveBtn.addEventListener('click', () => {
-        const levelSelect = document.getElementById('level-select') as HTMLSelectElement;
+        const levelSelect = document.getElementById(
+          'level-select'
+        ) as HTMLSelectElement;
         if (!levelSelect.value) {
           this.showNotification('Please select a level first', 'error');
           return;
@@ -555,31 +607,31 @@ export class MultiplayerUI {
 
   private startQuickMatch(levelId: string): void {
     this.showNotification('🔍 Looking for opponents...', 'info');
-    
+
     // Emit quick match request to server
     this.multiplayerManager.socket.emit('quick-match', {
       levelId,
-      playerId: this.multiplayerManager.socket.id
+      playerId: this.multiplayerManager.socket.id,
     });
   }
 
   private createCompetitiveSession(levelId: string): void {
     this.showNotification('🏆 Creating competitive session...', 'info');
-    
+
     // Create a competitive session with the selected level
     this.multiplayerManager.createSession(`Competitive: ${levelId}`, {
       isCompetitive: true,
       levelId,
       minPlayers: 2,
-      maxPlayers: 4
+      maxPlayers: 4,
     });
   }
 
   private showSpectatorLobby(): void {
     this.showNotification('👁️ Showing active competitive matches...', 'info');
-    
+
     // This would show a list of ongoing competitive matches
     // For now, just emit a spectator request
     this.multiplayerManager.socket.emit('request-spectator-sessions');
   }
-} 
+}

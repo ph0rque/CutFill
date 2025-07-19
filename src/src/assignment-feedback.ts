@@ -1,4 +1,8 @@
-import type { AssignmentProgress, AssignmentObjective, AssignmentConfig } from './assignments';
+import type {
+  AssignmentProgress,
+  AssignmentObjective,
+  AssignmentConfig,
+} from './assignments';
 
 export interface FeedbackMessage {
   id: string;
@@ -83,45 +87,54 @@ export class AssignmentFeedbackSystem {
       type: 'success',
       message: `🚀 Assignment Started: ${assignment.name}`,
       priority: 'high',
-      duration: 4000
+      duration: 4000,
     });
 
     // Show initial hints for all objectives
     assignment.objectives.forEach((objective, index) => {
       const hintId = `objective_start_hint_${objective.id}`;
       if (!this.shownHints.has(hintId)) {
-        setTimeout(() => {
-          this.showFeedback({
-            id: hintId,
-            type: 'hint',
-            message: `💡 Ready to start? Focus on: ${objective.description}`,
-            priority: 'medium',
-            duration: 5000,
-            objectiveId: objective.id
-          });
-          this.shownHints.add(hintId);
-        }, 1000 + index * 2000);
+        setTimeout(
+          () => {
+            this.showFeedback({
+              id: hintId,
+              type: 'hint',
+              message: `💡 Ready to start? Focus on: ${objective.description}`,
+              priority: 'medium',
+              duration: 5000,
+              objectiveId: objective.id,
+            });
+            this.shownHints.add(hintId);
+          },
+          1000 + index * 2000
+        );
       }
     });
 
     // Show initial hints
     assignment.hints.slice(0, 2).forEach((hint, index) => {
-      setTimeout(() => {
-        this.showFeedback({
-          id: `initial_hint_${index}`,
-          type: 'tip',
-          message: `💡 ${hint}`,
-          priority: 'medium',
-          duration: 6000
-        });
-      }, 1000 + index * 2000);
+      setTimeout(
+        () => {
+          this.showFeedback({
+            id: `initial_hint_${index}`,
+            type: 'tip',
+            message: `💡 ${hint}`,
+            priority: 'medium',
+            duration: 6000,
+          });
+        },
+        1000 + index * 2000
+      );
     });
   }
 
   /**
    * Update progress display
    */
-  public updateProgress(assignment: AssignmentConfig, progress: AssignmentProgress): void {
+  public updateProgress(
+    assignment: AssignmentConfig,
+    progress: AssignmentProgress
+  ): void {
     if (!this.progressContainer) return;
 
     const indicators = this.generateProgressIndicators(assignment, progress);
@@ -132,11 +145,14 @@ export class AssignmentFeedbackSystem {
   /**
    * Generate progress indicators for objectives
    */
-  private generateProgressIndicators(assignment: AssignmentConfig, progress: AssignmentProgress): ProgressIndicator[] {
+  private generateProgressIndicators(
+    assignment: AssignmentConfig,
+    progress: AssignmentProgress
+  ): ProgressIndicator[] {
     return progress.objectives.map(objective => {
       const lastValue = this.lastProgressValues.get(objective.id) || 0;
       const currentValue = objective.score;
-      
+
       let trend: 'improving' | 'stable' | 'declining' | 'unknown' = 'unknown';
       if (currentValue > lastValue + 1) trend = 'improving';
       else if (currentValue < lastValue - 1) trend = 'declining';
@@ -144,7 +160,11 @@ export class AssignmentFeedbackSystem {
 
       this.lastProgressValues.set(objective.id, currentValue);
 
-      let status: 'not_started' | 'in_progress' | 'near_completion' | 'completed' = 'not_started';
+      let status:
+        | 'not_started'
+        | 'in_progress'
+        | 'near_completion'
+        | 'completed' = 'not_started';
       if (objective.completed) status = 'completed';
       else if (currentValue >= 75) status = 'near_completion';
       else if (currentValue > 10) status = 'in_progress';
@@ -155,7 +175,7 @@ export class AssignmentFeedbackSystem {
         target: 100,
         unit: '%',
         status,
-        trend
+        trend,
       };
     });
   }
@@ -163,10 +183,15 @@ export class AssignmentFeedbackSystem {
   /**
    * Update progress display in the UI
    */
-  private updateProgressDisplay(indicators: ProgressIndicator[], progress: AssignmentProgress): void {
+  private updateProgressDisplay(
+    indicators: ProgressIndicator[],
+    progress: AssignmentProgress
+  ): void {
     if (!this.progressContainer) return;
 
-    const completedObjectives = indicators.filter(i => i.status === 'completed').length;
+    const completedObjectives = indicators.filter(
+      i => i.status === 'completed'
+    ).length;
     const totalObjectives = indicators.length;
     const overallScore = Math.round(progress.currentScore);
 
@@ -199,22 +224,27 @@ export class AssignmentFeedbackSystem {
   /**
    * Create progress item for individual objective
    */
-  private createObjectiveProgressItem(indicator: ProgressIndicator, progress: AssignmentProgress): string {
-    const objective = progress.objectives.find(obj => obj.id === indicator.objectiveId);
+  private createObjectiveProgressItem(
+    indicator: ProgressIndicator,
+    progress: AssignmentProgress
+  ): string {
+    const objective = progress.objectives.find(
+      obj => obj.id === indicator.objectiveId
+    );
     if (!objective) return '';
 
     const statusColor = {
-      'completed': '#4CAF50',
-      'near_completion': '#FF9800', 
-      'in_progress': '#2196F3',
-      'not_started': '#666'
+      completed: '#4CAF50',
+      near_completion: '#FF9800',
+      in_progress: '#2196F3',
+      not_started: '#666',
     }[indicator.status];
 
     const trendIcon = {
-      'improving': '📈',
-      'stable': '➡️',
-      'declining': '📉',
-      'unknown': '⏳'
+      improving: '📈',
+      stable: '➡️',
+      declining: '📉',
+      unknown: '⏳',
     }[indicator.trend];
 
     return `
@@ -236,46 +266,60 @@ export class AssignmentFeedbackSystem {
   /**
    * Analyze progress and provide contextual feedback
    */
-  private analyzeProgressAndGiveFeedback(assignment: AssignmentConfig, progress: AssignmentProgress, indicators: ProgressIndicator[]): void {
+  private analyzeProgressAndGiveFeedback(
+    assignment: AssignmentConfig,
+    progress: AssignmentProgress,
+    indicators: ProgressIndicator[]
+  ): void {
     // Check for objectives that need attention
     indicators.forEach(indicator => {
-      const objective = progress.objectives.find(obj => obj.id === indicator.objectiveId);
+      const objective = progress.objectives.find(
+        obj => obj.id === indicator.objectiveId
+      );
       if (!objective) return;
 
       // Skip not_started feedback, as it's handled at start
-      if (indicator.trend === 'declining' && indicator.current > 20 && !this.hasRecentFeedback(`objective_declining_${objective.id}`)) {
+      if (
+        indicator.trend === 'declining' &&
+        indicator.current > 20 &&
+        !this.hasRecentFeedback(`objective_declining_${objective.id}`)
+      ) {
         this.showFeedback({
           id: `objective_declining_${objective.id}`,
           type: 'warning',
           message: `⚠️ Progress declining on: ${objective.description.substring(0, 30)}...`,
           priority: 'high',
           duration: 4000,
-          objectiveId: objective.id
+          objectiveId: objective.id,
         });
       }
 
-      if (indicator.status === 'near_completion' && !objective.completed && !this.hasRecentFeedback(`objective_near_complete_${objective.id}`)) {
+      if (
+        indicator.status === 'near_completion' &&
+        !objective.completed &&
+        !this.hasRecentFeedback(`objective_near_complete_${objective.id}`)
+      ) {
         this.showFeedback({
           id: `objective_near_complete_${objective.id}`,
           type: 'tip',
           message: `🎯 Almost there! Focus on: ${objective.description.substring(0, 30)}...`,
           priority: 'high',
           duration: 3000,
-          objectiveId: objective.id
+          objectiveId: objective.id,
         });
       }
     });
 
     // Overall progress feedback
     const overallScore = Math.round(progress.currentScore);
-    
+
     if (overallScore >= 90 && !this.hasRecentFeedback('excellent_progress')) {
       this.showFeedback({
         id: 'excellent_progress',
         type: 'success',
-        message: '🌟 Excellent work! You\'re mastering these earthworks skills!',
+        message: "🌟 Excellent work! You're mastering these earthworks skills!",
         priority: 'high',
-        duration: 4000
+        duration: 4000,
       });
     } else if (overallScore >= 70 && !this.hasRecentFeedback('good_progress')) {
       this.showFeedback({
@@ -283,21 +327,23 @@ export class AssignmentFeedbackSystem {
         type: 'success',
         message: '👍 Great progress! Keep up the solid work!',
         priority: 'medium',
-        duration: 3000
+        duration: 3000,
       });
     }
 
     // Time-based feedback removed as per user request
 
     // Volume balance feedback
-    const netMovement = Math.abs(progress.volumeData.totalCut - progress.volumeData.totalFill);
+    const netMovement = Math.abs(
+      progress.volumeData.totalCut - progress.volumeData.totalFill
+    );
     if (netMovement > 10 && !this.hasRecentFeedback('volume_balance')) {
       this.showFeedback({
         id: 'volume_balance',
         type: 'tip',
         message: `⚖️ Try to balance cut and fill volumes for efficiency (current imbalance: ${netMovement.toFixed(1)} yd³)`,
         priority: 'medium',
-        duration: 4000
+        duration: 4000,
       });
     }
   }
@@ -363,7 +409,10 @@ export class AssignmentFeedbackSystem {
     if (element && this.feedbackContainer) {
       element.style.animation = 'slideOutToRight 0.3s ease-out';
       setTimeout(() => {
-        if (this.feedbackContainer && this.feedbackContainer.contains(element)) {
+        if (
+          this.feedbackContainer &&
+          this.feedbackContainer.contains(element)
+        ) {
           this.feedbackContainer.removeChild(element);
         }
         this.activeFeedback.delete(feedbackId);
@@ -380,7 +429,7 @@ export class AssignmentFeedbackSystem {
       progress: '#4CAF50',
       warning: '#FF9800',
       success: '#4CAF50',
-      tip: '#9C27B0'
+      tip: '#9C27B0',
     };
     return colors[type as keyof typeof colors] || '#666';
   }
@@ -422,17 +471,21 @@ export class AssignmentFeedbackSystem {
   /**
    * Show assignment completion feedback
    */
-  public showAssignmentCompleted(assignment: AssignmentConfig, progress: AssignmentProgress, passed: boolean): void {
+  public showAssignmentCompleted(
+    assignment: AssignmentConfig,
+    progress: AssignmentProgress,
+    passed: boolean
+  ): void {
     const score = Math.round(progress.currentScore);
-    
+
     this.showFeedback({
       id: 'assignment_completed',
       type: passed ? 'success' : 'warning',
-      message: passed 
+      message: passed
         ? `🎉 Assignment Complete! Score: ${score}% - Excellent work!`
         : `📝 Assignment Complete! Score: ${score}% - Try again for a better score!`,
       priority: 'high',
-      duration: 6000
+      duration: 6000,
     });
 
     // Hide progress container after a delay
@@ -445,4 +498,4 @@ export class AssignmentFeedbackSystem {
   public resetHints(): void {
     this.shownHints.clear();
   }
-} 
+}

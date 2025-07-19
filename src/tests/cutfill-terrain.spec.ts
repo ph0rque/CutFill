@@ -10,38 +10,52 @@ test.describe('CutFill Terrain System Tests', () => {
 
   test.beforeEach(async ({ page: testPage }) => {
     page = testPage;
-    
+
+    // Set up localStorage before page loads to simulate existing guest user
+    await page.addInitScript(() => {
+      localStorage.setItem('hasVisited', 'true');
+      localStorage.setItem('guestData', JSON.stringify({
+        username: 'TestUser',
+        tempGuestId: 'guest_test123',
+        ageRange: '13-25',
+        mode: 'solo'
+      }));
+    });
+
     // Navigate to the application
     await page.goto(APP_URL);
-    
+
     // Wait for the page to load
     await page.waitForLoadState('domcontentloaded');
-    
-    // Wait for terrain to initialize
-    await page.waitForTimeout(2000);
+
+    // Wait for the game to initialize with the pre-set guest data
+    await page.waitForTimeout(3000);
   });
 
   test('should load the CutFill application successfully', async () => {
     // Check if the page title is correct
     await expect(page).toHaveTitle(/CutFill/);
-    
+
     // Check if the main canvas is present
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
-    
+
     // Take initial screenshot
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/cutfill-initial-load.png',
-      fullPage: true 
+      fullPage: true,
     });
   });
 
   test('should wait for terrain to load properly', async () => {
     // Wait for terrain to be fully loaded
-    await page.waitForFunction(() => {
-      const terrain = (window as any).terrain;
-      return terrain && terrain.getMesh && terrain.getMesh();
-    }, { timeout: TERRAIN_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => {
+        const terrain = (window as any).terrain;
+        return terrain && terrain.getMesh && terrain.getMesh();
+      },
+      { timeout: TERRAIN_LOAD_TIMEOUT }
+    );
 
     // Check if terrain helpers are available
     await page.waitForFunction(() => {
@@ -53,15 +67,18 @@ test.describe('CutFill Terrain System Tests', () => {
 
   test('should render terrain without artifacts', async () => {
     // Wait for terrain to load
-    await page.waitForFunction(() => {
-      const terrain = (window as any).terrain;
-      return terrain && terrain.getMesh && terrain.getMesh();
-    }, { timeout: TERRAIN_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => {
+        const terrain = (window as any).terrain;
+        return terrain && terrain.getMesh && terrain.getMesh();
+      },
+      { timeout: TERRAIN_LOAD_TIMEOUT }
+    );
 
     // Take screenshot before clean render
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-before-clean.png',
-      fullPage: true 
+      fullPage: true,
     });
 
     // Test clean render function
@@ -73,9 +90,9 @@ test.describe('CutFill Terrain System Tests', () => {
     await page.waitForTimeout(1000);
 
     // Take screenshot after clean render
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-after-clean.png',
-      fullPage: true 
+      fullPage: true,
     });
 
     // Check for any rendering errors in console
@@ -169,23 +186,26 @@ test.describe('CutFill Terrain System Tests', () => {
 
     // Press 'A' to open levels
     await page.keyboard.press('a');
-    
+
     // Wait for level selection UI to appear
     await page.waitForTimeout(1000);
 
     // Check if assignment UI is visible
     const assignmentUI = await page.evaluate(() => {
       const assignmentManager = (window as any).assignmentManager;
-      return assignmentManager && typeof assignmentManager.getCurrentAssignment === 'function';
+      return (
+        assignmentManager &&
+        typeof assignmentManager.getCurrentAssignment === 'function'
+      );
     });
 
     expect(assignmentUI).toBeTruthy();
     console.log('✅ Level progression system accessible via "A" key');
 
     // Take screenshot of level selection
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/level-selection.png',
-      fullPage: true 
+      fullPage: true,
     });
   });
 
@@ -194,8 +214,10 @@ test.describe('CutFill Terrain System Tests', () => {
   // ==========================================
 
   test('should test terrain loading integration with existing levels', async () => {
-    console.log('🧪 Testing terrain loading integration with existing levels...');
-    
+    console.log(
+      '🧪 Testing terrain loading integration with existing levels...'
+    );
+
     // Wait for assignment manager to be available
     await page.waitForFunction(() => {
       return (window as any).assignmentManager !== undefined;
@@ -205,13 +227,13 @@ test.describe('CutFill Terrain System Tests', () => {
     const testResults = await page.evaluate(async () => {
       const assignmentManager = (window as any).assignmentManager;
       const terrain = (window as any).terrain;
-      
+
       const results = {
         assignmentLoadingWorks: false,
         levelDataAvailable: false,
         terrainIntegrationWorks: false,
         fallbackMechanismWorks: false,
-        errors: [] as string[]
+        errors: [] as string[],
       };
 
       try {
@@ -219,33 +241,47 @@ test.describe('CutFill Terrain System Tests', () => {
         const assignments = await assignmentManager.getAvailableAssignments();
         if (assignments && assignments.length > 0) {
           results.assignmentLoadingWorks = true;
-          console.log(`✅ Loaded ${assignments.length} assignments with terrain integration`);
-          
+          console.log(
+            `✅ Loaded ${assignments.length} assignments with terrain integration`
+          );
+
           // Test 2: Check if assignments have level numbers and terrain configs
           console.log('🔍 Assignment structure debug:');
-          console.log('First assignment:', JSON.stringify(assignments[0], null, 2));
-          
-          const hasLevelNumbers = assignments.some(a => a.levelNumber !== undefined);
-          const hasTerrainConfigs = assignments.some(a => a.terrainConfig !== undefined);
-          
+          console.log(
+            'First assignment:',
+            JSON.stringify(assignments[0], null, 2)
+          );
+
+          const hasLevelNumbers = assignments.some(
+            a => a.levelNumber !== undefined
+          );
+          const hasTerrainConfigs = assignments.some(
+            a => a.terrainConfig !== undefined
+          );
+
           console.log(`Level numbers present: ${hasLevelNumbers}`);
           console.log(`Terrain configs present: ${hasTerrainConfigs}`);
-          
+
           if (hasLevelNumbers && hasTerrainConfigs) {
             results.levelDataAvailable = true;
-            console.log('✅ Assignments have level numbers and terrain configurations');
+            console.log(
+              '✅ Assignments have level numbers and terrain configurations'
+            );
           } else {
             // More lenient check - just need some terrain-related data
-            const hasTerrainData = assignments.some(a => 
-              a.levelNumber !== undefined || 
-              a.terrainConfig !== undefined || 
-              a.category !== undefined ||
-              a.difficulty !== undefined
+            const hasTerrainData = assignments.some(
+              a =>
+                a.levelNumber !== undefined ||
+                a.terrainConfig !== undefined ||
+                a.category !== undefined ||
+                a.difficulty !== undefined
             );
-            
+
             if (hasTerrainData) {
               results.levelDataAvailable = true;
-              console.log('✅ Assignments have terrain-related data (lenient check)');
+              console.log(
+                '✅ Assignments have terrain-related data (lenient check)'
+              );
             } else {
               console.log('❌ No terrain-related data found in assignments');
             }
@@ -256,16 +292,21 @@ test.describe('CutFill Terrain System Tests', () => {
         if (assignments && assignments.length > 0) {
           const firstAssignment = assignments[0];
           try {
-            const success = await assignmentManager.startAssignment(firstAssignment.id, 'test_user');
+            const success = await assignmentManager.startAssignment(
+              firstAssignment.id,
+              'test_user'
+            );
             if (success) {
               results.terrainIntegrationWorks = true;
               console.log('✅ Assignment start with terrain integration works');
-              
+
               // Wait for terrain setup to complete
               await new Promise(resolve => setTimeout(resolve, 1000));
             }
           } catch (startError: any) {
-            results.errors.push(`Assignment start error: ${startError.message}`);
+            results.errors.push(
+              `Assignment start error: ${startError.message}`
+            );
           }
         }
 
@@ -277,9 +318,10 @@ test.describe('CutFill Terrain System Tests', () => {
             console.log('✅ Terrain fallback mechanism available');
           }
         }
-
       } catch (error: any) {
-        results.errors.push(`Error during terrain loading test: ${error.message}`);
+        results.errors.push(
+          `Error during terrain loading test: ${error.message}`
+        );
       }
 
       return results;
@@ -290,7 +332,7 @@ test.describe('CutFill Terrain System Tests', () => {
     expect(testResults.levelDataAvailable).toBeTruthy();
     expect(testResults.terrainIntegrationWorks).toBeTruthy();
     expect(testResults.fallbackMechanismWorks).toBeTruthy();
-    
+
     if (testResults.errors.length > 0) {
       console.log('⚠️ Test errors:', testResults.errors);
     }
@@ -298,15 +340,15 @@ test.describe('CutFill Terrain System Tests', () => {
     console.log('✅ Terrain loading integration tests passed');
 
     // Take screenshot of terrain state
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-loading-integration.png',
-      fullPage: true 
+      fullPage: true,
     });
   });
 
   test('should verify terrain persistence works across level transitions', async () => {
     console.log('🧪 Testing terrain persistence across level transitions...');
-    
+
     // Wait for assignment manager to be available
     await page.waitForFunction(() => {
       return (window as any).assignmentManager !== undefined;
@@ -315,7 +357,7 @@ test.describe('CutFill Terrain System Tests', () => {
     const persistenceResults = await page.evaluate(async () => {
       const assignmentManager = (window as any).assignmentManager;
       const terrain = (window as any).terrain;
-      
+
       const results = {
         initialTerrainState: null as any,
         modifiedTerrainState: null as any,
@@ -323,7 +365,7 @@ test.describe('CutFill Terrain System Tests', () => {
         persistenceWorking: false,
         levelTransitionWorking: false,
         saveMethodAvailable: false,
-        errors: [] as string[]
+        errors: [] as string[],
       };
 
       try {
@@ -345,36 +387,44 @@ test.describe('CutFill Terrain System Tests', () => {
             const position = { x: 10, y: 0, z: 10 };
             terrain.modifyTerrain(position, 2, 0.5);
             results.modifiedTerrainState = terrain.exportTerrain();
-            console.log('🔧 Modified terrain for persistence test (alternative method)');
+            console.log(
+              '🔧 Modified terrain for persistence test (alternative method)'
+            );
           } catch (modifyError: any) {
-            console.log('⚠️ Terrain modification not available, testing without modification');
+            console.log(
+              '⚠️ Terrain modification not available, testing without modification'
+            );
             results.modifiedTerrainState = results.initialTerrainState;
           }
         }
 
         // Step 3: Test terrain export/import cycle (simulating level transition)
-        if (results.modifiedTerrainState && typeof terrain.importTerrain === 'function') {
+        if (
+          results.modifiedTerrainState &&
+          typeof terrain.importTerrain === 'function'
+        ) {
           // Reset to flat state
           terrain.reset();
-          
+
           // Restore from exported state
           terrain.importTerrain(results.modifiedTerrainState);
           results.restoredTerrainState = terrain.exportTerrain();
-          
+
           results.persistenceWorking = true;
           console.log('✅ Terrain persistence methods work');
         } else if (typeof terrain.exportTerrain === 'function') {
           // Even if import doesn't work, export functionality shows persistence capability
           results.persistenceWorking = true;
-          console.log('✅ Terrain export functionality available (partial persistence)');
+          console.log(
+            '✅ Terrain export functionality available (partial persistence)'
+          );
         } else {
           // Check for alternative persistence methods
-          const hasBasicPersistence = (
+          const hasBasicPersistence =
             typeof terrain.reset === 'function' ||
             typeof terrain.getMesh === 'function' ||
-            typeof terrain.updateTerrainColors === 'function'
-          );
-          
+            typeof terrain.updateTerrainColors === 'function';
+
           if (hasBasicPersistence) {
             results.persistenceWorking = true;
             console.log('✅ Basic terrain state management available');
@@ -388,22 +438,30 @@ test.describe('CutFill Terrain System Tests', () => {
         if (assignments && assignments.length >= 2) {
           try {
             // Start first assignment
-            const success1 = await assignmentManager.startAssignment(assignments[0].id, 'test_user');
+            const success1 = await assignmentManager.startAssignment(
+              assignments[0].id,
+              'test_user'
+            );
             if (success1) {
               console.log('📋 Started first assignment');
-              
+
               // Wait for setup
               await new Promise(resolve => setTimeout(resolve, 1000));
-              
+
               // Start second assignment (simulating level transition)
-              const success2 = await assignmentManager.startAssignment(assignments[1].id, 'test_user');
+              const success2 = await assignmentManager.startAssignment(
+                assignments[1].id,
+                'test_user'
+              );
               if (success2) {
                 results.levelTransitionWorking = true;
                 console.log('✅ Level transition working');
               }
             }
           } catch (transitionError: any) {
-            results.errors.push(`Level transition error: ${transitionError.message}`);
+            results.errors.push(
+              `Level transition error: ${transitionError.message}`
+            );
           }
         }
 
@@ -412,7 +470,6 @@ test.describe('CutFill Terrain System Tests', () => {
           results.saveMethodAvailable = true;
           console.log('💾 Terrain save method available');
         }
-
       } catch (error: any) {
         results.errors.push(`Error during persistence test: ${error.message}`);
       }
@@ -425,7 +482,7 @@ test.describe('CutFill Terrain System Tests', () => {
     expect(persistenceResults.persistenceWorking).toBeTruthy();
     expect(persistenceResults.levelTransitionWorking).toBeTruthy();
     expect(persistenceResults.saveMethodAvailable).toBeTruthy();
-    
+
     if (persistenceResults.errors.length > 0) {
       console.log('⚠️ Persistence test errors:', persistenceResults.errors);
     }
@@ -433,15 +490,15 @@ test.describe('CutFill Terrain System Tests', () => {
     console.log('✅ Terrain persistence across level transitions verified');
 
     // Take screenshot of final state
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-persistence-test.png',
-      fullPage: true 
+      fullPage: true,
     });
   });
 
   test('should test terrain database integration and server connectivity', async () => {
     console.log('🧪 Testing terrain database integration...');
-    
+
     await page.waitForFunction(() => {
       return (window as any).assignmentManager !== undefined;
     });
@@ -449,13 +506,13 @@ test.describe('CutFill Terrain System Tests', () => {
     const dbIntegrationResults = await page.evaluate(async () => {
       const assignmentManager = (window as any).assignmentManager;
       const terrain = (window as any).terrain;
-      
+
       const results = {
         serverMethodsAvailable: false,
         assignmentLoadingWorks: false,
         terrainServerIntegration: false,
         fallbackMechanismWorks: false,
-        errors: [] as string[]
+        errors: [] as string[],
       };
 
       try {
@@ -469,21 +526,28 @@ test.describe('CutFill Terrain System Tests', () => {
         const assignments = await assignmentManager.getAvailableAssignments();
         if (assignments && assignments.length > 0) {
           results.assignmentLoadingWorks = true;
-          console.log('✅ Assignment loading works (includes terrain fallback)');
+          console.log(
+            '✅ Assignment loading works (includes terrain fallback)'
+          );
         }
 
         // Test 3: Test terrain server integration (expect it to fail gracefully)
         if (terrain && typeof terrain.loadTerrainFromServer === 'function') {
           try {
             // This should fail gracefully since server may not be running
-            const loadSuccess = await terrain.loadTerrainFromServer(1, 'test_assignment');
+            const loadSuccess = await terrain.loadTerrainFromServer(
+              1,
+              'test_assignment'
+            );
             // Either success or graceful failure is acceptable
             results.terrainServerIntegration = true;
             console.log('📡 Terrain server integration test completed');
           } catch (serverError: any) {
             // Graceful failure is expected
             results.terrainServerIntegration = true;
-            console.log('📡 Terrain server gracefully handled connection failure');
+            console.log(
+              '📡 Terrain server gracefully handled connection failure'
+            );
           }
         }
 
@@ -495,19 +559,22 @@ test.describe('CutFill Terrain System Tests', () => {
               id: 'test',
               name: 'Test Assignment',
               terrainConfig: { initialTerrain: 'flat' },
-              levelNumber: 1
+              levelNumber: 1,
             };
-            
+
             // Should fall back to local terrain generation
             results.fallbackMechanismWorks = true;
             console.log('✅ Fallback mechanism available');
           } catch (fallbackError: any) {
-            results.errors.push(`Fallback mechanism error: ${fallbackError.message}`);
+            results.errors.push(
+              `Fallback mechanism error: ${fallbackError.message}`
+            );
           }
         }
-
       } catch (error: any) {
-        results.errors.push(`Database integration test error: ${error.message}`);
+        results.errors.push(
+          `Database integration test error: ${error.message}`
+        );
       }
 
       return results;
@@ -518,23 +585,26 @@ test.describe('CutFill Terrain System Tests', () => {
     expect(dbIntegrationResults.assignmentLoadingWorks).toBeTruthy();
     expect(dbIntegrationResults.terrainServerIntegration).toBeTruthy();
     expect(dbIntegrationResults.fallbackMechanismWorks).toBeTruthy();
-    
+
     if (dbIntegrationResults.errors.length > 0) {
-      console.log('⚠️ Database integration errors:', dbIntegrationResults.errors);
+      console.log(
+        '⚠️ Database integration errors:',
+        dbIntegrationResults.errors
+      );
     }
 
     console.log('✅ Terrain database integration tests completed');
 
     // Take screenshot of database integration state
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-database-integration.png',
-      fullPage: true 
+      fullPage: true,
     });
   });
 
   test('should test terrain versioning and compatibility across level updates', async () => {
     console.log('🧪 Testing terrain versioning and compatibility...');
-    
+
     await page.waitForFunction(() => {
       return (window as any).assignmentManager !== undefined;
     });
@@ -542,13 +612,13 @@ test.describe('CutFill Terrain System Tests', () => {
     const versioningResults = await page.evaluate(async () => {
       const assignmentManager = (window as any).assignmentManager;
       const terrain = (window as any).terrain;
-      
+
       const results = {
         assignmentVersioningSupported: false,
         terrainConfigCompatibility: false,
         levelNumberSupport: false,
         versionHandlingWorks: false,
-        errors: [] as string[]
+        errors: [] as string[],
       };
 
       try {
@@ -557,33 +627,48 @@ test.describe('CutFill Terrain System Tests', () => {
         if (assignments && assignments.length > 0) {
           console.log('🔍 Versioning debug - Assignment sample:');
           console.log('Assignment keys:', Object.keys(assignments[0]));
-          console.log('First assignment levelNumber:', assignments[0].levelNumber);
-          console.log('First assignment levelVersion:', assignments[0].levelVersion);
-          
-          const hasVersioning = assignments.some(a => a.levelVersion !== undefined);
-          const hasLevelNumbers = assignments.some(a => 
-            a.levelNumber !== undefined || 
-            a.difficulty !== undefined ||
-            a.id?.includes('level') ||
-            a.name?.toLowerCase().includes('level')
+          console.log(
+            'First assignment levelNumber:',
+            assignments[0].levelNumber
           );
-          
+          console.log(
+            'First assignment levelVersion:',
+            assignments[0].levelVersion
+          );
+
+          const hasVersioning = assignments.some(
+            a => a.levelVersion !== undefined
+          );
+          const hasLevelNumbers = assignments.some(
+            a =>
+              a.levelNumber !== undefined ||
+              a.difficulty !== undefined ||
+              a.id?.includes('level') ||
+              a.name?.toLowerCase().includes('level')
+          );
+
           console.log(`Has versioning: ${hasVersioning}`);
           console.log(`Has level identification: ${hasLevelNumbers}`);
-          
+
           if (hasVersioning) {
             results.assignmentVersioningSupported = true;
             console.log('✅ Assignment versioning supported');
           }
-          
+
           if (hasLevelNumbers) {
             results.levelNumberSupport = true;
             console.log('✅ Level identification support available');
           } else {
             // Even more lenient check - assignments exist with structure
-            if (assignments.length > 0 && assignments[0].id && assignments[0].name) {
+            if (
+              assignments.length > 0 &&
+              assignments[0].id &&
+              assignments[0].name
+            ) {
               results.levelNumberSupport = true;
-              console.log('✅ Basic assignment structure supports level concepts');
+              console.log(
+                '✅ Basic assignment structure supports level concepts'
+              );
             }
           }
         }
@@ -592,7 +677,7 @@ test.describe('CutFill Terrain System Tests', () => {
         const testConfigs = [
           { initialTerrain: 'flat', width: 50, height: 50 },
           { initialTerrain: 'rolling', width: 100, height: 100 },
-          { initialTerrain: 'rough', width: 80, height: 60 }
+          { initialTerrain: 'rough', width: 80, height: 60 },
         ];
 
         let compatibilityCount = 0;
@@ -604,7 +689,9 @@ test.describe('CutFill Terrain System Tests', () => {
               compatibilityCount++;
             }
           } catch (configError: any) {
-            results.errors.push(`Config compatibility error: ${configError.message}`);
+            results.errors.push(
+              `Config compatibility error: ${configError.message}`
+            );
           }
         }
 
@@ -621,7 +708,6 @@ test.describe('CutFill Terrain System Tests', () => {
             console.log('✅ Version handling in assignments works');
           }
         }
-
       } catch (error: any) {
         results.errors.push(`Versioning test error: ${error.message}`);
       }
@@ -632,7 +718,7 @@ test.describe('CutFill Terrain System Tests', () => {
     // Validate versioning results
     expect(versioningResults.levelNumberSupport).toBeTruthy();
     expect(versioningResults.terrainConfigCompatibility).toBeTruthy();
-    
+
     if (versioningResults.errors.length > 0) {
       console.log('⚠️ Versioning test errors:', versioningResults.errors);
     }
@@ -640,9 +726,9 @@ test.describe('CutFill Terrain System Tests', () => {
     console.log('✅ Terrain versioning and compatibility tests completed');
 
     // Take screenshot of versioning test
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-versioning-test.png',
-      fullPage: true 
+      fullPage: true,
     });
   });
 
@@ -674,21 +760,24 @@ test.describe('CutFill Terrain System Tests', () => {
 
   test('should verify terrain dimensions match 40x40 yard specifications', async () => {
     // Wait for terrain to load
-    await page.waitForFunction(() => {
-      const terrain = (window as any).terrain;
-      return terrain && terrain.getMesh && terrain.getMesh();
-    }, { timeout: TERRAIN_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => {
+        const terrain = (window as any).terrain;
+        return terrain && terrain.getMesh && terrain.getMesh();
+      },
+      { timeout: TERRAIN_LOAD_TIMEOUT }
+    );
 
     // Get terrain dimensions
     const terrainDimensions = await page.evaluate(() => {
       const terrain = (window as any).terrain;
       if (!terrain || !terrain.getMesh) return null;
-      
+
       const terrainGroup = terrain.getMesh();
-      
+
       // The terrain group contains multiple meshes, we need to find the surface mesh
       let surfaceMesh: any = null;
-      
+
       // Try to get the surface mesh directly if available
       if (terrain.getSurfaceMesh) {
         surfaceMesh = terrain.getSurfaceMesh();
@@ -700,36 +789,44 @@ test.describe('CutFill Terrain System Tests', () => {
           }
         });
       }
-      
+
       if (!surfaceMesh || !surfaceMesh.geometry) return null;
-      
+
       const geometry = surfaceMesh.geometry;
-      
+
       if (!geometry.boundingBox) {
         geometry.computeBoundingBox();
       }
-      
+
       const boundingBox = geometry.boundingBox;
       if (!boundingBox) return null;
-      
+
       return {
         width: boundingBox.max.x - boundingBox.min.x,
         height: boundingBox.max.z - boundingBox.min.z,
-        depth: boundingBox.max.y - boundingBox.min.y
+        depth: boundingBox.max.y - boundingBox.min.y,
       };
     });
 
     if (terrainDimensions) {
-      console.log(`📏 Terrain dimensions: ${terrainDimensions.width}x${terrainDimensions.height} feet (depth: ${terrainDimensions.depth} feet)`);
-      
+      console.log(
+        `📏 Terrain dimensions: ${terrainDimensions.width}x${terrainDimensions.height} feet (depth: ${terrainDimensions.depth} feet)`
+      );
+
       // Check if dimensions are approximately 120x120 feet (40x40 yards) - allowing for some tolerance
       const tolerance = 5; // 5 feet tolerance
-      const widthInRange = Math.abs(terrainDimensions.width - TERRAIN_DIMENSIONS.width) <= tolerance;
-      const heightInRange = Math.abs(terrainDimensions.height - TERRAIN_DIMENSIONS.height) <= tolerance;
-      
+      const widthInRange =
+        Math.abs(terrainDimensions.width - TERRAIN_DIMENSIONS.width) <=
+        tolerance;
+      const heightInRange =
+        Math.abs(terrainDimensions.height - TERRAIN_DIMENSIONS.height) <=
+        tolerance;
+
       expect(widthInRange).toBeTruthy();
       expect(heightInRange).toBeTruthy();
-      console.log('✅ Terrain dimensions match 120x120 feet (40x40 yard) specifications');
+      console.log(
+        '✅ Terrain dimensions match 120x120 feet (40x40 yard) specifications'
+      );
     } else {
       console.log('⚠️  Could not determine terrain dimensions');
     }
@@ -740,10 +837,10 @@ test.describe('CutFill Terrain System Tests', () => {
     const consoleErrors: string[] = [];
 
     // Listen for console messages
-    page.on('console', (msg) => {
+    page.on('console', msg => {
       const text = msg.text();
       consoleMessages.push(text);
-      
+
       if (msg.type() === 'error') {
         consoleErrors.push(text);
       }
@@ -763,11 +860,12 @@ test.describe('CutFill Terrain System Tests', () => {
     await page.waitForTimeout(2000);
 
     // Filter terrain-related errors
-    const terrainErrors = consoleErrors.filter(error => 
-      error.toLowerCase().includes('terrain') || 
-      error.toLowerCase().includes('three') ||
-      error.toLowerCase().includes('webgl') ||
-      error.toLowerCase().includes('render')
+    const terrainErrors = consoleErrors.filter(
+      error =>
+        error.toLowerCase().includes('terrain') ||
+        error.toLowerCase().includes('three') ||
+        error.toLowerCase().includes('webgl') ||
+        error.toLowerCase().includes('render')
     );
 
     console.log(`📋 Total console messages: ${consoleMessages.length}`);
@@ -786,15 +884,18 @@ test.describe('CutFill Terrain System Tests', () => {
 
   test('should take comprehensive screenshots for visual verification', async () => {
     // Wait for terrain to load
-    await page.waitForFunction(() => {
-      const terrain = (window as any).terrain;
-      return terrain && terrain.getMesh && terrain.getMesh();
-    }, { timeout: TERRAIN_LOAD_TIMEOUT });
+    await page.waitForFunction(
+      () => {
+        const terrain = (window as any).terrain;
+        return terrain && terrain.getMesh && terrain.getMesh();
+      },
+      { timeout: TERRAIN_LOAD_TIMEOUT }
+    );
 
     // Take screenshot of initial state
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-initial-state.png',
-      fullPage: true 
+      fullPage: true,
     });
 
     // Test various terrain states
@@ -802,18 +903,18 @@ test.describe('CutFill Terrain System Tests', () => {
       (window as any).terrainHelpers.enable3D();
     });
     await page.waitForTimeout(1000);
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-3d-enabled.png',
-      fullPage: true 
+      fullPage: true,
     });
 
     await page.evaluate(() => {
       (window as any).terrainHelpers.disable3D();
     });
     await page.waitForTimeout(1000);
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-3d-disabled.png',
-      fullPage: true 
+      fullPage: true,
     });
 
     // Reset and clean render
@@ -821,11 +922,340 @@ test.describe('CutFill Terrain System Tests', () => {
       (window as any).terrainHelpers.resetTerrain();
     });
     await page.waitForTimeout(1000);
-    await page.screenshot({ 
+    await page.screenshot({
       path: 'test-results/terrain-final-state.png',
-      fullPage: true 
+      fullPage: true,
     });
 
     console.log('✅ Comprehensive screenshots taken for visual verification');
+  });
+});
+
+test.describe('Guest User Profile Display', () => {
+  test.beforeEach(async ({ context }) => {
+    // Clear localStorage to simulate first visit or clean logout state
+    await context.clearCookies();
+    await context.addInitScript(() => {
+      localStorage.clear();
+      // Also clear any Supabase session data that might persist
+      sessionStorage.clear();
+    });
+  });
+
+  test('should always show simplified guest registration instead of auth UI', async ({ page }) => {
+    await page.goto('http://localhost:5173/');
+
+    // Should ALWAYS see guest registration form, never auth UI
+    await expect(page.locator('h2:has-text("Welcome to CutFill - Guest Setup")')).toBeVisible({ timeout: 10000 });
+    
+    // Should NOT see the complex auth UI with Sign In/Sign Up tabs
+    await expect(page.locator('#auth-tabs')).not.toBeVisible();
+    await expect(page.locator('button:has-text("Sign In")')).not.toBeVisible();
+    await expect(page.locator('button:has-text("Sign Up")')).not.toBeVisible();
+    
+    // Should see the simplified guest form elements
+    await expect(page.locator('input[placeholder="Choose a username"]')).toBeVisible();
+    await expect(page.locator('#guest-agerange')).toBeVisible();
+    await expect(page.locator('input[value="solo"]')).toBeVisible();
+    await expect(page.locator('button:has-text("Start Playing")')).toBeVisible();
+  });
+
+  test('should display guest username and age range in profile section', async ({ page }) => {
+    await page.goto('http://localhost:5173/');
+
+    // Wait for guest UI to appear
+    await expect(page.locator('h2:has-text("Welcome to CutFill - Guest Setup")')).toBeVisible({ timeout: 10000 });
+
+    // Fill in guest registration form
+    let testUsername = 'TestPlayer123';
+    const testAgeRange = '13-25';
+    
+    await page.fill('input[placeholder="Choose a username"]', testUsername);
+    await page.selectOption('#guest-agerange', testAgeRange);
+    
+    // Ensure solo mode is selected (should be default)
+    await page.check('input[value="solo"]');
+    
+    // Set up promise to wait for localStorage to be set (indicates successful registration)
+    const guestDataPromise = page.waitForFunction(() => {
+      return localStorage.getItem('guestData') !== null;
+    }, { timeout: 20000 });
+    
+    // Click start playing to trigger Socket.io registration
+    await page.click('button:has-text("Start Playing")');
+
+    // Check if username was taken and handle suggestion
+    try {
+      await page.waitForSelector('text=Username taken', { timeout: 3000 });
+      console.log('Username was taken, trying suggested username');
+      
+      // Get the suggested username from the input field
+      const suggestedUsername = await page.inputValue('input[placeholder="Choose a username"]');
+      testUsername = suggestedUsername; // Update our expected username
+      
+      // Click start playing again with the suggested username
+      await page.click('button:has-text("Start Playing")');
+    } catch (e) {
+      // Username was not taken, continue with original flow
+      console.log('Username was accepted on first try');
+    }
+
+    // Wait for guest data to be saved to localStorage (indicates Socket.io registration completed)
+    await guestDataPromise;
+    
+    // Additional wait for game initialization
+    await page.waitForTimeout(3000);
+
+    // Verify game has initialized (should show game UI)
+    await expect(page.locator('h3:has-text("🏗️ Precision Tools")')).toBeVisible({ timeout: 10000 });
+    
+    // Check localStorage for guest data
+    const guestData = await page.evaluate(() => {
+      return localStorage.getItem('guestData');
+    });
+    
+    expect(guestData).toBeTruthy();
+    const parsedGuestData = JSON.parse(guestData!);
+    expect(parsedGuestData.username).toBe(testUsername); // Use the final username (original or suggested)
+    expect(parsedGuestData.ageRange).toBe(testAgeRange);
+    
+    // Check that hasVisited flag is set
+    const hasVisited = await page.evaluate(() => {
+      return localStorage.getItem('hasVisited');
+    });
+    expect(hasVisited).toBe('true');
+  });
+
+  test('should preserve guest info on page reload', async ({ page }) => {
+    // First, complete guest registration
+    await page.goto('http://localhost:5173/');
+    await expect(page.locator('h2:has-text("Welcome to CutFill - Guest Setup")')).toBeVisible({ timeout: 10000 });
+
+    let testUsername = 'PersistentUser';
+    const testAgeRange = '8-12';
+    
+    await page.fill('input[placeholder="Choose a username"]', testUsername);
+    await page.selectOption('#guest-agerange', testAgeRange);
+    await page.check('input[value="solo"]');
+
+    // Set up promise to wait for localStorage
+    const guestDataPromise = page.waitForFunction(() => {
+      return localStorage.getItem('guestData') !== null;
+    }, { timeout: 20000 });
+
+    await page.click('button:has-text("Start Playing")');
+
+    // Check if username was taken and handle suggestion
+    try {
+      await page.waitForSelector('text=Username taken', { timeout: 3000 });
+      console.log('Username was taken, trying suggested username');
+      const suggestedUsername = await page.inputValue('input[placeholder="Choose a username"]');
+      testUsername = suggestedUsername;
+      await page.click('button:has-text("Start Playing")');
+    } catch (e) {
+      console.log('Username was accepted on first try');
+    }
+
+    // Wait for registration to complete
+    await guestDataPromise;
+    await page.waitForTimeout(3000);
+
+    // Verify game loaded
+    await expect(page.locator('h3:has-text("🏗️ Precision Tools")')).toBeVisible({ timeout: 10000 });
+
+    // Reload the page
+    await page.reload();
+    await page.waitForTimeout(3000);
+
+    // Should skip guest registration and go straight to game
+    await expect(page.locator('h3:has-text("🏗️ Precision Tools")')).toBeVisible({ timeout: 10000 });
+
+    // Should maintain guest data
+    const guestData = await page.evaluate(() => {
+      return localStorage.getItem('guestData');
+    });
+    
+    expect(guestData).toBeTruthy();
+    const parsedGuestData = JSON.parse(guestData!);
+    expect(parsedGuestData.username).toBe(testUsername); // Use final username
+    expect(parsedGuestData.ageRange).toBe(testAgeRange);
+  });
+
+  test('should apply age-based UI adjustments for young users', async ({ page }) => {
+    // Set up console log collection before navigation
+    const logs: string[] = [];
+    page.on('console', msg => logs.push(msg.text()));
+
+    await page.goto('http://localhost:5173/');
+    await expect(page.locator('h2:has-text("Welcome to CutFill - Guest Setup")')).toBeVisible({ timeout: 10000 });
+
+    let testUsername = 'YoungPlayer';
+    const testAgeRange = '8-12';
+    
+    await page.fill('input[placeholder="Choose a username"]', testUsername);
+    await page.selectOption('#guest-agerange', testAgeRange);
+    await page.check('input[value="solo"]');
+
+    // Set up promise to wait for localStorage
+    const guestDataPromise = page.waitForFunction(() => {
+      return localStorage.getItem('guestData') !== null;
+    }, { timeout: 20000 });
+
+    await page.click('button:has-text("Start Playing")');
+
+    // Check if username was taken and handle suggestion
+    try {
+      await page.waitForSelector('text=Username taken', { timeout: 3000 });
+      console.log('Username was taken, trying suggested username');
+      const suggestedUsername = await page.inputValue('input[placeholder="Choose a username"]');
+      testUsername = suggestedUsername;
+      await page.click('button:has-text("Start Playing")');
+    } catch (e) {
+      console.log('Username was accepted on first try');
+    }
+
+    // Wait for registration to complete
+    await guestDataPromise;
+    await page.waitForTimeout(3000);
+
+    // Verify game loaded
+    await expect(page.locator('h3:has-text("🏗️ Precision Tools")')).toBeVisible({ timeout: 10000 });
+
+    // Verify guest data was stored with correct age range
+    const guestData = await page.evaluate(() => {
+      return localStorage.getItem('guestData');
+    });
+    
+    expect(guestData).toBeTruthy();
+    const parsedGuestData = JSON.parse(guestData!);
+    expect(parsedGuestData.ageRange).toBe('8-12');
+    
+    // Should have logged age range adjustment during initialization
+    const ageLogFound = logs.some((log: string) => log.includes('Age range: 8-12'));
+    expect(ageLogFound).toBeTruthy();
+  });
+
+  test('should show different age ranges in dropdown', async ({ page }) => {
+    await page.goto('http://localhost:5173/');
+    await expect(page.locator('h2:has-text("Welcome to CutFill - Guest Setup")')).toBeVisible({ timeout: 10000 });
+
+    // Check that all age range options are available
+    const ageRangeSelect = page.locator('#guest-agerange');
+    await expect(ageRangeSelect.locator('option')).toHaveCount(4); // Including the default option
+    await expect(ageRangeSelect.locator('option[value="8-12"]')).toHaveText('8-12 (Kids)');
+    await expect(ageRangeSelect.locator('option[value="13-25"]')).toHaveText('13-25 (Teens/Young Adults)');
+    await expect(ageRangeSelect.locator('option[value="26+"]')).toHaveText('26+ (Professionals)');
+  });
+
+  test('should handle username uniqueness with age range display', async ({ page, context }) => {
+    await page.goto('http://localhost:5173/');
+    await expect(page.locator('h2:has-text("Welcome to CutFill - Guest Setup")')).toBeVisible({ timeout: 10000 });
+
+    let testUsername = 'TestUser';
+    const testAgeRange = '26+';
+    
+    await page.fill('input[placeholder="Choose a username"]', testUsername);
+    await page.selectOption('#guest-agerange', testAgeRange);
+    await page.check('input[value="solo"]');
+
+    // Set up promise to wait for localStorage
+    const guestDataPromise = page.waitForFunction(() => {
+      return localStorage.getItem('guestData') !== null;
+    }, { timeout: 20000 });
+
+    await page.click('button:has-text("Start Playing")');
+
+    // Check if username was taken and handle suggestion
+    try {
+      await page.waitForSelector('text=Username taken', { timeout: 3000 });
+      console.log('Username was taken, trying suggested username');
+      const suggestedUsername = await page.inputValue('input[placeholder="Choose a username"]');
+      testUsername = suggestedUsername;
+      await page.click('button:has-text("Start Playing")');
+    } catch (e) {
+      console.log('Username was accepted on first try');
+    }
+
+    // Wait for registration to complete
+    await guestDataPromise;
+    await page.waitForTimeout(3000);
+
+    // Verify game loaded
+    await expect(page.locator('h3:has-text("🏗️ Precision Tools")')).toBeVisible({ timeout: 10000 });
+
+    // Verify successful registration
+    const guestData = await page.evaluate(() => {
+      return localStorage.getItem('guestData');
+    });
+    
+    expect(guestData).toBeTruthy();
+    const parsedGuestData = JSON.parse(guestData!);
+    expect(parsedGuestData.username).toBe(testUsername); // Use final username
+    expect(parsedGuestData.ageRange).toBe(testAgeRange);
+  });
+
+  test('should show guest registration after logout, not auth UI', async ({ page }) => {
+    // First, register as a guest
+    await page.goto('http://localhost:5173/');
+    await expect(page.locator('h2:has-text("Welcome to CutFill - Guest Setup")')).toBeVisible({ timeout: 10000 });
+
+    let testUsername = 'LogoutTestUser';
+    const testAgeRange = '26+';
+    
+    await page.fill('input[placeholder="Choose a username"]', testUsername);
+    await page.selectOption('#guest-agerange', testAgeRange);
+    await page.check('input[value="solo"]');
+
+    // Wait for registration
+    const guestDataPromise = page.waitForFunction(() => {
+      return localStorage.getItem('guestData') !== null;
+    }, { timeout: 20000 });
+
+    await page.click('button:has-text("Start Playing")');
+
+    // Handle username suggestions
+    try {
+      await page.waitForSelector('text=Username taken', { timeout: 3000 });
+      const suggestedUsername = await page.inputValue('input[placeholder="Choose a username"]');
+      testUsername = suggestedUsername;
+      await page.click('button:has-text("Start Playing")');
+    } catch (e) {
+      // Username accepted
+    }
+
+    await guestDataPromise;
+    await page.waitForTimeout(3000);
+
+    // Verify game loaded
+    await expect(page.locator('h3:has-text("🏗️ Precision Tools")')).toBeVisible({ timeout: 10000 });
+
+    // Now test logout behavior - click "Back to Main" to access logout
+    await page.click('button:has-text("Back to Main")');
+    await page.waitForTimeout(1000);
+
+    // Click logout button
+    await page.click('button:has-text("🚪 Logout")');
+
+    // Wait for page reload
+    await page.waitForTimeout(3000);
+
+    // Should see guest registration form, NOT auth UI
+    await expect(page.locator('h2:has-text("Welcome to CutFill - Guest Setup")')).toBeVisible({ timeout: 10000 });
+    
+    // Should NOT see auth UI elements
+    await expect(page.locator('#auth-tabs')).not.toBeVisible();
+    await expect(page.locator('button:has-text("Sign In")')).not.toBeVisible();
+    await expect(page.locator('button:has-text("🎮 Continue as Guest")')).not.toBeVisible();
+    
+    // Verify localStorage was cleared
+    const clearedGuestData = await page.evaluate(() => {
+      return localStorage.getItem('guestData');
+    });
+    expect(clearedGuestData).toBeNull();
+
+    const clearedHasVisited = await page.evaluate(() => {
+      return localStorage.getItem('hasVisited');
+    });
+    expect(clearedHasVisited).toBeNull();
   });
 });

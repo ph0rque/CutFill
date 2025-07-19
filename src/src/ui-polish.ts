@@ -110,7 +110,7 @@ export class UIPolishSystem {
       mobile: 768,
       tablet: 1024,
       desktop: 1440,
-      wide: 1920
+      wide: 1920,
     };
     this.initializeThemes();
     this.initializeAgeGroups();
@@ -131,24 +131,25 @@ export class UIPolishSystem {
         success: '#4CAF50',
         warning: '#FF9800',
         error: '#F44336',
-        info: '#2196F3'
+        info: '#2196F3',
       },
       typography: {
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         fontSize: {
           xs: '12px',
           sm: '14px',
           md: '16px',
           lg: '18px',
           xl: '24px',
-          xxl: '32px'
+          xxl: '32px',
         },
         fontWeight: {
           light: '300',
           normal: '400',
           semibold: '600',
-          bold: '700'
-        }
+          bold: '700',
+        },
       },
       spacing: {
         xs: '4px',
@@ -156,26 +157,26 @@ export class UIPolishSystem {
         md: '16px',
         lg: '24px',
         xl: '32px',
-        xxl: '48px'
+        xxl: '48px',
       },
       borderRadius: {
         sm: '4px',
         md: '8px',
         lg: '12px',
         xl: '16px',
-        full: '50%'
+        full: '50%',
       },
       shadows: {
         sm: '0 2px 4px rgba(0,0,0,0.1)',
         md: '0 4px 8px rgba(0,0,0,0.2)',
         lg: '0 8px 16px rgba(0,0,0,0.3)',
-        xl: '0 12px 24px rgba(0,0,0,0.4)'
+        xl: '0 12px 24px rgba(0,0,0,0.4)',
       },
       animations: {
         fast: '0.15s ease-out',
         normal: '0.3s ease-out',
-        slow: '0.5s ease-out'
-      }
+        slow: '0.5s ease-out',
+      },
     };
   }
 
@@ -192,13 +193,13 @@ export class UIPolishSystem {
           animations: 'enhanced',
           iconSize: 'large',
           spacing: 'spacious',
-          colorContrast: 'high'
+          colorContrast: 'high',
         },
         gameplay: {
           tooltipLevel: 'basic',
           errorTolerance: 'high',
           timeoutLimits: 'extended',
-          assistanceLevel: 'guided'
+          assistanceLevel: 'guided',
         },
         accessibility: {
           screenReader: true,
@@ -206,8 +207,8 @@ export class UIPolishSystem {
           highContrast: false,
           reducedMotion: false,
           audioFeedback: true,
-          hapticFeedback: true
-        }
+          hapticFeedback: true,
+        },
       },
       {
         id: 'teen',
@@ -220,13 +221,13 @@ export class UIPolishSystem {
           animations: 'standard',
           iconSize: 'medium',
           spacing: 'comfortable',
-          colorContrast: 'normal'
+          colorContrast: 'normal',
         },
         gameplay: {
           tooltipLevel: 'detailed',
           errorTolerance: 'medium',
           timeoutLimits: 'standard',
-          assistanceLevel: 'hints'
+          assistanceLevel: 'hints',
         },
         accessibility: {
           screenReader: true,
@@ -234,8 +235,8 @@ export class UIPolishSystem {
           highContrast: false,
           reducedMotion: false,
           audioFeedback: false,
-          hapticFeedback: false
-        }
+          hapticFeedback: false,
+        },
       },
       {
         id: 'adult',
@@ -248,13 +249,13 @@ export class UIPolishSystem {
           animations: 'standard',
           iconSize: 'medium',
           spacing: 'comfortable',
-          colorContrast: 'normal'
+          colorContrast: 'normal',
         },
         gameplay: {
           tooltipLevel: 'detailed',
           errorTolerance: 'medium',
           timeoutLimits: 'standard',
-          assistanceLevel: 'hints'
+          assistanceLevel: 'hints',
         },
         accessibility: {
           screenReader: true,
@@ -262,8 +263,8 @@ export class UIPolishSystem {
           highContrast: false,
           reducedMotion: false,
           audioFeedback: false,
-          hapticFeedback: false
-        }
+          hapticFeedback: false,
+        },
       },
       {
         id: 'professional',
@@ -276,13 +277,13 @@ export class UIPolishSystem {
           animations: 'minimal',
           iconSize: 'small',
           spacing: 'compact',
-          colorContrast: 'normal'
+          colorContrast: 'normal',
         },
         gameplay: {
           tooltipLevel: 'expert',
           errorTolerance: 'low',
           timeoutLimits: 'strict',
-          assistanceLevel: 'minimal'
+          assistanceLevel: 'minimal',
         },
         accessibility: {
           screenReader: true,
@@ -290,8 +291,8 @@ export class UIPolishSystem {
           highContrast: false,
           reducedMotion: true,
           audioFeedback: false,
-          hapticFeedback: false
-        }
+          hapticFeedback: false,
+        },
       },
       {
         id: 'senior',
@@ -304,13 +305,13 @@ export class UIPolishSystem {
           animations: 'minimal',
           iconSize: 'large',
           spacing: 'spacious',
-          colorContrast: 'maximum'
+          colorContrast: 'maximum',
         },
         gameplay: {
           tooltipLevel: 'basic',
           errorTolerance: 'high',
           timeoutLimits: 'extended',
-          assistanceLevel: 'guided'
+          assistanceLevel: 'guided',
         },
         accessibility: {
           screenReader: true,
@@ -318,9 +319,9 @@ export class UIPolishSystem {
           highContrast: true,
           reducedMotion: true,
           audioFeedback: true,
-          hapticFeedback: false
-        }
-      }
+          hapticFeedback: false,
+        },
+      },
     ];
 
     // Set default age group
@@ -329,11 +330,12 @@ export class UIPolishSystem {
 
   private detectAccessibilityPreferences(): void {
     this.accessibilityPreferences = {
-      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)')
+        .matches,
       highContrast: window.matchMedia('(prefers-contrast: high)').matches,
       forcedColors: window.matchMedia('(forced-colors: active)').matches,
       darkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
-      largeText: window.matchMedia('(min-resolution: 1.5dppx)').matches
+      largeText: window.matchMedia('(min-resolution: 1.5dppx)').matches,
     };
   }
 
@@ -347,7 +349,7 @@ export class UIPolishSystem {
     this.createThemeSelector();
     this.setupKeyboardNavigation();
     this.applyInitialSettings();
-    
+
     this.isInitialized = true;
   }
 
@@ -494,7 +496,7 @@ export class UIPolishSystem {
         }
       }
     `;
-    
+
     document.head.appendChild(style);
   }
 
@@ -504,16 +506,19 @@ export class UIPolishSystem {
       const query = `(min-width: ${width}px)`;
       const mq = window.matchMedia(query);
       this.mediaQueries[name] = mq;
-      
-      mq.addEventListener('change', (e) => {
+
+      mq.addEventListener('change', e => {
         this.handleBreakpointChange(name, e.matches);
       });
     });
 
     // Set up resize observer for dynamic content
-    this.resizeObserver = new ResizeObserver((entries) => {
+    this.resizeObserver = new ResizeObserver(entries => {
       entries.forEach(entry => {
-        this.handleElementResize(entry.target as HTMLElement, entry.contentRect);
+        this.handleElementResize(
+          entry.target as HTMLElement,
+          entry.contentRect
+        );
       });
     });
 
@@ -527,7 +532,7 @@ export class UIPolishSystem {
   private handleBreakpointChange(breakpoint: string, matches: boolean): void {
     const body = document.body;
     body.classList.toggle(`breakpoint-${breakpoint}`, matches);
-    
+
     // Adjust UI for specific breakpoints
     if (breakpoint === 'mobile' && matches) {
       this.enableMobileOptimizations();
@@ -550,7 +555,7 @@ export class UIPolishSystem {
     panels.forEach(panel => {
       (panel as HTMLElement).classList.add('mobile-optimized');
     });
-    
+
     // Enable touch-friendly interactions
     document.body.classList.add('touch-device');
   }
@@ -560,7 +565,7 @@ export class UIPolishSystem {
     panels.forEach(panel => {
       (panel as HTMLElement).classList.remove('mobile-optimized');
     });
-    
+
     // Enable hover effects
     document.body.classList.add('desktop-device');
   }
@@ -633,44 +638,58 @@ export class UIPolishSystem {
 
   private setupAccessibilityEvents(): void {
     // High contrast toggle
-    document.getElementById('high-contrast-toggle')?.addEventListener('change', (e) => {
-      const enabled = (e.target as HTMLInputElement).checked;
-      document.body.classList.toggle('high-contrast', enabled);
-    });
+    document
+      .getElementById('high-contrast-toggle')
+      ?.addEventListener('change', e => {
+        const enabled = (e.target as HTMLInputElement).checked;
+        document.body.classList.toggle('high-contrast', enabled);
+      });
 
     // Reduced motion toggle
-    document.getElementById('reduced-motion-toggle')?.addEventListener('change', (e) => {
-      const enabled = (e.target as HTMLInputElement).checked;
-      document.body.classList.toggle('reduced-motion', enabled);
-    });
+    document
+      .getElementById('reduced-motion-toggle')
+      ?.addEventListener('change', e => {
+        const enabled = (e.target as HTMLInputElement).checked;
+        document.body.classList.toggle('reduced-motion', enabled);
+      });
 
     // Audio feedback toggle
-    document.getElementById('audio-feedback-toggle')?.addEventListener('change', (e) => {
-      const enabled = (e.target as HTMLInputElement).checked;
-      this.toggleAudioFeedback(enabled);
-    });
+    document
+      .getElementById('audio-feedback-toggle')
+      ?.addEventListener('change', e => {
+        const enabled = (e.target as HTMLInputElement).checked;
+        this.toggleAudioFeedback(enabled);
+      });
 
     // Keyboard navigation toggle
-    document.getElementById('keyboard-nav-toggle')?.addEventListener('change', (e) => {
-      const enabled = (e.target as HTMLInputElement).checked;
-      this.toggleKeyboardNavigation(enabled);
-    });
+    document
+      .getElementById('keyboard-nav-toggle')
+      ?.addEventListener('change', e => {
+        const enabled = (e.target as HTMLInputElement).checked;
+        this.toggleKeyboardNavigation(enabled);
+      });
 
     // Font size slider
-    document.getElementById('font-size-slider')?.addEventListener('input', (e) => {
-      const size = (e.target as HTMLInputElement).value;
-      this.adjustFontSize(parseInt(size));
-    });
+    document
+      .getElementById('font-size-slider')
+      ?.addEventListener('input', e => {
+        const size = (e.target as HTMLInputElement).value;
+        this.adjustFontSize(parseInt(size));
+      });
 
     // Reset button
-    document.getElementById('reset-accessibility')?.addEventListener('click', () => {
-      this.resetAccessibilitySettings();
-    });
+    document
+      .getElementById('reset-accessibility')
+      ?.addEventListener('click', () => {
+        this.resetAccessibilitySettings();
+      });
 
     // Close button
-    document.getElementById('close-accessibility')?.addEventListener('click', () => {
-      this.hideAccessibilityPanel();
-    });
+    document
+      .getElementById('close-accessibility')
+      ?.addEventListener('click', () => {
+        this.hideAccessibilityPanel();
+      });
   }
 
   private createAgeGroupSelector(): void {
@@ -722,11 +741,18 @@ export class UIPolishSystem {
       { id: 'kids', name: 'Kids Mode', ageRange: '8-12', icon: '🧒' },
       { id: 'teen', name: 'Teen Mode', ageRange: '13-17', icon: '👦' },
       { id: 'adult', name: 'Adult Mode', ageRange: '18-35', icon: '👨' },
-      { id: 'professional', name: 'Professional Mode', ageRange: '25-60+', icon: '👨‍💼' },
-      { id: 'senior', name: 'Senior Mode', ageRange: '55+', icon: '👴' }
+      {
+        id: 'professional',
+        name: 'Professional Mode',
+        ageRange: '25-60+',
+        icon: '👨‍💼',
+      },
+      { id: 'senior', name: 'Senior Mode', ageRange: '55+', icon: '👴' },
     ];
 
-    container.innerHTML = ageGroups.map(group => `
+    container.innerHTML = ageGroups
+      .map(
+        group => `
       <label style="display: flex; align-items: center; gap: ${this.currentTheme.spacing.md}; margin-bottom: ${this.currentTheme.spacing.sm}; cursor: pointer; padding: ${this.currentTheme.spacing.sm}; border-radius: ${this.currentTheme.borderRadius.sm}; transition: background-color ${this.currentTheme.animations.fast};">
         <input type="radio" name="age-group" value="${group.id}" ${group.id === this.currentAgeGroup.id ? 'checked' : ''}>
         <span style="font-size: ${this.currentTheme.typography.fontSize.lg};">${group.icon}</span>
@@ -735,20 +761,24 @@ export class UIPolishSystem {
           <div style="font-size: ${this.currentTheme.typography.fontSize.xs}; color: ${this.currentTheme.colors.textSecondary};">Ages ${group.ageRange}</div>
         </div>
       </label>
-    `).join('');
+    `
+      )
+      .join('');
   }
 
   private setupAgeGroupEvents(): void {
     document.querySelectorAll('input[name="age-group"]').forEach(input => {
-      input.addEventListener('change', (e) => {
+      input.addEventListener('change', e => {
         const groupId = (e.target as HTMLInputElement).value;
         this.switchAgeGroup(groupId);
       });
     });
 
-    document.getElementById('close-age-group')?.addEventListener('click', () => {
-      this.hideAgeGroupSelector();
-    });
+    document
+      .getElementById('close-age-group')
+      ?.addEventListener('click', () => {
+        this.hideAgeGroupSelector();
+      });
   }
 
   private createThemeSelector(): void {
@@ -782,7 +812,7 @@ export class UIPolishSystem {
 
   private setupKeyboardNavigation(): void {
     // Add keyboard navigation support
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', e => {
       if (e.key === 'Tab') {
         // Ensure tab navigation works properly
         this.handleTabNavigation(e);
@@ -809,9 +839,11 @@ export class UIPolishSystem {
     const focusableElements = document.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
-    
+
     const firstElement = focusableElements[0] as HTMLElement;
-    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+    const lastElement = focusableElements[
+      focusableElements.length - 1
+    ] as HTMLElement;
 
     if (e.shiftKey && document.activeElement === firstElement) {
       e.preventDefault();
@@ -824,34 +856,46 @@ export class UIPolishSystem {
 
   private applyInitialSettings(): void {
     // Apply responsive classes
-    document.body.classList.add('ui-responsive', `ui-${this.currentAgeGroup.id}`);
-    
+    document.body.classList.add(
+      'ui-responsive',
+      `ui-${this.currentAgeGroup.id}`
+    );
+
     // Apply accessibility preferences
     if (this.accessibilityPreferences.reducedMotion) {
       document.body.classList.add('reduced-motion');
     }
-    
+
     if (this.accessibilityPreferences.highContrast) {
       document.body.classList.add('high-contrast');
     }
-    
+
     // Apply age group settings
     this.applyAgeGroupSettings();
   }
 
   private applyAgeGroupSettings(): void {
     const settings = this.currentAgeGroup;
-    
+
     // Update CSS custom properties
-    document.documentElement.style.setProperty('--ui-font-size', this.getFontSizeForAgeGroup(settings.ui.fontSize));
-    document.documentElement.style.setProperty('--ui-spacing', this.getSpacingForAgeGroup(settings.ui.spacing));
-    document.documentElement.style.setProperty('--ui-icon-size', this.getIconSizeForAgeGroup(settings.ui.iconSize));
-    
+    document.documentElement.style.setProperty(
+      '--ui-font-size',
+      this.getFontSizeForAgeGroup(settings.ui.fontSize)
+    );
+    document.documentElement.style.setProperty(
+      '--ui-spacing',
+      this.getSpacingForAgeGroup(settings.ui.spacing)
+    );
+    document.documentElement.style.setProperty(
+      '--ui-icon-size',
+      this.getIconSizeForAgeGroup(settings.ui.iconSize)
+    );
+
     // Apply accessibility settings
     if (settings.accessibility.reducedMotion) {
       document.body.classList.add('reduced-motion');
     }
-    
+
     if (settings.accessibility.highContrast) {
       document.body.classList.add('high-contrast');
     }
@@ -862,7 +906,7 @@ export class UIPolishSystem {
       small: this.currentTheme.typography.fontSize.sm,
       medium: this.currentTheme.typography.fontSize.md,
       large: this.currentTheme.typography.fontSize.lg,
-      xl: this.currentTheme.typography.fontSize.xl
+      xl: this.currentTheme.typography.fontSize.xl,
     };
     return sizes[size as keyof typeof sizes] || sizes.medium;
   }
@@ -871,7 +915,7 @@ export class UIPolishSystem {
     const spacings = {
       compact: this.currentTheme.spacing.sm,
       comfortable: this.currentTheme.spacing.md,
-      spacious: this.currentTheme.spacing.lg
+      spacious: this.currentTheme.spacing.lg,
     };
     return spacings[spacing as keyof typeof spacings] || spacings.comfortable;
   }
@@ -880,7 +924,7 @@ export class UIPolishSystem {
     const sizes = {
       small: '16px',
       medium: '24px',
-      large: '32px'
+      large: '32px',
     };
     return sizes[size as keyof typeof sizes] || sizes.medium;
   }
@@ -888,18 +932,43 @@ export class UIPolishSystem {
   // Public methods
   public switchAgeGroup(groupId: string): void {
     const ageGroups = [
-      { id: 'kids', name: 'Kids Mode', ageRange: '8-12', description: 'Large icons, simple interface, lots of guidance' },
-      { id: 'teen', name: 'Teen Mode', ageRange: '13-17', description: 'Modern interface with competitive elements' },
-      { id: 'adult', name: 'Adult Mode', ageRange: '18-35', description: 'Efficient interface for experienced users' },
-      { id: 'professional', name: 'Professional Mode', ageRange: '25-60+', description: 'Advanced interface with detailed technical information' },
-      { id: 'senior', name: 'Senior Mode', ageRange: '55+', description: 'Large text, high contrast, clear navigation' }
+      {
+        id: 'kids',
+        name: 'Kids Mode',
+        ageRange: '8-12',
+        description: 'Large icons, simple interface, lots of guidance',
+      },
+      {
+        id: 'teen',
+        name: 'Teen Mode',
+        ageRange: '13-17',
+        description: 'Modern interface with competitive elements',
+      },
+      {
+        id: 'adult',
+        name: 'Adult Mode',
+        ageRange: '18-35',
+        description: 'Efficient interface for experienced users',
+      },
+      {
+        id: 'professional',
+        name: 'Professional Mode',
+        ageRange: '25-60+',
+        description: 'Advanced interface with detailed technical information',
+      },
+      {
+        id: 'senior',
+        name: 'Senior Mode',
+        ageRange: '55+',
+        description: 'Large text, high contrast, clear navigation',
+      },
     ];
 
     const group = ageGroups.find(g => g.id === groupId);
     if (group) {
       // Remove old age group class
       document.body.classList.remove(`ui-${this.currentAgeGroup.id}`);
-      
+
       // Update current age group
       this.currentAgeGroup = {
         id: group.id,
@@ -907,18 +976,70 @@ export class UIPolishSystem {
         ageRange: group.ageRange,
         description: group.description,
         ui: {
-          fontSize: group.id === 'kids' ? 'large' : group.id === 'senior' ? 'xl' : group.id === 'professional' ? 'small' : 'medium',
-          complexity: group.id === 'kids' || group.id === 'senior' ? 'simplified' : group.id === 'professional' ? 'advanced' : 'standard',
-          animations: group.id === 'kids' ? 'enhanced' : group.id === 'professional' || group.id === 'senior' ? 'minimal' : 'standard',
-          iconSize: group.id === 'kids' || group.id === 'senior' ? 'large' : group.id === 'professional' ? 'small' : 'medium',
-          spacing: group.id === 'kids' || group.id === 'senior' ? 'spacious' : group.id === 'professional' ? 'compact' : 'comfortable',
-          colorContrast: group.id === 'kids' ? 'high' : group.id === 'senior' ? 'maximum' : 'normal'
+          fontSize:
+            group.id === 'kids'
+              ? 'large'
+              : group.id === 'senior'
+                ? 'xl'
+                : group.id === 'professional'
+                  ? 'small'
+                  : 'medium',
+          complexity:
+            group.id === 'kids' || group.id === 'senior'
+              ? 'simplified'
+              : group.id === 'professional'
+                ? 'advanced'
+                : 'standard',
+          animations:
+            group.id === 'kids'
+              ? 'enhanced'
+              : group.id === 'professional' || group.id === 'senior'
+                ? 'minimal'
+                : 'standard',
+          iconSize:
+            group.id === 'kids' || group.id === 'senior'
+              ? 'large'
+              : group.id === 'professional'
+                ? 'small'
+                : 'medium',
+          spacing:
+            group.id === 'kids' || group.id === 'senior'
+              ? 'spacious'
+              : group.id === 'professional'
+                ? 'compact'
+                : 'comfortable',
+          colorContrast:
+            group.id === 'kids'
+              ? 'high'
+              : group.id === 'senior'
+                ? 'maximum'
+                : 'normal',
         },
         gameplay: {
-          tooltipLevel: group.id === 'professional' ? 'expert' : group.id === 'kids' || group.id === 'senior' ? 'basic' : 'detailed',
-          errorTolerance: group.id === 'kids' || group.id === 'senior' ? 'high' : group.id === 'professional' ? 'low' : 'medium',
-          timeoutLimits: group.id === 'kids' || group.id === 'senior' ? 'extended' : group.id === 'professional' ? 'strict' : 'standard',
-          assistanceLevel: group.id === 'kids' || group.id === 'senior' ? 'guided' : group.id === 'professional' ? 'minimal' : 'hints'
+          tooltipLevel:
+            group.id === 'professional'
+              ? 'expert'
+              : group.id === 'kids' || group.id === 'senior'
+                ? 'basic'
+                : 'detailed',
+          errorTolerance:
+            group.id === 'kids' || group.id === 'senior'
+              ? 'high'
+              : group.id === 'professional'
+                ? 'low'
+                : 'medium',
+          timeoutLimits:
+            group.id === 'kids' || group.id === 'senior'
+              ? 'extended'
+              : group.id === 'professional'
+                ? 'strict'
+                : 'standard',
+          assistanceLevel:
+            group.id === 'kids' || group.id === 'senior'
+              ? 'guided'
+              : group.id === 'professional'
+                ? 'minimal'
+                : 'hints',
         },
         accessibility: {
           screenReader: true,
@@ -926,16 +1047,16 @@ export class UIPolishSystem {
           highContrast: group.id === 'senior',
           reducedMotion: group.id === 'professional' || group.id === 'senior',
           audioFeedback: group.id === 'kids' || group.id === 'senior',
-          hapticFeedback: group.id === 'kids'
-        }
+          hapticFeedback: group.id === 'kids',
+        },
       };
-      
+
       // Apply new age group class
       document.body.classList.add(`ui-${this.currentAgeGroup.id}`);
-      
+
       // Apply settings
       this.applyAgeGroupSettings();
-      
+
       // Update UI
       this.updateAgeGroupDisplay();
     }
@@ -995,15 +1116,29 @@ export class UIPolishSystem {
 
   private resetAccessibilitySettings(): void {
     // Reset all accessibility settings to defaults
-    document.body.classList.remove('high-contrast', 'reduced-motion', 'audio-feedback', 'keyboard-navigation');
+    document.body.classList.remove(
+      'high-contrast',
+      'reduced-motion',
+      'audio-feedback',
+      'keyboard-navigation'
+    );
     document.documentElement.style.removeProperty('--ui-font-size');
-    
+
     // Reset form controls
-    (document.getElementById('high-contrast-toggle') as HTMLInputElement).checked = false;
-    (document.getElementById('reduced-motion-toggle') as HTMLInputElement).checked = false;
-    (document.getElementById('audio-feedback-toggle') as HTMLInputElement).checked = false;
-    (document.getElementById('keyboard-nav-toggle') as HTMLInputElement).checked = false;
-    (document.getElementById('font-size-slider') as HTMLInputElement).value = '16';
+    (
+      document.getElementById('high-contrast-toggle') as HTMLInputElement
+    ).checked = false;
+    (
+      document.getElementById('reduced-motion-toggle') as HTMLInputElement
+    ).checked = false;
+    (
+      document.getElementById('audio-feedback-toggle') as HTMLInputElement
+    ).checked = false;
+    (
+      document.getElementById('keyboard-nav-toggle') as HTMLInputElement
+    ).checked = false;
+    (document.getElementById('font-size-slider') as HTMLInputElement).value =
+      '16';
   }
 
   private closeAllPanels(): void {
@@ -1018,12 +1153,14 @@ export class UIPolishSystem {
 
   private updateAgeGroupDisplay(): void {
     const currentElement = document.getElementById('current-age-group');
-    const descriptionElement = document.getElementById('current-age-description');
-    
+    const descriptionElement = document.getElementById(
+      'current-age-description'
+    );
+
     if (currentElement) {
       currentElement.textContent = this.currentAgeGroup.name;
     }
-    
+
     if (descriptionElement) {
       descriptionElement.textContent = this.currentAgeGroup.description;
     }
@@ -1041,7 +1178,7 @@ export class UIPolishSystem {
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
     }
-    
+
     Object.values(this.mediaQueries).forEach(mq => {
       mq.removeEventListener('change', () => {});
     });
@@ -1057,4 +1194,4 @@ interface AccessibilityPreferences {
 }
 
 // Create and export the global UI polish system
-export const uiPolishSystem = new UIPolishSystem(); 
+export const uiPolishSystem = new UIPolishSystem();

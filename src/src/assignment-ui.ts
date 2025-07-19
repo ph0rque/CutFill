@@ -1,5 +1,9 @@
 import { AssignmentManager } from './assignments';
-import type { AssignmentConfig, AssignmentProgress, AssignmentObjective } from './assignments';
+import type {
+  AssignmentConfig,
+  AssignmentProgress,
+  AssignmentObjective,
+} from './assignments';
 import { supabase } from './supabase';
 import { AssignmentFeedbackSystem } from './assignment-feedback';
 
@@ -24,7 +28,9 @@ export class AssignmentUI {
    */
   private async getCurrentUser(): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       this.currentUserId = user?.id || 'guest';
     } catch (error) {
       console.log('Using guest user for assignments');
@@ -37,7 +43,7 @@ export class AssignmentUI {
    */
   private setupCallbacks(): void {
     this.assignmentManager.setCallbacks({
-      onProgressUpdate: (progress) => {
+      onProgressUpdate: progress => {
         this.updateProgressDisplay(progress);
         this.updatePersistentProgressPanel();
         this.updateMainObjectiveDisplay();
@@ -47,22 +53,27 @@ export class AssignmentUI {
           this.feedbackSystem.updateProgress(assignment, progress);
         }
       },
-      onObjectiveComplete: (objective) => this.showObjectiveComplete(objective),
-      onAssignmentComplete: (progress) => {
+      onObjectiveComplete: objective => this.showObjectiveComplete(objective),
+      onAssignmentComplete: progress => {
         this.showAssignmentComplete(progress);
         this.updatePersistentProgressPanel();
         // Show completion feedback
         const assignment = this.assignmentManager.getCurrentAssignment();
         if (assignment) {
-          const passed = progress.currentScore >= assignment.successCriteria.minimumScore;
-          this.feedbackSystem.showAssignmentCompleted(assignment, progress, passed);
+          const passed =
+            progress.currentScore >= assignment.successCriteria.minimumScore;
+          this.feedbackSystem.showAssignmentCompleted(
+            assignment,
+            progress,
+            passed
+          );
         }
       },
       onAssignmentStop: () => {
         this.hidePersistentProgress();
         this.updateMainUIAssignmentDisplay();
         this.updateMainObjectiveDisplay();
-      }
+      },
     });
   }
 
@@ -177,14 +188,17 @@ export class AssignmentUI {
 
     // Get available assignments
     const assignments = await this.assignmentManager.getAvailableAssignments();
-    
+
     // Current assignment status
     const currentAssignment = this.assignmentManager.getCurrentAssignment();
     const currentProgress = this.assignmentManager.getProgress();
 
     // Current assignment section (if any)
     if (currentAssignment && currentProgress) {
-      const currentSection = this.createCurrentAssignmentSection(currentAssignment, currentProgress);
+      const currentSection = this.createCurrentAssignmentSection(
+        currentAssignment,
+        currentProgress
+      );
       panel.appendChild(header);
       panel.appendChild(currentSection);
     } else {
@@ -205,7 +219,10 @@ export class AssignmentUI {
   /**
    * Create current assignment section
    */
-  private createCurrentAssignmentSection(assignment: AssignmentConfig, progress: AssignmentProgress): HTMLElement {
+  private createCurrentAssignmentSection(
+    assignment: AssignmentConfig,
+    progress: AssignmentProgress
+  ): HTMLElement {
     const section = document.createElement('div');
     section.style.cssText = `
       background: rgba(76, 175, 80, 0.2);
@@ -215,7 +232,9 @@ export class AssignmentUI {
       margin-bottom: 25px;
     `;
 
-    const completedObjectives = progress.objectives.filter(obj => obj.completed).length;
+    const completedObjectives = progress.objectives.filter(
+      obj => obj.completed
+    ).length;
     const totalObjectives = progress.objectives.length;
     const progressPercent = Math.round(progress.currentScore);
 
@@ -251,7 +270,9 @@ export class AssignmentUI {
       <div style="margin-bottom: 15px;">
         <div style="font-weight: bold; margin-bottom: 10px;">Objectives (${completedObjectives}/${totalObjectives}):</div>
         <div id="objectives-list">
-          ${progress.objectives.map(obj => `
+          ${progress.objectives
+            .map(
+              obj => `
             <div style="
               display: flex;
               align-items: center;
@@ -267,7 +288,9 @@ export class AssignmentUI {
                 <div style="font-size: 12px; color: #ccc;">Score: ${Math.round(obj.score)}% (Weight: ${Math.round(obj.weight * 100)}%)</div>
               </div>
             </div>
-          `).join('')}
+          `
+            )
+            .join('')}
         </div>
       </div>
 
@@ -297,12 +320,16 @@ export class AssignmentUI {
   /**
    * Create level selection section with unlock status
    */
-  private async createAssignmentsSection(assignments: AssignmentConfig[]): Promise<HTMLElement> {
+  private async createAssignmentsSection(
+    assignments: AssignmentConfig[]
+  ): Promise<HTMLElement> {
     const section = document.createElement('div');
-    
+
     // Get user's unlocked levels
-    const unlockedLevels = await this.assignmentManager.getUnlockedLevels(this.currentUserId || 'guest');
-    
+    const unlockedLevels = await this.assignmentManager.getUnlockedLevels(
+      this.currentUserId || 'guest'
+    );
+
     // Section header
     const header = document.createElement('div');
     header.style.cssText = `
@@ -311,7 +338,7 @@ export class AssignmentUI {
       align-items: center;
       margin-bottom: 15px;
     `;
-    
+
     header.innerHTML = `
       <h3 style="margin: 0; color: white;">🎮 Available Levels</h3>
       <div style="display: flex; gap: 10px; align-items: center;">
@@ -355,7 +382,10 @@ export class AssignmentUI {
 
     // Create level cards with unlock status
     assignments
-      .sort((a, b) => (a.levelNumber || a.difficulty) - (b.levelNumber || b.difficulty))
+      .sort(
+        (a, b) =>
+          (a.levelNumber || a.difficulty) - (b.levelNumber || b.difficulty)
+      )
       .forEach(assignment => {
         const card = this.createAssignmentCard(assignment, unlockedLevels);
         grid.appendChild(card);
@@ -368,15 +398,19 @@ export class AssignmentUI {
   /**
    * Create individual level card with Practice/Compete options
    */
-  private createAssignmentCard(assignment: AssignmentConfig, unlockedLevels: number[] = []): HTMLElement {
+  private createAssignmentCard(
+    assignment: AssignmentConfig,
+    unlockedLevels: number[] = []
+  ): HTMLElement {
     const card = document.createElement('div');
     card.className = 'assignment-card';
     card.setAttribute('data-difficulty', assignment.difficulty.toString());
-    
+
     // Check level unlock status
     const levelNumber = assignment.levelNumber || assignment.difficulty;
     const isUnlocked = unlockedLevels.includes(levelNumber);
-    const isCompetitive = assignment.isCompetitive || assignment.name.includes('COMPETITIVE');
+    const isCompetitive =
+      assignment.isCompetitive || assignment.name.includes('COMPETITIVE');
 
     card.style.cssText = `
       background: ${!isUnlocked ? 'rgba(100,100,100,0.2)' : isCompetitive ? 'rgba(156,39,176,0.15)' : 'rgba(76,175,80,0.15)'};
@@ -391,15 +425,19 @@ export class AssignmentUI {
 
     // Level progression indicators
     const levelIcon = !isUnlocked ? '🔒' : isCompetitive ? '🏆' : '✅';
-    const levelStatus = !isUnlocked ? 'LOCKED' : isCompetitive ? 'COMPETITIVE' : 'UNLOCKED';
-    
+    const levelStatus = !isUnlocked
+      ? 'LOCKED'
+      : isCompetitive
+        ? 'COMPETITIVE'
+        : 'UNLOCKED';
+
     // Category color
     const categoryColors: Record<string, string> = {
       foundation: '#FF9800',
-      drainage: '#2196F3', 
+      drainage: '#2196F3',
       grading: '#4CAF50',
       excavation: '#F44336',
-      road_construction: '#9C27B0'
+      road_construction: '#9C27B0',
     };
     const categoryColor = categoryColors[assignment.category] || '#666';
 
@@ -432,7 +470,9 @@ export class AssignmentUI {
         ${assignment.description}
       </p>
       
-      ${isCompetitive ? `
+      ${
+        isCompetitive
+          ? `
         <div style="margin-bottom: 12px; padding: 8px; background: rgba(255,107,53,0.2); border-left: 3px solid #FF6B35; border-radius: 4px;">
           <div style="font-weight: bold; font-size: 12px; color: #FFB366; margin-bottom: 4px;">🏁 Competitive Features:</div>
           <div style="font-size: 11px; color: #ccc;">
@@ -442,7 +482,9 @@ export class AssignmentUI {
             • Championship points system
           </div>
         </div>
-      ` : ''}
+      `
+          : ''
+      }
       
       <!-- Level Stats -->
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 15px; font-size: 11px;">
@@ -461,11 +503,14 @@ export class AssignmentUI {
       </div>
 
       <!-- Action Buttons -->
-      ${!isUnlocked ? `
+      ${
+        !isUnlocked
+          ? `
         <div style="text-align: center; padding: 12px; background: rgba(100,100,100,0.3); border-radius: 4px; color: #888;">
           🔒 Complete Level ${levelNumber - 1} to unlock
         </div>
-      ` : `
+      `
+          : `
         <div style="display: flex; gap: 8px;">
           <button 
             class="practice-btn" 
@@ -486,7 +531,9 @@ export class AssignmentUI {
           >
             📚 Practice
           </button>
-          ${isCompetitive ? `
+          ${
+            isCompetitive
+              ? `
             <button 
               class="compete-btn" 
               data-assignment-id="${assignment.id}"
@@ -506,9 +553,12 @@ export class AssignmentUI {
             >
               🏆 Compete
             </button>
-          ` : ''}
+          `
+              : ''
+          }
         </div>
-      `}
+      `
+      }
     `;
 
     // Hover effects
@@ -587,14 +637,21 @@ export class AssignmentUI {
       margin-bottom: 20px;
     `;
 
-    const maxLevel = Math.max(...this.assignmentManager.getAssignmentTemplates().map(a => a.levelNumber || 1));
+    const maxLevel = Math.max(
+      ...this.assignmentManager
+        .getAssignmentTemplates()
+        .map(a => a.levelNumber || 1)
+    );
     const progressPercent = (unlockedLevels.length / maxLevel) * 100;
 
     panel.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
         <h4 style="margin: 0; color: #2196F3;">🎯 Level Progress</h4>
         <div style="display: flex; gap: 10px;">
-          ${this.assignmentManager.isDeveloperMode() ? '' : `
+          ${
+            this.assignmentManager.isDeveloperMode()
+              ? ''
+              : `
             <button id="unlock-all-levels" style="
               background: #FF9800;
               color: white;
@@ -604,7 +661,8 @@ export class AssignmentUI {
               cursor: pointer;
               font-size: 12px;
             ">🔓 Unlock All</button>
-          `}
+          `
+          }
           <span style="font-size: 12px; color: #2196F3; font-weight: bold;">
             ${unlockedLevels.length}/${maxLevel} levels unlocked
           </span>
@@ -622,10 +680,13 @@ export class AssignmentUI {
       <div style="margin-top: 12px;">
         <div style="font-size: 12px; font-weight: bold; margin-bottom: 8px;">Quick Level Access:</div>
         <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-          ${Array.from({length: maxLevel}, (_, i) => i + 1).map(level => {
-            const isUnlocked = unlockedLevels.includes(level);
-            const isCurrent = this.assignmentManager.getCurrentAssignment()?.levelNumber === level;
-            return `
+          ${Array.from({ length: maxLevel }, (_, i) => i + 1)
+            .map(level => {
+              const isUnlocked = unlockedLevels.includes(level);
+              const isCurrent =
+                this.assignmentManager.getCurrentAssignment()?.levelNumber ===
+                level;
+              return `
               <button 
                 class="quick-level-btn" 
                 data-level="${level}"
@@ -645,7 +706,8 @@ export class AssignmentUI {
                 ${level}${isCurrent ? '⭐' : ''}
               </button>
             `;
-          }).join('')}
+            })
+            .join('')}
         </div>
       </div>
     `;
@@ -671,7 +733,10 @@ export class AssignmentUI {
         this.showNotification('🔒 Developer mode disabled', 'info');
       } else {
         this.assignmentManager.enableDeveloperMode();
-        this.showNotification('🔧 Developer mode enabled - all levels unlocked!', 'success');
+        this.showNotification(
+          '🔧 Developer mode enabled - all levels unlocked!',
+          'success'
+        );
       }
       // Refresh the UI to show updated unlock status
       await this.show();
@@ -689,20 +754,25 @@ export class AssignmentUI {
     // Start assignment buttons
     const startBtns = this.container.querySelectorAll('.start-assignment-btn');
     startBtns.forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const assignmentId = (e.target as HTMLElement).getAttribute('data-assignment-id');
+      btn.addEventListener('click', async e => {
+        const assignmentId = (e.target as HTMLElement).getAttribute(
+          'data-assignment-id'
+        );
         if (assignmentId) {
           // Ensure we have a user ID (wait for it if needed)
           if (!this.currentUserId) {
             await this.getCurrentUser();
           }
-          
+
           // Use guest as fallback if still no user ID
           const userId = this.currentUserId || 'guest';
-          
+
           console.log(`Starting assignment ${assignmentId} for user ${userId}`);
-          
-          const success = await this.assignmentManager.startAssignment(assignmentId, userId);
+
+          const success = await this.assignmentManager.startAssignment(
+            assignmentId,
+            userId
+          );
           if (success) {
             this.hide();
             this.updateMainUIAssignmentDisplay();
@@ -710,7 +780,10 @@ export class AssignmentUI {
             console.log(`Assignment ${assignmentId} started successfully`);
           } else {
             console.error(`Failed to start assignment ${assignmentId}`);
-            this.showNotification('Failed to start assignment. Please try again.', 'warning');
+            this.showNotification(
+              'Failed to start assignment. Please try again.',
+              'warning'
+            );
           }
         } else {
           console.error('No assignment ID found on button');
@@ -721,7 +794,7 @@ export class AssignmentUI {
     // Practice mode buttons
     const practiceBtns = this.container.querySelectorAll('.practice-btn');
     practiceBtns.forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', async e => {
         const target = e.target as HTMLElement;
         const assignmentId = target.getAttribute('data-assignment-id');
         if (assignmentId) {
@@ -729,21 +802,31 @@ export class AssignmentUI {
           if (!this.currentUserId) {
             await this.getCurrentUser();
           }
-          
+
           // Use guest as fallback if still no user ID
           const userId = this.currentUserId || 'guest';
-          
-          console.log(`Starting assignment ${assignmentId} in practice mode for user ${userId}`);
-          
-          const success = await this.assignmentManager.startAssignment(assignmentId, userId);
+
+          console.log(
+            `Starting assignment ${assignmentId} in practice mode for user ${userId}`
+          );
+
+          const success = await this.assignmentManager.startAssignment(
+            assignmentId,
+            userId
+          );
           if (success) {
             this.hide();
             this.updateMainUIAssignmentDisplay();
             this.showAssignmentStarted(assignmentId);
             console.log(`Assignment ${assignmentId} started in practice mode`);
           } else {
-            console.error(`Failed to start assignment ${assignmentId} in practice mode`);
-            this.showNotification('Failed to start assignment. Please try again.', 'warning');
+            console.error(
+              `Failed to start assignment ${assignmentId} in practice mode`
+            );
+            this.showNotification(
+              'Failed to start assignment. Please try again.',
+              'warning'
+            );
           }
         } else {
           console.error('No assignment ID found on practice button');
@@ -754,7 +837,7 @@ export class AssignmentUI {
     // Compete mode buttons
     const competeBtns = this.container.querySelectorAll('.compete-btn');
     competeBtns.forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', async e => {
         const target = e.target as HTMLElement;
         const assignmentId = target.getAttribute('data-assignment-id');
         if (assignmentId) {
@@ -762,26 +845,41 @@ export class AssignmentUI {
           if (!this.currentUserId) {
             await this.getCurrentUser();
           }
-          
+
           // Use guest as fallback if still no user ID
           const userId = this.currentUserId || 'guest';
-          
-          console.log(`Starting assignment ${assignmentId} in competitive mode for user ${userId}`);
-          
+
+          console.log(
+            `Starting assignment ${assignmentId} in competitive mode for user ${userId}`
+          );
+
           // For competitive mode, we need to create a multiplayer session
-          this.showNotification('Competitive mode requires multiplayer session. Creating session...', 'info');
-          
+          this.showNotification(
+            'Competitive mode requires multiplayer session. Creating session...',
+            'info'
+          );
+
           // TODO: Integration with multiplayer system for competitive mode
           // For now, start in competitive single-player mode
-          const success = await this.assignmentManager.startAssignment(assignmentId, userId);
+          const success = await this.assignmentManager.startAssignment(
+            assignmentId,
+            userId
+          );
           if (success) {
             this.hide();
             this.updateMainUIAssignmentDisplay();
             this.showAssignmentStarted(assignmentId);
-            console.log(`Assignment ${assignmentId} started in competitive mode`);
+            console.log(
+              `Assignment ${assignmentId} started in competitive mode`
+            );
           } else {
-            console.error(`Failed to start assignment ${assignmentId} in competitive mode`);
-            this.showNotification('Failed to start assignment. Please try again.', 'warning');
+            console.error(
+              `Failed to start assignment ${assignmentId} in competitive mode`
+            );
+            this.showNotification(
+              'Failed to start assignment. Please try again.',
+              'warning'
+            );
           }
         } else {
           console.error('No assignment ID found on compete button');
@@ -790,18 +888,27 @@ export class AssignmentUI {
     });
 
     // Age group selector
-    const ageGroupSelector = this.container.querySelector('#age-group-selector') as HTMLSelectElement;
+    const ageGroupSelector = this.container.querySelector(
+      '#age-group-selector'
+    ) as HTMLSelectElement;
     ageGroupSelector?.addEventListener('change', async () => {
-      const success = this.assignmentManager.setAgeGroup(ageGroupSelector.value);
+      const success = this.assignmentManager.setAgeGroup(
+        ageGroupSelector.value
+      );
       if (success) {
         // Refresh the entire UI to show age-scaled assignments
         await this.show();
-        this.showNotification(`Assignments updated for ${this.assignmentManager.getCurrentAgeGroup().name}!`, 'info');
+        this.showNotification(
+          `Assignments updated for ${this.assignmentManager.getCurrentAgeGroup().name}!`,
+          'info'
+        );
       }
     });
 
     // Difficulty filter
-    const difficultyFilter = this.container.querySelector('#difficulty-filter') as HTMLSelectElement;
+    const difficultyFilter = this.container.querySelector(
+      '#difficulty-filter'
+    ) as HTMLSelectElement;
     difficultyFilter?.addEventListener('change', () => {
       this.filterAssignments(difficultyFilter.value);
     });
@@ -810,7 +917,9 @@ export class AssignmentUI {
     const unlockAllBtn = this.container.querySelector('#unlock-all-levels');
     unlockAllBtn?.addEventListener('click', async () => {
       if (this.currentUserId && this.currentUserId !== 'guest') {
-        const success = await this.assignmentManager.unlockAllLevels(this.currentUserId);
+        const success = await this.assignmentManager.unlockAllLevels(
+          this.currentUserId
+        );
         if (success) {
           this.showNotification('🎉 All levels unlocked!', 'success');
           await this.show(); // Refresh UI
@@ -825,28 +934,35 @@ export class AssignmentUI {
     // Quick level access buttons
     const quickLevelBtns = this.container.querySelectorAll('.quick-level-btn');
     quickLevelBtns.forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', async e => {
         const target = e.target as HTMLElement;
         const level = parseInt(target.getAttribute('data-level') || '1');
-        
+
         // Find assignment for this level
-        const assignments = await this.assignmentManager.getAvailableAssignments();
+        const assignments =
+          await this.assignmentManager.getAvailableAssignments();
         const assignment = assignments.find(a => a.levelNumber === level);
-        
+
         if (assignment) {
           // Ensure we have a user ID
           if (!this.currentUserId) {
             await this.getCurrentUser();
           }
-          
+
           const userId = this.currentUserId || 'guest';
-          const success = await this.assignmentManager.startAssignment(assignment.id, userId);
-          
+          const success = await this.assignmentManager.startAssignment(
+            assignment.id,
+            userId
+          );
+
           if (success) {
             this.hide();
             this.updateMainUIAssignmentDisplay();
             this.showAssignmentStarted(assignment.id);
-            this.showNotification(`🎯 Started Level ${level}: ${assignment.name}`, 'success');
+            this.showNotification(
+              `🎯 Started Level ${level}: ${assignment.name}`,
+              'success'
+            );
           } else {
             this.showNotification('Failed to start level', 'warning');
           }
@@ -857,7 +973,7 @@ export class AssignmentUI {
     });
 
     // Click outside to close
-    this.container.addEventListener('click', (e) => {
+    this.container.addEventListener('click', e => {
       if (e.target === this.container) {
         this.hide();
       }
@@ -897,7 +1013,10 @@ export class AssignmentUI {
    * Show objective completion notification
    */
   private showObjectiveComplete(objective: AssignmentObjective): void {
-    this.showNotification(`✅ Objective Complete: ${objective.description}`, 'success');
+    this.showNotification(
+      `✅ Objective Complete: ${objective.description}`,
+      'success'
+    );
   }
 
   /**
@@ -909,7 +1028,7 @@ export class AssignmentUI {
 
     const score = Math.round(progress.currentScore);
     const passed = score >= assignment.successCriteria.minimumScore;
-    
+
     this.showNotification(
       `🎉 Assignment Complete: ${assignment.name}\nScore: ${score}% ${passed ? '(PASSED)' : '(TRY AGAIN)'}`,
       passed ? 'success' : 'warning'
@@ -923,14 +1042,16 @@ export class AssignmentUI {
    * Update the main UI objective display
    */
   private updateMainObjectiveDisplay(): void {
-    const objectiveDisplay = document.getElementById('current-objective-display');
+    const objectiveDisplay = document.getElementById(
+      'current-objective-display'
+    );
     const objectiveText = document.getElementById('objective-text');
-    
+
     if (!objectiveDisplay || !objectiveText) return;
-    
+
     const assignment = this.assignmentManager.getCurrentAssignment();
     const progress = this.assignmentManager.getProgress();
-    
+
     if (assignment && progress && progress.objectives.length > 0) {
       // Show the main objective prominently
       objectiveDisplay.style.display = 'block';
@@ -945,14 +1066,17 @@ export class AssignmentUI {
    * Show assignment started notification
    */
   private showAssignmentStarted(assignmentId: string): void {
-    this.showNotification(`🚀 Assignment Started! Follow the objectives in the precision tools.`, 'info');
-    
+    this.showNotification(
+      `🚀 Assignment Started! Follow the objectives in the precision tools.`,
+      'info'
+    );
+
     // Update main objective display
     this.updateMainObjectiveDisplay();
-    
+
     // Show persistent progress panel
     this.showPersistentProgress();
-    
+
     // Trigger real-time feedback system
     const assignment = this.assignmentManager.getCurrentAssignment();
     if (assignment) {
@@ -963,11 +1087,14 @@ export class AssignmentUI {
   /**
    * Show notification
    */
-  private showNotification(message: string, type: 'success' | 'warning' | 'info' = 'info'): void {
+  private showNotification(
+    message: string,
+    type: 'success' | 'warning' | 'info' = 'info'
+  ): void {
     const colors = {
       success: '#4CAF50',
-      warning: '#FF9800', 
-      info: '#2196F3'
+      warning: '#FF9800',
+      info: '#2196F3',
     };
 
     const notification = document.createElement('div');
@@ -1022,17 +1149,21 @@ export class AssignmentUI {
    */
   private updateMainUIAssignmentDisplay(): void {
     const currentAssignmentDiv = document.getElementById('current-assignment');
-    const assignmentProgressDiv = document.getElementById('assignment-progress');
-    
+    const assignmentProgressDiv = document.getElementById(
+      'assignment-progress'
+    );
+
     const assignment = this.assignmentManager.getCurrentAssignment();
     const progress = this.assignmentManager.getProgress();
 
     if (currentAssignmentDiv) {
       if (assignment && progress) {
         const score = Math.round(progress.currentScore);
-        const completedObjectives = progress.objectives.filter(obj => obj.completed).length;
+        const completedObjectives = progress.objectives.filter(
+          obj => obj.completed
+        ).length;
         const totalObjectives = progress.objectives.length;
-        
+
         currentAssignmentDiv.innerHTML = `
           <div style="font-weight: bold; color: #4CAF50;">${assignment.name}</div>
           <div style="font-size: 11px;">Progress: ${score}% | Objectives: ${completedObjectives}/${totalObjectives}</div>
@@ -1070,29 +1201,29 @@ export class AssignmentUI {
     // Calculate safe position below precision tools panel
     const precisionPanel = document.getElementById('precision-tools-ui');
     const mainPanel = document.getElementById('main-ui-panel');
-    
+
     let topPosition = 380; // Default fallback
     let leftPosition = 10; // Default left position
-    
+
     // Check if precision tools panel exists and calculate position below it
     if (precisionPanel) {
       const precisionRect = precisionPanel.getBoundingClientRect();
       topPosition = precisionRect.bottom + 10;
-    } 
+    }
     // Fallback to main panel if precision panel doesn't exist
     else if (mainPanel) {
       const mainRect = mainPanel.getBoundingClientRect();
       topPosition = mainRect.bottom + 10;
     }
-    
+
     // Responsive positioning and sizing based on screen size
     const screenWidth = window.innerWidth;
     const screenHeight = window.innerHeight;
-    
+
     // Initialize responsive properties
     let panelWidth = '350px';
     let panelPadding = '15px';
-    
+
     // Mobile devices (width < 768px)
     if (screenWidth < 768) {
       leftPosition = 10;
@@ -1100,7 +1231,7 @@ export class AssignmentUI {
       panelWidth = `${Math.min(screenWidth - 20, 350)}px`;
       panelPadding = '12px';
     }
-    // Tablet devices (width < 1024px)  
+    // Tablet devices (width < 1024px)
     else if (screenWidth < 1024) {
       // Ensure we don't go off-screen vertically
       const maxHeight = screenHeight - 200;
@@ -1121,7 +1252,7 @@ export class AssignmentUI {
         topPosition = 60; // Align with precision tools
       }
     }
-    
+
     this.persistentProgressPanel.style.cssText = `
       position: fixed;
       top: ${topPosition}px;
@@ -1164,7 +1295,9 @@ export class AssignmentUI {
       return;
     }
 
-    const completedObjectives = progress.objectives.filter(obj => obj.completed).length;
+    const completedObjectives = progress.objectives.filter(
+      obj => obj.completed
+    ).length;
     const totalObjectives = progress.objectives.length;
     const progressPercent = Math.round(progress.currentScore);
 
@@ -1180,7 +1313,9 @@ export class AssignmentUI {
           <div style="margin: 8px 0;">
             <div style="font-size: 12px; font-weight: bold; margin-bottom: 6px;">Objectives (${completedObjectives}/${totalObjectives}):</div>
             <div style="max-height: 150px; overflow-y: auto; padding-right: 5px;">
-              ${progress.objectives.map(obj => `
+              ${progress.objectives
+                .map(
+                  obj => `
                 <div style="display: flex; align-items: flex-start; margin: 4px 0; font-size: 11px; line-height: 1.3;">
                   <span style="color: ${obj.completed ? '#4CAF50' : '#ccc'}; margin-right: 6px; margin-top: 2px;">
                     ${obj.completed ? '✅' : '⏳'}
@@ -1189,7 +1324,9 @@ export class AssignmentUI {
                     ${obj.description}
                   </span>
                 </div>
-              `).join('')}
+              `
+                )
+                .join('')}
             </div>
           </div>
           <div style="display: flex; gap: 8px; font-size: 10px; margin-bottom: 4px;">
@@ -1252,23 +1389,23 @@ export class AssignmentUI {
     if (!this.persistentProgressPanel) {
       this.createPersistentProgressPanel();
     }
-    
+
     if (this.persistentProgressPanel) {
       this.persistentProgressPanel.style.display = 'block';
       document.body.appendChild(this.persistentProgressPanel);
-      
+
       // Ensure no conflicts with main UI panel in precision mode
       this.ensureNoUIConflicts();
     }
   }
-  
+
   /**
    * Ensure no UI conflicts with other panels
    */
   private ensureNoUIConflicts(): void {
     const mainPanel = document.getElementById('main-ui-panel');
     const precisionPanel = document.getElementById('precision-tools-ui');
-    
+
     // If we're in precision mode (precision panel exists), hide main panel to avoid conflicts
     if (precisionPanel && mainPanel) {
       // Hide main panel when precision tools are active
@@ -1310,7 +1447,9 @@ export class AssignmentUI {
       },
       unlockAll: async () => {
         if (this.currentUserId && this.currentUserId !== 'guest') {
-          const success = await this.assignmentManager.unlockAllLevels(this.currentUserId);
+          const success = await this.assignmentManager.unlockAllLevels(
+            this.currentUserId
+          );
           if (success) {
             console.log('🎉 All levels unlocked!');
           } else {
@@ -1321,11 +1460,15 @@ export class AssignmentUI {
         }
       },
       startLevel: async (levelNumber: number) => {
-        const assignments = await this.assignmentManager.getAvailableAssignments();
+        const assignments =
+          await this.assignmentManager.getAvailableAssignments();
         const assignment = assignments.find(a => a.levelNumber === levelNumber);
         if (assignment) {
           const userId = this.currentUserId || 'guest';
-          const success = await this.assignmentManager.startAssignment(assignment.id, userId);
+          const success = await this.assignmentManager.startAssignment(
+            assignment.id,
+            userId
+          );
           if (success) {
             console.log(`🎯 Started Level ${levelNumber}: ${assignment.name}`);
           } else {
@@ -1334,7 +1477,7 @@ export class AssignmentUI {
         } else {
           console.log(`❌ Level ${levelNumber} not found`);
         }
-      }
+      },
     };
 
     console.log(`
@@ -1354,19 +1497,24 @@ export class AssignmentUI {
     // Update initial display
     this.updateMainUIAssignmentDisplay();
     this.updateMainObjectiveDisplay();
-    
+
     // Show persistent progress panel if assignment is active
     const currentAssignment = this.assignmentManager.getCurrentAssignment();
     if (currentAssignment) {
       this.showPersistentProgress();
     }
-    
+
     // Add global helper methods for easy testing
     this.addGlobalHelpers();
-    
+
     // Set up keyboard shortcut (A key)
-    document.addEventListener('keydown', (event) => {
-      if (event.key.toLowerCase() === 'a' && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+    document.addEventListener('keydown', event => {
+      if (
+        event.key.toLowerCase() === 'a' &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey
+      ) {
         // Only trigger if not in input field
         const target = event.target as HTMLElement;
         if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
@@ -1375,13 +1523,16 @@ export class AssignmentUI {
         }
       }
     });
-    
+
     // Set up window resize handler to reposition panels
     window.addEventListener('resize', () => {
-      if (this.persistentProgressPanel && this.persistentProgressPanel.style.display !== 'none') {
+      if (
+        this.persistentProgressPanel &&
+        this.persistentProgressPanel.style.display !== 'none'
+      ) {
         // Recreate panel with new positioning
         this.showPersistentProgress();
       }
     });
   }
-} 
+}

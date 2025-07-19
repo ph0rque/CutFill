@@ -62,13 +62,21 @@ export interface FeedbackSystem {
 }
 
 export interface NotificationSystem {
-  show(message: string, type: 'success' | 'warning' | 'error' | 'info', duration?: number): void;
+  show(
+    message: string,
+    type: 'success' | 'warning' | 'error' | 'info',
+    duration?: number
+  ): void;
   hide(id: string): void;
   clear(): void;
 }
 
 export interface TooltipSystem {
-  show(element: HTMLElement, content: string, position?: 'top' | 'bottom' | 'left' | 'right'): void;
+  show(
+    element: HTMLElement,
+    content: string,
+    position?: 'top' | 'bottom' | 'left' | 'right'
+  ): void;
   hide(element: HTMLElement): void;
   hideAll(): void;
 }
@@ -116,7 +124,7 @@ export class VisualEnhancementSystem {
         excavator: '🚜',
         bulldozer: '🚜',
         grader: '🛣️',
-        compactor: '🛞'
+        compactor: '🛞',
       },
       ui: {
         accessibility: '♿',
@@ -125,22 +133,22 @@ export class VisualEnhancementSystem {
         help: '❓',
         close: '✕',
         minimize: '−',
-        maximize: '□'
+        maximize: '□',
       },
       feedback: {
         success: '✅',
         warning: '⚠️',
         error: '❌',
         info: 'ℹ️',
-        loading: '⏳'
+        loading: '⏳',
       },
       terrain: {
         cut: '🔻',
         fill: '🔺',
         level: '📏',
         water: '💧',
-        soil: '🟫'
-      }
+        soil: '🟫',
+      },
     };
   }
 
@@ -157,7 +165,7 @@ export class VisualEnhancementSystem {
       fadeOut: 'fadeOut 0.3s ease-in',
       pulse: 'pulse 2s ease-in-out infinite',
       bounce: 'bounce 0.6s ease-out',
-      shake: 'shake 0.5s ease-in-out'
+      shake: 'shake 0.5s ease-in-out',
     };
   }
 
@@ -166,7 +174,7 @@ export class VisualEnhancementSystem {
       notifications: new NotificationManager(),
       tooltips: new TooltipManager(),
       sounds: new SoundManager(),
-      haptics: new HapticManager()
+      haptics: new HapticManager(),
     };
   }
 
@@ -182,18 +190,18 @@ export class VisualEnhancementSystem {
           background: '#121212',
           surface: '#1E1E1E',
           text: '#FFFFFF',
-          textSecondary: '#B0B0B0'
+          textSecondary: '#B0B0B0',
         },
         gradients: {
           primary: 'linear-gradient(135deg, #4CAF50 0%, #45A049 100%)',
           secondary: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
-          accent: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)'
+          accent: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
         },
         shadows: {
           small: '0 2px 4px rgba(0,0,0,0.2)',
           medium: '0 4px 8px rgba(0,0,0,0.3)',
-          large: '0 8px 16px rgba(0,0,0,0.4)'
-        }
+          large: '0 8px 16px rgba(0,0,0,0.4)',
+        },
       },
       light: {
         name: 'Light Mode',
@@ -205,18 +213,18 @@ export class VisualEnhancementSystem {
           background: '#FFFFFF',
           surface: '#F5F5F5',
           text: '#212121',
-          textSecondary: '#757575'
+          textSecondary: '#757575',
         },
         gradients: {
           primary: 'linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)',
           secondary: 'linear-gradient(135deg, #1565C0 0%, #0D47A1 100%)',
-          accent: 'linear-gradient(135deg, #E65100 0%, #BF360C 100%)'
+          accent: 'linear-gradient(135deg, #E65100 0%, #BF360C 100%)',
         },
         shadows: {
           small: '0 2px 4px rgba(0,0,0,0.1)',
           medium: '0 4px 8px rgba(0,0,0,0.15)',
-          large: '0 8px 16px rgba(0,0,0,0.2)'
-        }
+          large: '0 8px 16px rgba(0,0,0,0.2)',
+        },
       },
       highContrast: {
         name: 'High Contrast',
@@ -228,19 +236,19 @@ export class VisualEnhancementSystem {
           background: '#000000',
           surface: '#111111',
           text: '#FFFFFF',
-          textSecondary: '#CCCCCC'
+          textSecondary: '#CCCCCC',
         },
         gradients: {
           primary: 'linear-gradient(135deg, #00FF00 0%, #00CC00 100%)',
           secondary: 'linear-gradient(135deg, #00FFFF 0%, #00CCCC 100%)',
-          accent: 'linear-gradient(135deg, #FFFF00 0%, #CCCC00 100%)'
+          accent: 'linear-gradient(135deg, #FFFF00 0%, #CCCC00 100%)',
         },
         shadows: {
           small: '0 2px 4px rgba(255,255,255,0.2)',
           medium: '0 4px 8px rgba(255,255,255,0.3)',
-          large: '0 8px 16px rgba(255,255,255,0.4)'
-        }
-      }
+          large: '0 8px 16px rgba(255,255,255,0.4)',
+        },
+      },
     };
   }
 
@@ -252,7 +260,7 @@ export class VisualEnhancementSystem {
     this.setupVisualFeedback();
     this.setupResponsiveImages();
     this.setupAccessibilityEnhancements();
-    
+
     this.isInitialized = true;
   }
 
@@ -381,7 +389,7 @@ export class VisualEnhancementSystem {
         animation: glow 2s ease-in-out infinite;
       }
     `;
-    
+
     document.head.appendChild(style);
   }
 
@@ -664,21 +672,24 @@ export class VisualEnhancementSystem {
         }
       }
     `;
-    
+
     document.head.appendChild(style);
   }
 
   private setupVisualFeedback(): void {
     // Add hover effects to all buttons
-    document.addEventListener('mouseover', (e) => {
+    document.addEventListener('mouseover', e => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'BUTTON' && !target.classList.contains('enhanced-button')) {
+      if (
+        target.tagName === 'BUTTON' &&
+        !target.classList.contains('enhanced-button')
+      ) {
         target.classList.add('enhanced-button', 'primary');
       }
     });
 
     // Add click ripple effect
-    document.addEventListener('click', (e) => {
+    document.addEventListener('click', e => {
       const target = e.target as HTMLElement;
       if (target.tagName === 'BUTTON') {
         this.createRippleEffect(target, e);
@@ -691,7 +702,7 @@ export class VisualEnhancementSystem {
     const size = Math.max(rect.width, rect.height);
     const x = event.clientX - rect.left - size / 2;
     const y = event.clientY - rect.top - size / 2;
-    
+
     const ripple = document.createElement('div');
     ripple.style.cssText = `
       position: absolute;
@@ -705,11 +716,11 @@ export class VisualEnhancementSystem {
       transform: scale(0);
       animation: ripple 0.6s ease-out;
     `;
-    
+
     element.style.position = 'relative';
     element.style.overflow = 'hidden';
     element.appendChild(ripple);
-    
+
     setTimeout(() => {
       ripple.remove();
     }, 600);
@@ -737,15 +748,18 @@ export class VisualEnhancementSystem {
             '♿': 'Accessibility options',
             '👥': 'Age group selector',
             '⚙️': 'Settings',
-            '❓': 'Help'
+            '❓': 'Help',
           };
-          button.setAttribute('aria-label', labels[icon as keyof typeof labels] || 'Button');
+          button.setAttribute(
+            'aria-label',
+            labels[icon as keyof typeof labels] || 'Button'
+          );
         }
       }
     });
 
     // Add keyboard navigation indicators
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', e => {
       if (e.key === 'Tab') {
         document.body.classList.add('keyboard-navigation');
       }
@@ -761,7 +775,7 @@ export class VisualEnhancementSystem {
     if (!theme) return;
 
     this.currentTheme = themeName;
-    
+
     // Apply theme colors as CSS custom properties
     Object.entries(theme.colors).forEach(([key, value]) => {
       document.documentElement.style.setProperty(`--color-${key}`, value);
@@ -784,11 +798,19 @@ export class VisualEnhancementSystem {
     return this.icons[category]?.[name as keyof any] || '❓';
   }
 
-  public showNotification(message: string, type: 'success' | 'warning' | 'error' | 'info' = 'info', duration: number = 5000): void {
+  public showNotification(
+    message: string,
+    type: 'success' | 'warning' | 'error' | 'info' = 'info',
+    duration: number = 5000
+  ): void {
     this.feedback.notifications.show(message, type, duration);
   }
 
-  public showTooltip(element: HTMLElement, content: string, position: 'top' | 'bottom' | 'left' | 'right' = 'top'): void {
+  public showTooltip(
+    element: HTMLElement,
+    content: string,
+    position: 'top' | 'bottom' | 'left' | 'right' = 'top'
+  ): void {
     this.feedback.tooltips.show(element, content, position);
   }
 
@@ -822,7 +844,11 @@ class NotificationManager implements NotificationSystem {
   private notifications: Map<string, HTMLElement> = new Map();
   private notificationCount = 0;
 
-  show(message: string, type: 'success' | 'warning' | 'error' | 'info', duration: number = 5000): void {
+  show(
+    message: string,
+    type: 'success' | 'warning' | 'error' | 'info',
+    duration: number = 5000
+  ): void {
     const id = `notification-${++this.notificationCount}`;
     const notification = document.createElement('div');
     notification.className = `enhanced-notification ${type}`;
@@ -833,15 +859,15 @@ class NotificationManager implements NotificationSystem {
         <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: inherit; cursor: pointer; margin-left: auto;">×</button>
       </div>
     `;
-    
+
     document.body.appendChild(notification);
     this.notifications.set(id, notification);
-    
+
     // Show notification
     setTimeout(() => {
       notification.classList.add('show');
     }, 100);
-    
+
     // Auto-hide after duration
     setTimeout(() => {
       this.hide(id);
@@ -872,7 +898,7 @@ class NotificationManager implements NotificationSystem {
       success: '✅',
       warning: '⚠️',
       error: '❌',
-      info: 'ℹ️'
+      info: 'ℹ️',
     };
     return icons[type as keyof typeof icons] || 'ℹ️';
   }
@@ -881,22 +907,27 @@ class NotificationManager implements NotificationSystem {
 class TooltipManager implements TooltipSystem {
   private tooltips: Map<HTMLElement, HTMLElement> = new Map();
 
-  show(element: HTMLElement, content: string, position: 'top' | 'bottom' | 'left' | 'right' = 'top'): void {
+  show(
+    element: HTMLElement,
+    content: string,
+    position: 'top' | 'bottom' | 'left' | 'right' = 'top'
+  ): void {
     this.hide(element); // Remove existing tooltip
-    
+
     const tooltip = document.createElement('div');
     tooltip.className = 'enhanced-tooltip';
     tooltip.textContent = content;
-    
+
     document.body.appendChild(tooltip);
     this.tooltips.set(element, tooltip);
-    
+
     // Position tooltip
     const rect = element.getBoundingClientRect();
     const tooltipRect = tooltip.getBoundingClientRect();
-    
-    let top = 0, left = 0;
-    
+
+    let top = 0,
+      left = 0;
+
     switch (position) {
       case 'top':
         top = rect.top - tooltipRect.height - 10;
@@ -915,10 +946,10 @@ class TooltipManager implements TooltipSystem {
         left = rect.right + 10;
         break;
     }
-    
+
     tooltip.style.top = `${top}px`;
     tooltip.style.left = `${left}px`;
-    
+
     // Show tooltip
     setTimeout(() => {
       tooltip.classList.add('show');
@@ -952,7 +983,7 @@ class SoundManager implements SoundSystem {
 
   play(sound: string, volume?: number): void {
     if (this.muted) return;
-    
+
     // Create audio element if it doesn't exist
     if (!this.sounds.has(sound)) {
       const audio = new Audio();
@@ -960,7 +991,7 @@ class SoundManager implements SoundSystem {
       audio.volume = volume || this.volume;
       this.sounds.set(sound, audio);
     }
-    
+
     const audio = this.sounds.get(sound);
     if (audio) {
       audio.currentTime = 0;
@@ -1004,4 +1035,4 @@ class HapticManager implements HapticSystem {
 }
 
 // Create and export the global visual enhancement system
-export const visualEnhancementSystem = new VisualEnhancementSystem(); 
+export const visualEnhancementSystem = new VisualEnhancementSystem();

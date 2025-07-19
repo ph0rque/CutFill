@@ -45,7 +45,7 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
   public layout: LayoutManager;
   public touch: TouchManager;
   public performance: PerformanceManager;
-  
+
   private currentBreakpoint: string = 'desktop';
   private isInitialized = false;
   private resizeObserver: ResizeObserver | null = null;
@@ -68,7 +68,7 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
     this.setupOrientationHandling();
     this.setupResponsiveImages();
     this.setupViewportOptimization();
-    
+
     this.isInitialized = true;
   }
 
@@ -78,13 +78,13 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
       mobile: '(max-width: 768px)',
       tablet: '(min-width: 769px) and (max-width: 1024px)',
       desktop: '(min-width: 1025px) and (max-width: 1440px)',
-      wide: '(min-width: 1441px)'
+      wide: '(min-width: 1441px)',
     };
 
     // Create media query listeners
     Object.entries(breakpoints).forEach(([name, query]) => {
       const mq = window.matchMedia(query);
-      mq.addEventListener('change', (e) => {
+      mq.addEventListener('change', e => {
         if (e.matches) {
           this.currentBreakpoint = name;
           this.layout.adaptLayout(name);
@@ -315,14 +315,14 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
         }
       }
     `;
-    
+
     document.head.appendChild(style);
   }
 
   private setupTouchSupport(): void {
     // Detect touch capabilities
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    
+
     if (isTouch) {
       document.body.classList.add('touch-device');
       this.touch.enableTouch();
@@ -336,16 +336,16 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
     let frameCount = 0;
     let lastTime = performance.now();
     let fps = 60;
-    
+
     const measureFPS = () => {
       frameCount++;
       const currentTime = performance.now();
-      
+
       if (currentTime - lastTime >= 1000) {
         fps = frameCount;
         frameCount = 0;
         lastTime = currentTime;
-        
+
         // Adjust quality based on FPS
         if (fps < 30) {
           this.performance.reduceQuality();
@@ -353,24 +353,25 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
           this.performance.increaseQuality();
         }
       }
-      
+
       requestAnimationFrame(measureFPS);
     };
-    
+
     requestAnimationFrame(measureFPS);
   }
 
   private setupOrientationHandling(): void {
     this.orientationChangeHandler = () => {
-      const orientation = window.innerHeight > window.innerWidth ? 'portrait' : 'landscape';
+      const orientation =
+        window.innerHeight > window.innerWidth ? 'portrait' : 'landscape';
       this.layout.adjustForOrientation(orientation);
-      
+
       // Force resize event after orientation change
       setTimeout(() => {
         window.dispatchEvent(new Event('resize'));
       }, 100);
     };
-    
+
     window.addEventListener('orientationchange', this.orientationChangeHandler);
     window.addEventListener('resize', this.orientationChangeHandler);
   }
@@ -380,7 +381,7 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
     const images = document.querySelectorAll('img');
     images.forEach(img => {
       img.loading = 'lazy';
-      
+
       // Add srcset for different screen densities
       if (!img.srcset) {
         const src = img.src;
@@ -395,15 +396,18 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
 
   private setupViewportOptimization(): void {
     // Ensure proper viewport meta tag
-    let viewportMeta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement;
+    let viewportMeta = document.querySelector(
+      'meta[name="viewport"]'
+    ) as HTMLMetaElement;
     if (!viewportMeta) {
       viewportMeta = document.createElement('meta');
       viewportMeta.name = 'viewport';
       document.head.appendChild(viewportMeta);
     }
-    
-    viewportMeta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
-    
+
+    viewportMeta.content =
+      'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+
     // Add safe area insets for devices with notches
     const safeAreaStyle = document.createElement('style');
     safeAreaStyle.textContent = `
@@ -421,21 +425,30 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
 
   private onBreakpointChange(breakpoint: string): void {
     // Update panel classes
-    const panels = document.querySelectorAll('.main-panel, .panel, .enhanced-panel');
+    const panels = document.querySelectorAll(
+      '.main-panel, .panel, .enhanced-panel'
+    );
     panels.forEach(panel => {
       panel.classList.remove('mobile', 'tablet', 'desktop', 'wide');
       panel.classList.add(breakpoint);
     });
-    
+
     // Update tool grids
     const toolGrids = document.querySelectorAll('.tool-grid');
     toolGrids.forEach(grid => {
-      (grid as HTMLElement).classList.remove('mobile-grid', 'tablet-grid', 'desktop-grid', 'wide-grid');
+      (grid as HTMLElement).classList.remove(
+        'mobile-grid',
+        'tablet-grid',
+        'desktop-grid',
+        'wide-grid'
+      );
       (grid as HTMLElement).classList.add(`${breakpoint}-grid`);
     });
-    
+
     // Trigger custom event
-    window.dispatchEvent(new CustomEvent('breakpointChange', { detail: breakpoint }));
+    window.dispatchEvent(
+      new CustomEvent('breakpointChange', { detail: breakpoint })
+    );
   }
 
   public getCurrentBreakpoint(): string {
@@ -446,9 +459,12 @@ export class ResponsiveDesignManager implements ResponsiveDesignSystem {
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
     }
-    
+
     if (this.orientationChangeHandler) {
-      window.removeEventListener('orientationchange', this.orientationChangeHandler);
+      window.removeEventListener(
+        'orientationchange',
+        this.orientationChangeHandler
+      );
       window.removeEventListener('resize', this.orientationChangeHandler);
     }
   }
@@ -512,7 +528,7 @@ class LayoutManagerImpl implements LayoutManager {
       (button as HTMLElement).style.minHeight = '60px';
       (button as HTMLElement).style.fontSize = '14px';
     });
-    
+
     // Make panels full-screen on mobile
     panel.style.position = 'fixed';
     panel.style.top = '0';
@@ -570,14 +586,18 @@ class LayoutManagerImpl implements LayoutManager {
   }
 
   optimizeForDevice(device: 'mobile' | 'tablet' | 'desktop'): void {
-    document.body.classList.remove('mobile-device', 'tablet-device', 'desktop-device');
+    document.body.classList.remove(
+      'mobile-device',
+      'tablet-device',
+      'desktop-device'
+    );
     document.body.classList.add(`${device}-device`);
   }
 
   adjustForOrientation(orientation: 'portrait' | 'landscape'): void {
     document.body.classList.remove('portrait', 'landscape');
     document.body.classList.add(orientation);
-    
+
     if (orientation === 'landscape' && window.innerHeight < 500) {
       // Optimize for landscape mode on small screens
       const panels = document.querySelectorAll('.main-panel');
@@ -619,11 +639,14 @@ class TouchManagerImpl implements TouchManager {
     // Handle touch start events only for UI elements
     const touch = event.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
-    
+
     // Only handle touches on UI elements, not the game canvas
-    if (element && (element.classList.contains('tool-btn') || element.closest('.main-panel'))) {
+    if (
+      element &&
+      (element.classList.contains('tool-btn') || element.closest('.main-panel'))
+    ) {
       if (element.classList.contains('tool-btn')) {
-      element.classList.add('touch-active');
+        element.classList.add('touch-active');
       }
     }
   }
@@ -632,7 +655,7 @@ class TouchManagerImpl implements TouchManager {
     // Only prevent default for UI interactions, not canvas interactions
     const touch = event.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
-    
+
     // Only prevent scrolling if touching UI elements
     if (element && element.closest('.main-panel')) {
       event.preventDefault();
@@ -654,14 +677,14 @@ class PerformanceManagerImpl implements PerformanceManager {
     fps: 60,
     memory: 0,
     renderTime: 0,
-    deviceType: 'medium'
+    deviceType: 'medium',
   };
 
   optimizeForDevice(): void {
     // Detect device capabilities
     const deviceMemory = (navigator as any).deviceMemory || 4;
     const hardwareConcurrency = navigator.hardwareConcurrency || 4;
-    
+
     if (deviceMemory <= 2 || hardwareConcurrency <= 2) {
       this.currentQuality = 'low';
       this.metrics.deviceType = 'low';
@@ -672,7 +695,7 @@ class PerformanceManagerImpl implements PerformanceManager {
       this.currentQuality = 'medium';
       this.metrics.deviceType = 'medium';
     }
-    
+
     this.applyQualitySettings();
   }
 
@@ -695,13 +718,17 @@ class PerformanceManagerImpl implements PerformanceManager {
   }
 
   private applyQualitySettings(): void {
-    document.body.classList.remove('quality-low', 'quality-medium', 'quality-high');
+    document.body.classList.remove(
+      'quality-low',
+      'quality-medium',
+      'quality-high'
+    );
     document.body.classList.add(`quality-${this.currentQuality}`);
-    
+
     // Apply quality-specific styles
     const style = document.createElement('style');
     style.id = 'performance-quality-styles';
-    
+
     switch (this.currentQuality) {
       case 'low':
         style.textContent = `
@@ -725,13 +752,13 @@ class PerformanceManagerImpl implements PerformanceManager {
         `;
         break;
     }
-    
+
     // Remove old style if exists
     const oldStyle = document.getElementById('performance-quality-styles');
     if (oldStyle) {
       oldStyle.remove();
     }
-    
+
     document.head.appendChild(style);
   }
 
@@ -741,4 +768,4 @@ class PerformanceManagerImpl implements PerformanceManager {
 }
 
 // Create and export the global responsive design system
-export const responsiveDesignSystem = new ResponsiveDesignManager(); 
+export const responsiveDesignSystem = new ResponsiveDesignManager();

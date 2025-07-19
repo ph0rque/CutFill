@@ -70,7 +70,7 @@ export class PerformanceOptimizer {
       shadowQuality: 'medium',
       antialiasing: true,
       vsync: true,
-      ...config
+      ...config,
     };
 
     this.metrics = {
@@ -83,7 +83,7 @@ export class PerformanceOptimizer {
       textures: 0,
       materials: 0,
       renderTime: 0,
-      updateTime: 0
+      updateTime: 0,
     };
 
     this.initializeOptimizationStrategies();
@@ -95,52 +95,52 @@ export class PerformanceOptimizer {
       {
         name: 'Reduce Shadow Quality',
         priority: 1,
-        condition: (metrics) => metrics.fps < this.config.targetFPS * 0.8,
+        condition: metrics => metrics.fps < this.config.targetFPS * 0.8,
         apply: () => this.reduceShadowQuality(),
-        revert: () => this.increaseShadowQuality()
+        revert: () => this.increaseShadowQuality(),
       },
       {
         name: 'Enable Frustum Culling',
         priority: 2,
-        condition: (metrics) => metrics.drawCalls > 1000,
+        condition: metrics => metrics.drawCalls > 1000,
         apply: () => this.enableFrustumCulling(),
-        revert: () => this.disableFrustumCulling()
+        revert: () => this.disableFrustumCulling(),
       },
       {
         name: 'Reduce Render Quality',
         priority: 3,
-        condition: (metrics) => metrics.fps < this.config.targetFPS * 0.7,
+        condition: metrics => metrics.fps < this.config.targetFPS * 0.7,
         apply: () => this.reduceRenderQuality(),
-        revert: () => this.increaseRenderQuality()
+        revert: () => this.increaseRenderQuality(),
       },
       {
         name: 'Enable Level of Detail',
         priority: 4,
-        condition: (metrics) => metrics.triangles > 50000,
+        condition: metrics => metrics.triangles > 50000,
         apply: () => this.enableLOD(),
-        revert: () => this.disableLOD()
+        revert: () => this.disableLOD(),
       },
       {
         name: 'Reduce Particle Count',
         priority: 5,
-        condition: (metrics) => metrics.fps < this.config.targetFPS * 0.6,
+        condition: metrics => metrics.fps < this.config.targetFPS * 0.6,
         apply: () => this.reduceParticles(),
-        revert: () => this.increaseParticles()
+        revert: () => this.increaseParticles(),
       },
       {
         name: 'Disable Antialiasing',
         priority: 6,
-        condition: (metrics) => metrics.fps < this.config.targetFPS * 0.5,
+        condition: metrics => metrics.fps < this.config.targetFPS * 0.5,
         apply: () => this.disableAntialiasing(),
-        revert: () => this.enableAntialiasing()
+        revert: () => this.enableAntialiasing(),
       },
       {
         name: 'Emergency Mode',
         priority: 10,
-        condition: (metrics) => metrics.fps < this.config.targetFPS * 0.3,
+        condition: metrics => metrics.fps < this.config.targetFPS * 0.3,
         apply: () => this.enableEmergencyMode(),
-        revert: () => this.disableEmergencyMode()
-      }
+        revert: () => this.disableEmergencyMode(),
+      },
     ];
   }
 
@@ -189,8 +189,8 @@ export class PerformanceOptimizer {
     try {
       const blob = new Blob([workerCode], { type: 'application/javascript' });
       this.performanceWorker = new Worker(URL.createObjectURL(blob));
-      
-      this.performanceWorker.onmessage = (e) => {
+
+      this.performanceWorker.onmessage = e => {
         this.metrics.fps = e.data.fps;
         this.metrics.frameTime = e.data.frameTime;
         this.metrics.memoryUsage = e.data.memoryUsage;
@@ -201,11 +201,15 @@ export class PerformanceOptimizer {
     }
   }
 
-  public initialize(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
+  public initialize(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.Camera
+  ): void {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
-    
+
     this.optimizeRenderer();
     this.setupGeometryPooling();
     this.setupMaterialPooling();
@@ -221,7 +225,7 @@ export class PerformanceOptimizer {
     // Enable renderer optimizations
     this.renderer.sortObjects = true;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    
+
     // Configure render settings based on quality
     switch (this.config.renderQuality) {
       case 'low':
@@ -250,7 +254,7 @@ export class PerformanceOptimizer {
       'OES_texture_half_float',
       'OES_texture_half_float_linear',
       'WEBGL_depth_texture',
-      'OES_element_index_uint'
+      'OES_element_index_uint',
     ];
 
     extensions.forEach(ext => {
@@ -263,9 +267,12 @@ export class PerformanceOptimizer {
     const commonGeometries = [
       { name: 'box', geometry: new THREE.BoxGeometry(1, 1, 1) },
       { name: 'sphere', geometry: new THREE.SphereGeometry(0.5, 16, 16) },
-      { name: 'cylinder', geometry: new THREE.CylinderGeometry(0.5, 0.5, 1, 16) },
+      {
+        name: 'cylinder',
+        geometry: new THREE.CylinderGeometry(0.5, 0.5, 1, 16),
+      },
       { name: 'plane', geometry: new THREE.PlaneGeometry(1, 1) },
-      { name: 'cone', geometry: new THREE.ConeGeometry(0.5, 1, 16) }
+      { name: 'cone', geometry: new THREE.ConeGeometry(0.5, 1, 16) },
     ];
 
     commonGeometries.forEach(({ name, geometry }) => {
@@ -279,7 +286,7 @@ export class PerformanceOptimizer {
       { name: 'basic', material: new THREE.MeshBasicMaterial() },
       { name: 'lambert', material: new THREE.MeshLambertMaterial() },
       { name: 'phong', material: new THREE.MeshPhongMaterial() },
-      { name: 'standard', material: new THREE.MeshStandardMaterial() }
+      { name: 'standard', material: new THREE.MeshStandardMaterial() },
     ];
 
     commonMaterials.forEach(({ name, material }) => {
@@ -310,7 +317,7 @@ export class PerformanceOptimizer {
       setInterval(() => {
         const memory = (performance as any).memory;
         this.metrics.memoryUsage = memory.usedJSHeapSize / 1024 / 1024;
-        
+
         if (this.metrics.memoryUsage > this.config.maxMemoryUsage) {
           this.emergencyMemoryCleanup();
         }
@@ -320,36 +327,36 @@ export class PerformanceOptimizer {
 
   private startMonitoring(): void {
     if (this.isMonitoring) return;
-    
+
     this.isMonitoring = true;
     this.monitorPerformance();
   }
 
   private monitorPerformance(): void {
     const startTime = performance.now();
-    
+
     // Update frame count
     this.frameCount++;
-    
+
     // Send frame signal to worker
     if (this.performanceWorker) {
       this.performanceWorker.postMessage({ type: 'frame' });
     }
-    
+
     // Calculate metrics
     const currentTime = performance.now();
     const deltaTime = currentTime - this.lastFrameTime;
     this.lastFrameTime = currentTime;
-    
+
     this.frameTimeHistory.push(deltaTime);
     if (this.frameTimeHistory.length > 60) {
       this.frameTimeHistory.shift();
     }
-    
+
     // Update metrics
     this.metrics.frameTime = deltaTime;
     this.updateRenderMetrics();
-    
+
     // Continue monitoring
     if (this.isMonitoring) {
       requestAnimationFrame(() => this.monitorPerformance());
@@ -364,10 +371,12 @@ export class PerformanceOptimizer {
     this.metrics.triangles = info.render.triangles;
     this.metrics.geometries = info.memory.geometries;
     this.metrics.textures = info.memory.textures;
-    
+
     // Calculate FPS from frame time history
     if (this.frameTimeHistory.length > 0) {
-      const avgFrameTime = this.frameTimeHistory.reduce((a, b) => a + b, 0) / this.frameTimeHistory.length;
+      const avgFrameTime =
+        this.frameTimeHistory.reduce((a, b) => a + b, 0) /
+        this.frameTimeHistory.length;
       this.metrics.fps = 1000 / avgFrameTime;
     }
   }
@@ -375,14 +384,16 @@ export class PerformanceOptimizer {
   private onMetricsUpdate(): void {
     // Apply optimization strategies based on current metrics
     this.applyOptimizationStrategies();
-    
+
     // Trigger performance update event
     this.dispatchPerformanceEvent();
   }
 
   private applyOptimizationStrategies(): void {
-    const sortedStrategies = this.strategies.sort((a, b) => a.priority - b.priority);
-    
+    const sortedStrategies = this.strategies.sort(
+      (a, b) => a.priority - b.priority
+    );
+
     for (const strategy of sortedStrategies) {
       if (strategy.condition(this.metrics)) {
         console.log(`Applying optimization strategy: ${strategy.name}`);
@@ -394,7 +405,7 @@ export class PerformanceOptimizer {
 
   private dispatchPerformanceEvent(): void {
     const event = new CustomEvent('performanceUpdate', {
-      detail: { ...this.metrics }
+      detail: { ...this.metrics },
     });
     window.dispatchEvent(event);
   }
@@ -402,22 +413,34 @@ export class PerformanceOptimizer {
   // Optimization strategy implementations
   private reduceShadowQuality(): void {
     if (!this.renderer || !this.scene) return;
-    
-    this.scene.traverse((object) => {
+
+    this.scene.traverse(object => {
       if (object instanceof THREE.Light && object.shadow) {
-        object.shadow.mapSize.width = Math.max(256, object.shadow.mapSize.width / 2);
-        object.shadow.mapSize.height = Math.max(256, object.shadow.mapSize.height / 2);
+        object.shadow.mapSize.width = Math.max(
+          256,
+          object.shadow.mapSize.width / 2
+        );
+        object.shadow.mapSize.height = Math.max(
+          256,
+          object.shadow.mapSize.height / 2
+        );
       }
     });
   }
 
   private increaseShadowQuality(): void {
     if (!this.renderer || !this.scene) return;
-    
-    this.scene.traverse((object) => {
+
+    this.scene.traverse(object => {
       if (object instanceof THREE.Light && object.shadow) {
-        object.shadow.mapSize.width = Math.min(2048, object.shadow.mapSize.width * 2);
-        object.shadow.mapSize.height = Math.min(2048, object.shadow.mapSize.height * 2);
+        object.shadow.mapSize.width = Math.min(
+          2048,
+          object.shadow.mapSize.width * 2
+        );
+        object.shadow.mapSize.height = Math.min(
+          2048,
+          object.shadow.mapSize.height * 2
+        );
       }
     });
   }
@@ -428,11 +451,14 @@ export class PerformanceOptimizer {
     const frustum = new THREE.Frustum();
     const matrix = new THREE.Matrix4();
 
-    this.scene.traverse((object) => {
+    this.scene.traverse(object => {
       if (object instanceof THREE.Mesh) {
-        matrix.multiplyMatrices(this.camera!.projectionMatrix, this.camera!.matrixWorldInverse);
+        matrix.multiplyMatrices(
+          this.camera!.projectionMatrix,
+          this.camera!.matrixWorldInverse
+        );
         frustum.setFromProjectionMatrix(matrix);
-        
+
         if (!frustum.intersectsObject(object)) {
           object.visible = false;
           this.culledObjects.push(object);
@@ -460,37 +486,45 @@ export class PerformanceOptimizer {
 
     const currentPixelRatio = this.renderer.getPixelRatio();
     const maxPixelRatio = Math.min(window.devicePixelRatio, 2);
-    this.renderer.setPixelRatio(Math.min(maxPixelRatio, currentPixelRatio * 1.2));
+    this.renderer.setPixelRatio(
+      Math.min(maxPixelRatio, currentPixelRatio * 1.2)
+    );
   }
 
   private enableLOD(): void {
     if (!this.scene || !this.camera) return;
 
-    this.scene.traverse((object) => {
+    this.scene.traverse(object => {
       if (object instanceof THREE.Mesh && !this.lodObjects.has(object)) {
         const lod = new THREE.LOD();
-        
+
         // High detail (close)
         lod.addLevel(object, 0);
-        
+
         // Medium detail (middle distance)
         const mediumGeometry = object.geometry.clone();
-        mediumGeometry.attributes.position.array = mediumGeometry.attributes.position.array.slice(0, 
-          mediumGeometry.attributes.position.array.length / 2);
+        mediumGeometry.attributes.position.array =
+          mediumGeometry.attributes.position.array.slice(
+            0,
+            mediumGeometry.attributes.position.array.length / 2
+          );
         const mediumMesh = new THREE.Mesh(mediumGeometry, object.material);
         lod.addLevel(mediumMesh, 50);
-        
+
         // Low detail (far)
         const lowGeometry = object.geometry.clone();
-        lowGeometry.attributes.position.array = lowGeometry.attributes.position.array.slice(0, 
-          lowGeometry.attributes.position.array.length / 4);
+        lowGeometry.attributes.position.array =
+          lowGeometry.attributes.position.array.slice(
+            0,
+            lowGeometry.attributes.position.array.length / 4
+          );
         const lowMesh = new THREE.Mesh(lowGeometry, object.material);
         lod.addLevel(lowMesh, 100);
-        
+
         // Replace object with LOD
         object.parent?.add(lod);
         object.parent?.remove(object);
-        
+
         this.lodObjects.set(object, lod);
       }
     });
@@ -507,20 +541,23 @@ export class PerformanceOptimizer {
   private reduceParticles(): void {
     if (!this.scene) return;
 
-    this.scene.traverse((object) => {
+    this.scene.traverse(object => {
       if (object instanceof THREE.Points) {
         const geometry = object.geometry as THREE.BufferGeometry;
         if (geometry.attributes.position) {
           const positions = geometry.attributes.position.array;
           const reducedPositions = new Float32Array(positions.length / 2);
-          
+
           for (let i = 0; i < reducedPositions.length; i += 3) {
             reducedPositions[i] = positions[i * 2];
             reducedPositions[i + 1] = positions[i * 2 + 1];
             reducedPositions[i + 2] = positions[i * 2 + 2];
           }
-          
-          geometry.setAttribute('position', new THREE.BufferAttribute(reducedPositions, 3));
+
+          geometry.setAttribute(
+            'position',
+            new THREE.BufferAttribute(reducedPositions, 3)
+          );
         }
       }
     });
@@ -533,7 +570,7 @@ export class PerformanceOptimizer {
 
   private disableAntialiasing(): void {
     if (!this.renderer) return;
-    
+
     // This would require recreating the renderer
     // For now, just disable post-processing AA
     this.config.antialiasing = false;
@@ -541,7 +578,7 @@ export class PerformanceOptimizer {
 
   private enableAntialiasing(): void {
     if (!this.renderer) return;
-    
+
     this.config.antialiasing = true;
   }
 
@@ -551,17 +588,19 @@ export class PerformanceOptimizer {
 
     // Disable all shadows
     this.renderer.shadowMap.enabled = false;
-    
+
     // Reduce render resolution
     this.renderer.setPixelRatio(0.5);
-    
+
     // Disable complex materials
-    this.scene.traverse((object) => {
+    this.scene.traverse(object => {
       if (object instanceof THREE.Mesh) {
-        if (object.material instanceof THREE.MeshStandardMaterial || 
-            object.material instanceof THREE.MeshPhongMaterial) {
-          object.material = new THREE.MeshBasicMaterial({ 
-            color: object.material.color 
+        if (
+          object.material instanceof THREE.MeshStandardMaterial ||
+          object.material instanceof THREE.MeshPhongMaterial
+        ) {
+          object.material = new THREE.MeshBasicMaterial({
+            color: object.material.color,
           });
         }
       }
@@ -608,22 +647,22 @@ export class PerformanceOptimizer {
 
   private emergencyMemoryCleanup(): void {
     console.warn('Emergency memory cleanup triggered');
-    
+
     // Aggressive cleanup
     this.cleanupUnusedResources();
-    
+
     // Clear texture cache
     THREE.Cache.clear();
-    
+
     // Reduce texture resolution
-    this.texturePool.forEach((texture) => {
+    this.texturePool.forEach(texture => {
       if (texture.image) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        
+
         canvas.width = texture.image.width / 2;
         canvas.height = texture.image.height / 2;
-        
+
         if (ctx) {
           ctx.drawImage(texture.image, 0, 0, canvas.width, canvas.height);
           texture.image = canvas;
@@ -682,41 +721,54 @@ export class PerformanceOptimizer {
   public releaseGeometry(name: string): void {
     const geometry = this.geometryPool.get(name);
     if (geometry) {
-      geometry.userData.refCount = Math.max(0, (geometry.userData.refCount || 1) - 1);
+      geometry.userData.refCount = Math.max(
+        0,
+        (geometry.userData.refCount || 1) - 1
+      );
     }
   }
 
   public releaseMaterial(name: string): void {
     const material = this.materialPool.get(name);
     if (material) {
-      material.userData.refCount = Math.max(0, (material.userData.refCount || 1) - 1);
+      material.userData.refCount = Math.max(
+        0,
+        (material.userData.refCount || 1) - 1
+      );
     }
   }
 
   public releaseTexture(name: string): void {
     const texture = this.texturePool.get(name);
     if (texture) {
-      texture.userData.refCount = Math.max(0, (texture.userData.refCount || 1) - 1);
+      texture.userData.refCount = Math.max(
+        0,
+        (texture.userData.refCount || 1) - 1
+      );
     }
   }
 
-  public createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Material, count: number): THREE.InstancedMesh {
+  public createInstancedMesh(
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material,
+    count: number
+  ): THREE.InstancedMesh {
     const mesh = new THREE.InstancedMesh(geometry, material, count);
     return mesh;
   }
 
   public dispose(): void {
     this.isMonitoring = false;
-    
+
     if (this.performanceWorker) {
       this.performanceWorker.terminate();
     }
-    
+
     // Clean up all resources
     this.geometryPool.forEach(geometry => geometry.dispose());
     this.materialPool.forEach(material => material.dispose());
     this.texturePool.forEach(texture => texture.dispose());
-    
+
     this.geometryPool.clear();
     this.materialPool.clear();
     this.texturePool.clear();
@@ -764,7 +816,7 @@ export class PerformanceMonitorUI {
     });
 
     // Toggle visibility with Ctrl+Shift+P
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', e => {
       if (e.ctrlKey && e.shiftKey && e.key === 'P') {
         this.toggle();
       }
@@ -775,7 +827,7 @@ export class PerformanceMonitorUI {
     if (!this.container || !this.isVisible) return;
 
     const config = this.optimizer.getConfig();
-    
+
     this.container.innerHTML = `
       <div style="font-weight: bold; margin-bottom: 5px;">Performance Monitor</div>
       <div>FPS: ${metrics.fps.toFixed(1)} / ${config.targetFPS}</div>
@@ -794,7 +846,9 @@ export class PerformanceMonitorUI {
     `;
 
     // Color-code FPS
-    const fpsElement = this.container.querySelector('div:nth-child(2)') as HTMLElement;
+    const fpsElement = this.container.querySelector(
+      'div:nth-child(2)'
+    ) as HTMLElement;
     if (fpsElement) {
       if (metrics.fps >= config.targetFPS * 0.9) {
         fpsElement.style.color = '#4CAF50';
@@ -877,7 +931,9 @@ export const performanceOptimizer = new PerformanceOptimizer({
   renderQuality: 'medium',
   enableLOD: true,
   enableInstancing: true,
-  enableFrustumCulling: true
+  enableFrustumCulling: true,
 });
 
-export const performanceMonitorUI = new PerformanceMonitorUI(performanceOptimizer); 
+export const performanceMonitorUI = new PerformanceMonitorUI(
+  performanceOptimizer
+);

@@ -221,7 +221,6 @@ export class AuthUI {
     guestBtn.addEventListener('click', () => {
       this.handleGuestLogin();
     });
-
   }
 
   private switchTab(tab: 'login' | 'signup'): void {
@@ -332,7 +331,6 @@ export class AuthUI {
       this.hide();
     }
   }
-
 
   private showError(
     message: string,

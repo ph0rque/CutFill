@@ -98,6 +98,13 @@ The CutFill game now features professional-grade terrain dimensions using even y
 - ✅ **Assignment Variety**: Foundation prep, drainage, site development, road construction
 - ✅ **Professional Scenarios**: Real-world construction and civil engineering challenges
 
+### ✅ Guest User Onboarding (Complete)
+- Full-page form for first visits: username (unique), age range, mode (solo/practice or competition).
+- Server-side uniqueness checks with suggestions.
+- Creates/joins session based on mode.
+- Loads Level 1 terrain automatically.
+- Bypasses Supabase auth for guests.
+
 ---
 
 ## Technical Infrastructure

@@ -59,6 +59,7 @@ export default defineConfig({
       },
     },
 
+    /* Removed Firefox and WebKit for faster testing - Chrome only
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
@@ -68,6 +69,7 @@ export default defineConfig({
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
     },
+    */
 
     /* Test against mobile viewports if needed
     {
