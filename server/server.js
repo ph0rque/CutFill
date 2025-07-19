@@ -30,6 +30,159 @@ const playerSessions = new Map();
 // Global active users for username uniqueness (Set of usernames)
 const activeUsers = new Set();
 
+// Competitive lobbies management
+const competitiveLobbies = new Map();
+const lobbyQueue = [];
+
+// Competitive lobby class
+class CompetitiveLobby {
+  constructor(id) {
+    this.id = id;
+    this.players = new Map();
+    this.maxPlayers = 4;
+    this.minPlayers = 2;
+    this.status = 'waiting'; // waiting, ready, starting, active
+    this.createdAt = Date.now();
+    this.readyPlayers = new Set();
+    this.countdownTimer = null;
+  }
+
+  addPlayer(playerId, playerData) {
+    if (this.players.size >= this.maxPlayers) {
+      return false;
+    }
+    
+    playerData.ready = false;
+    playerData.joinedAt = Date.now();
+    this.players.set(playerId, playerData);
+    
+    return true;
+  }
+
+  removePlayer(playerId) {
+    const removed = this.players.delete(playerId);
+    this.readyPlayers.delete(playerId);
+    
+    // Cancel countdown if not enough players
+    if (this.players.size < this.minPlayers && this.countdownTimer) {
+      clearTimeout(this.countdownTimer);
+      this.countdownTimer = null;
+      this.status = 'waiting';
+    }
+    
+    return removed;
+  }
+
+  togglePlayerReady(playerId) {
+    const player = this.players.get(playerId);
+    if (!player) return false;
+    
+    player.ready = !player.ready;
+    
+    if (player.ready) {
+      this.readyPlayers.add(playerId);
+    } else {
+      this.readyPlayers.delete(playerId);
+      // Cancel countdown if someone becomes unready
+      if (this.countdownTimer) {
+        clearTimeout(this.countdownTimer);
+        this.countdownTimer = null;
+        this.status = 'waiting';
+      }
+    }
+    
+    // Check if all players are ready
+    if (this.players.size >= this.minPlayers && this.readyPlayers.size === this.players.size) {
+      this.startCountdown();
+    }
+    
+    return true;
+  }
+
+  startCountdown() {
+    if (this.countdownTimer) return; // Already counting down
+    
+    this.status = 'starting';
+    let countdown = 3;
+    
+    // Notify all players that countdown started
+    this.broadcastToLobby('match-starting', { countdown });
+    
+    this.countdownTimer = setInterval(() => {
+      countdown--;
+      if (countdown <= 0) {
+        clearInterval(this.countdownTimer);
+        this.startMatch();
+      }
+    }, 1000);
+  }
+
+  startMatch() {
+    this.status = 'active';
+    
+    // Create a competitive game session
+    const sessionId = `competitive_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const session = new GameSession(sessionId, {
+      name: `Competitive Match - Lobby ${this.id}`,
+      maxPlayers: this.maxPlayers,
+      isPublic: false,
+      isCompetitive: true,
+      levelId: 'competitive_1' // Default competitive level
+    });
+    
+    gameSessions.set(sessionId, session);
+    
+    // Move all lobby players to the game session
+    for (const [playerId, playerData] of this.players) {
+      session.addPlayer(playerId, {
+        ...playerData,
+        lobbyId: this.id
+      });
+      playerSessions.set(playerId, sessionId);
+      
+      // Make players join the session room
+      const socket = io.sockets.sockets.get(playerId);
+      if (socket) {
+        socket.join(sessionId);
+      }
+    }
+    
+    // Notify all players that the match started
+    this.broadcastToLobby('match-started', { 
+      sessionId,
+      lobbyId: this.id,
+      session: session.getSessionData()
+    });
+    
+    console.log(`🏆 Competitive match started: Lobby ${this.id} → Session ${sessionId}`);
+  }
+
+  broadcastToLobby(event, data) {
+    for (const playerId of this.players.keys()) {
+      const socket = io.sockets.sockets.get(playerId);
+      if (socket) {
+        socket.emit(event, data);
+      }
+    }
+  }
+
+  getLobbyData() {
+    return {
+      lobbyId: this.id,
+      playerCount: this.players.size,
+      maxPlayers: this.maxPlayers,
+      minPlayers: this.minPlayers,
+      status: this.status,
+      players: Array.from(this.players.values()),
+      createdAt: this.createdAt
+    };
+  }
+
+  isEmpty() {
+    return this.players.size === 0;
+  }
+}
+
 // Enhanced game session class
 class GameSession {
   constructor(id, options = {}) {
@@ -653,8 +806,104 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle competitive lobby events
+  socket.on('join-competitive-lobby', (data) => {
+    const { username, ageRange, tempGuestId } = data;
+    
+    console.log(`🏆 Player ${username} joining competitive lobby...`);
+    
+    // Find available lobby or create new one
+    let availableLobby = null;
+    for (const lobby of competitiveLobbies.values()) {
+      if (lobby.status === 'waiting' && lobby.players.size < lobby.maxPlayers) {
+        availableLobby = lobby;
+        break;
+      }
+    }
+    
+    if (!availableLobby) {
+      // Create new lobby
+      const lobbyId = `lobby_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      availableLobby = new CompetitiveLobby(lobbyId);
+      competitiveLobbies.set(lobbyId, availableLobby);
+      console.log(`🆕 Created new competitive lobby: ${lobbyId}`);
+    }
+    
+    // Add player to lobby
+    const playerData = {
+      id: socket.id,
+      username,
+      ageRange,
+      tempGuestId,
+      ready: false
+    };
+    
+    if (availableLobby.addPlayer(socket.id, playerData)) {
+      // Join lobby room
+      socket.join(`lobby_${availableLobby.id}`);
+      
+      // Notify player they joined
+      socket.emit('competitive-lobby-joined', availableLobby.getLobbyData());
+      
+      // Notify other players in lobby
+      socket.to(`lobby_${availableLobby.id}`).emit('lobby-updated', availableLobby.getLobbyData());
+      
+      console.log(`✅ Player ${username} joined lobby ${availableLobby.id} (${availableLobby.players.size}/${availableLobby.maxPlayers})`);
+    } else {
+      socket.emit('lobby-error', { message: 'Failed to join lobby - lobby full' });
+    }
+  });
+
+  socket.on('leave-competitive-lobby', (data) => {
+    const { lobbyId } = data;
+    const lobby = competitiveLobbies.get(lobbyId);
+    
+    if (lobby && lobby.removePlayer(socket.id)) {
+      socket.leave(`lobby_${lobbyId}`);
+      
+      // Notify remaining players
+      socket.to(`lobby_${lobbyId}`).emit('lobby-updated', lobby.getLobbyData());
+      
+      // Clean up empty lobby
+      if (lobby.isEmpty()) {
+        competitiveLobbies.delete(lobbyId);
+        console.log(`🗑️ Deleted empty lobby: ${lobbyId}`);
+      }
+      
+      console.log(`➖ Player ${socket.id} left lobby ${lobbyId}`);
+    }
+  });
+
+  socket.on('toggle-ready', (data) => {
+    const { lobbyId } = data;
+    const lobby = competitiveLobbies.get(lobbyId);
+    
+    if (lobby && lobby.togglePlayerReady(socket.id)) {
+      // Broadcast updated lobby state
+      io.to(`lobby_${lobbyId}`).emit('lobby-updated', lobby.getLobbyData());
+      
+      const player = lobby.players.get(socket.id);
+      console.log(`🎯 Player ${player?.username || socket.id} is ${player?.ready ? 'ready' : 'not ready'} in lobby ${lobbyId}`);
+    }
+  });
+
   // Handle disconnection (remove from activeUsers if guest)
   socket.on('disconnect', () => {
+    // Handle competitive lobby disconnection
+    for (const [lobbyId, lobby] of competitiveLobbies) {
+      if (lobby.players.has(socket.id)) {
+        lobby.removePlayer(socket.id);
+        socket.to(`lobby_${lobbyId}`).emit('lobby-updated', lobby.getLobbyData());
+        
+        // Clean up empty lobby
+        if (lobby.isEmpty()) {
+          competitiveLobbies.delete(lobbyId);
+          console.log(`🗑️ Deleted empty lobby after disconnect: ${lobbyId}`);
+        }
+        break;
+      }
+    }
+    
     const sessionId = playerSessions.get(socket.id);
     if (sessionId) {
       const session = gameSessions.get(sessionId);
@@ -680,13 +929,15 @@ io.on('connection', (socket) => {
           gameSessions.delete(sessionId);
           console.log(`Session ${sessionId} deleted (empty)`);
         }
+
+        // Clean up guest username (moved inside session block)
+        if (removedPlayer && removedPlayer.name) {
+          activeUsers.delete(removedPlayer.name);
+          console.log(`Removed guest username: ${removedPlayer.name}`);
+        }
       }
       
       playerSessions.delete(socket.id);
-      if (removedPlayer && removedPlayer.id.startsWith('guest_')) {
-        activeUsers.delete(removedPlayer.name);
-        console.log(`Removed guest username: ${removedPlayer.name}`);
-      }
     }
 
     console.log(`Player disconnected: ${socket.id}`);
@@ -1011,9 +1262,15 @@ app.get('/api/terrain/:levelId', async (req, res) => {
       `)
       .eq('level_id', parseInt(levelId));
 
+    // Helper function to validate UUID format
+    const isValidUUID = (str) => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return uuidRegex.test(str);
+    };
+
     // If assignment ID provided, filter by it, otherwise get default
     if (assignmentId) {
-      // First try to find by assignment_id (UUID)
+      // First try to find by assignment name
       const { data: assignmentData, error: assignmentError } = await supabase
         .from('assignments')
         .select('id')
@@ -1023,9 +1280,13 @@ app.get('/api/terrain/:levelId', async (req, res) => {
       if (assignmentData && !assignmentError) {
         // Found assignment by name, use its UUID
         query = query.eq('assignment_id', assignmentData.id);
-      } else {
-        // Assume it's already a UUID and filter directly
+      } else if (isValidUUID(assignmentId)) {
+        // It's a valid UUID format, try using it directly
         query = query.eq('assignment_id', assignmentId);
+      } else {
+        // Invalid assignment name/UUID, fall back to default terrain
+        console.log(`⚠️  Invalid assignment ID "${assignmentId}", falling back to default terrain`);
+        query = query.eq('is_default', true);
       }
     } else {
       query = query.eq('is_default', true);
@@ -1476,7 +1737,33 @@ app.get('/api/health', (req, res) => {
     status: 'healthy',
     timestamp: Date.now(),
     activeSessions: gameSessions.size,
-    connectedPlayers: playerSessions.size
+    connectedPlayers: playerSessions.size,
+    competitiveLobbies: competitiveLobbies.size,
+    lobbyDetails: Array.from(competitiveLobbies.values()).map(lobby => ({
+      id: lobby.id,
+      playerCount: lobby.players.size,
+      status: lobby.status,
+      createdAt: lobby.createdAt
+    }))
+  });
+});
+
+// Get competitive lobbies info (for debugging)
+app.get('/api/lobbies', (req, res) => {
+  const lobbies = Array.from(competitiveLobbies.values()).map(lobby => ({
+    ...lobby.getLobbyData(),
+    players: Array.from(lobby.players.values()).map(player => ({
+      id: player.id,
+      username: player.username,
+      ageRange: player.ageRange,
+      ready: player.ready,
+      joinedAt: player.joinedAt
+    }))
+  }));
+  
+  res.json({
+    totalLobbies: competitiveLobbies.size,
+    lobbies
   });
 });
 
