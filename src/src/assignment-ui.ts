@@ -21,6 +21,25 @@ export class AssignmentUI {
     this.feedbackSystem = new AssignmentFeedbackSystem();
     this.setupCallbacks();
     this.getCurrentUser();
+    this.addLevelProgressionStyles();
+  }
+
+  /**
+   * Add CSS styles for level progression
+   */
+  private addLevelProgressionStyles(): void {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes glow {
+        from {
+          box-shadow: 0 0 15px rgba(255,193,7,0.5);
+        }
+        to {
+          box-shadow: 0 0 25px rgba(255,193,7,0.8), 0 0 35px rgba(255,193,7,0.3);
+        }
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   /**
@@ -381,27 +400,60 @@ export class AssignmentUI {
     `;
 
     // Create level cards with unlock status
-    assignments
-      .sort(
-        (a, b) =>
-          (a.levelNumber || a.difficulty) - (b.levelNumber || b.difficulty)
-      )
-      .forEach(assignment => {
-        const card = this.createAssignmentCard(assignment, unlockedLevels);
-        grid.appendChild(card);
-      });
+    const sortedAssignments = assignments.sort(
+      (a, b) =>
+        (a.levelNumber || a.difficulty) - (b.levelNumber || b.difficulty)
+    );
+    
+    // Create cards asynchronously
+    for (const assignment of sortedAssignments) {
+      const card = await this.createAssignmentCard(assignment, unlockedLevels);
+      grid.appendChild(card);
+    }
 
     section.appendChild(grid);
     return section;
   }
 
   /**
+   * Check if a level is completed
+   */
+  private async isLevelCompleted(assignmentId: string): Promise<boolean> {
+    try {
+      if (!this.currentUserId || this.currentUserId === 'guest' || this.currentUserId.startsWith('guest_')) {
+        // For guest users, check if assignment was completed in current session
+        // This is a simple check - in a real app you might want more sophisticated tracking
+        return false;
+      }
+
+      const { data, error } = await supabase
+        .from('user_assignments')
+        .select('is_completed, score')
+        .eq('user_id', this.currentUserId)
+        .eq('assignment_id', assignmentId)
+        .eq('is_completed', true)
+        .order('completed_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking level completion:', error);
+        return false;
+      }
+
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Error in isLevelCompleted:', error);
+      return false;
+    }
+  }
+
+  /**
    * Create individual level card with Practice/Compete options
    */
-  private createAssignmentCard(
+  private async createAssignmentCard(
     assignment: AssignmentConfig,
     unlockedLevels: number[] = []
-  ): HTMLElement {
+  ): Promise<HTMLElement> {
     const card = document.createElement('div');
     card.className = 'assignment-card';
     card.setAttribute('data-difficulty', assignment.difficulty.toString());
@@ -411,25 +463,72 @@ export class AssignmentUI {
     const isUnlocked = unlockedLevels.includes(levelNumber);
     const isCompetitive =
       assignment.isCompetitive || assignment.name.includes('COMPETITIVE');
+    
+    // Check if level is completed
+    const isCompleted = await this.isLevelCompleted(assignment.id);
+    
+    // Check if this is the next recommended level
+    const nextRecommendedLevel = Math.max(...unlockedLevels.filter(level => level <= levelNumber)) + 1;
+    const isNextRecommended = levelNumber === nextRecommendedLevel && isUnlocked && !isCompleted;
+
+    // Determine card styling based on status
+    let cardBackground, cardBorder, cardEffects = '';
+    
+    if (!isUnlocked) {
+      cardBackground = 'rgba(100,100,100,0.2)';
+      cardBorder = '#666';
+      cardEffects = 'filter: grayscale(80%); opacity: 0.6;';
+    } else if (isCompleted) {
+      cardBackground = 'rgba(76,175,80,0.25)'; // Green for completed
+      cardBorder = '#4CAF50';
+      cardEffects = 'box-shadow: 0 0 10px rgba(76,175,80,0.3);';
+    } else if (isNextRecommended) {
+      cardBackground = 'rgba(255,193,7,0.25)'; // Gold for next recommended
+      cardBorder = '#FFC107';
+      cardEffects = 'box-shadow: 0 0 15px rgba(255,193,7,0.5); animation: glow 2s ease-in-out infinite alternate;';
+    } else if (isCompetitive) {
+      cardBackground = 'rgba(156,39,176,0.15)';
+      cardBorder = '#9C27B0';
+      cardEffects = 'box-shadow: 0 0 15px rgba(156,39,176,0.4);';
+    } else {
+      cardBackground = 'rgba(76,175,80,0.15)';
+      cardBorder = '#4CAF50';
+    }
 
     card.style.cssText = `
-      background: ${!isUnlocked ? 'rgba(100,100,100,0.2)' : isCompetitive ? 'rgba(156,39,176,0.15)' : 'rgba(76,175,80,0.15)'};
-      border: 2px solid ${!isUnlocked ? '#666' : isCompetitive ? '#9C27B0' : '#4CAF50'};
+      background: ${cardBackground};
+      border: 2px solid ${cardBorder};
       border-radius: 8px;
       padding: 18px;
       position: relative;
       transition: all 0.3s ease;
-      ${!isUnlocked ? 'filter: grayscale(80%); opacity: 0.6;' : ''}
-      ${isCompetitive && isUnlocked ? 'box-shadow: 0 0 15px rgba(156,39,176,0.4);' : ''}
+      ${cardEffects}
     `;
 
     // Level progression indicators
-    const levelIcon = !isUnlocked ? '🔒' : isCompetitive ? '🏆' : '✅';
-    const levelStatus = !isUnlocked
-      ? 'LOCKED'
-      : isCompetitive
-        ? 'COMPETITIVE'
-        : 'UNLOCKED';
+    let levelIcon, levelStatus, statusColor;
+    
+    if (!isUnlocked) {
+      levelIcon = '🔒';
+      levelStatus = 'LOCKED';
+      statusColor = '#666';
+    } else if (isCompleted) {
+      levelIcon = '✅';
+      levelStatus = 'COMPLETED';
+      statusColor = '#4CAF50';
+    } else if (isNextRecommended) {
+      levelIcon = '⭐';
+      levelStatus = 'RECOMMENDED';
+      statusColor = '#FFC107';
+    } else if (isCompetitive) {
+      levelIcon = '🏆';
+      levelStatus = 'COMPETITIVE';
+      statusColor = '#9C27B0';
+    } else {
+      levelIcon = '✅';
+      levelStatus = 'UNLOCKED';
+      statusColor = '#4CAF50';
+    }
 
     // Category color
     const categoryColors: Record<string, string> = {
@@ -443,7 +542,7 @@ export class AssignmentUI {
 
     card.innerHTML = `
       <!-- Level Status Badge -->
-      <div style="position: absolute; top: -8px; right: -8px; background: ${!isUnlocked ? '#666' : isCompetitive ? '#9C27B0' : '#4CAF50'}; color: white; padding: 6px 10px; border-radius: 15px; font-size: 10px; font-weight: bold; transform: rotate(12deg); box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+      <div style="position: absolute; top: -8px; right: -8px; background: ${statusColor}; color: white; padding: 6px 10px; border-radius: 15px; font-size: 10px; font-weight: bold; transform: rotate(12deg); box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
         ${levelIcon} ${levelStatus}
       </div>
       
@@ -508,6 +607,86 @@ export class AssignmentUI {
           ? `
         <div style="text-align: center; padding: 12px; background: rgba(100,100,100,0.3); border-radius: 4px; color: #888;">
           🔒 Complete Level ${levelNumber - 1} to unlock
+        </div>
+      `
+          : isCompleted
+          ? `
+        <div style="display: flex; gap: 8px;">
+          <div style="flex: 1; text-align: center; padding: 8px; background: rgba(76,175,80,0.2); border: 1px solid #4CAF50; border-radius: 4px; color: #4CAF50; font-size: 11px;">
+            ✅ COMPLETED
+          </div>
+          <button 
+            class="practice-btn" 
+            data-assignment-id="${assignment.id}"
+            data-mode="practice"
+            style="
+              flex: 1;
+              padding: 8px;
+              background: #4CAF50;
+              color: white;
+              border: none;
+              border-radius: 4px;
+              cursor: pointer;
+              font-weight: bold;
+              font-size: 11px;
+              transition: all 0.3s ease;
+            "
+          >
+            🔄 Replay
+          </button>
+        </div>
+      `
+          : isNextRecommended
+          ? `
+        <div style="margin-bottom: 8px; text-align: center; padding: 6px; background: rgba(255,193,7,0.2); border: 1px solid #FFC107; border-radius: 4px; color: #F57F17; font-size: 11px; font-weight: bold;">
+          ⭐ RECOMMENDED NEXT LEVEL ⭐
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button 
+            class="practice-btn" 
+            data-assignment-id="${assignment.id}"
+            data-mode="practice"
+            style="
+              flex: 1;
+              padding: 10px;
+              background: linear-gradient(135deg, #FFC107, #FF8F00);
+              color: white;
+              border: none;
+              border-radius: 4px;
+              cursor: pointer;
+              font-weight: bold;
+              font-size: 12px;
+              transition: all 0.3s ease;
+              box-shadow: 0 2px 4px rgba(255,193,7,0.3);
+            "
+          >
+            ⭐ Start Now
+          </button>
+          ${
+            isCompetitive
+              ? `
+            <button 
+              class="compete-btn" 
+              data-assignment-id="${assignment.id}"
+              data-mode="competitive"
+              style="
+                flex: 1;
+                padding: 10px;
+                background: #9C27B0;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 12px;
+                transition: all 0.3s ease;
+              "
+            >
+              🏆 Compete
+            </button>
+          `
+              : ''
+          }
         </div>
       `
           : `

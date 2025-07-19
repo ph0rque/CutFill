@@ -134,6 +134,14 @@ function initializeGame(): void {
         showAssignmentComplete(progress);
         // Award XP for assignment completion
         progressTracker.recordAssignmentCompletion(progress.currentScore);
+        
+        // Auto-open assignments modal after level completion with a delay
+        setTimeout(() => {
+          if (assignmentUI && assignmentManager) {
+            console.log('Auto-opening assignments modal after level completion');
+            assignmentUI.show();
+          }
+        }, 3000); // 3 second delay to let user see completion notification
       },
     });
 
@@ -844,7 +852,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Initialize when page loads
+  // Initialize when page loads
 window.addEventListener('load', async () => {
   const hasVisited = localStorage.getItem('hasVisited');
   const guestData = localStorage.getItem('guestData');
@@ -877,6 +885,14 @@ window.addEventListener('load', async () => {
           }
         });
       }
+      
+      // Auto-open assignments modal after registration
+      setTimeout(() => {
+        if (assignmentUI && assignmentManager) {
+          console.log('Auto-opening assignments modal after registration');
+          assignmentUI.show();
+        }
+      }, 500); // Small delay to ensure game is fully initialized
     });
     guestUI.show();
   } else if (guestData) {
@@ -887,6 +903,14 @@ window.addEventListener('load', async () => {
       
       const parsedGuestData = JSON.parse(guestData);
       updateUserInfo(undefined, parsedGuestData);
+      
+      // Auto-open assignments modal for returning users too
+      setTimeout(() => {
+        if (assignmentUI && assignmentManager) {
+          console.log('Auto-opening assignments modal for returning user');
+          assignmentUI.show();
+        }
+      }, 500); // Small delay to ensure game is fully initialized
     }
   } else {
     // Has visited but no guest data - show guest registration again (logout case)
@@ -903,6 +927,14 @@ window.addEventListener('load', async () => {
       
       // Log age range for gameplay adjustments
       console.log('Guest user initialized:', guestData.username, 'Age range:', guestData.ageRange);
+      
+      // Auto-open assignments modal after re-registration
+      setTimeout(() => {
+        if (assignmentUI && assignmentManager) {
+          console.log('Auto-opening assignments modal after re-registration');
+          assignmentUI.show();
+        }
+      }, 500); // Small delay to ensure game is fully initialized
     });
     guestUI.show();
   }
