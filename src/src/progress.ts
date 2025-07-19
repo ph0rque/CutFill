@@ -329,6 +329,39 @@ export class ProgressTracker {
 
   public async loadUserProgress(userId: string): Promise<UserProgress | null> {
     try {
+      // For guest users, try to use the safer function first
+      if (userId === 'guest' || userId.startsWith('guest_')) {
+        try {
+          const { data, error } = await supabase
+            .rpc('get_or_create_guest_progress', { guest_user_id: userId });
+
+          if (!error && data && data.length > 0) {
+            const record = data[0];
+            this.userProgress = {
+              userId: record.user_id,
+              level: record.level,
+              currentXP: record.experience % this.getXPForLevel(record.level + 1),
+              totalXP: record.experience,
+              assignmentsCompleted: record.assignments_completed,
+              totalVolumeMovedCubicYards: record.total_volume_moved,
+              toolUsageStats: this.parseToolUsage(record.tool_usage_stats),
+              averageAccuracy: this.calculateAverageAccuracy(record.accuracy_history),
+              totalTimeSpentMinutes: record.total_time_spent_minutes || 0,
+              currentStreak: record.current_streak || 0,
+              longestStreak: record.longest_streak || 0,
+              achievements: record.achievements || [],
+              unlockedLevels: record.unlocked_levels || [1],
+              completedBrackets: record.completed_brackets || [],
+              lastActiveDate: new Date(record.last_active_date || Date.now()),
+              preferences: record.preferences || this.getDefaultPreferences(),
+            };
+            return this.userProgress;
+          }
+        } catch (funcError) {
+          console.log('Guest progress function not available, falling back to direct query');
+        }
+      }
+
       const { data, error } = await supabase
         .from('user_progress')
         .select('*')
@@ -336,7 +369,13 @@ export class ProgressTracker {
         .single();
 
       if (error && error.code !== 'PGRST116') {
-        // Not found error
+        // Not found error - try to create for guest users
+        if (userId === 'guest' || userId.startsWith('guest_')) {
+          console.log('Creating new guest progress due to error:', error);
+          this.userProgress = this.createNewUserProgress(userId);
+          await this.saveUserProgress();
+          return this.userProgress;
+        }
         console.error('Error loading user progress:', error);
         return null;
       }
