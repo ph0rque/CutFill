@@ -97,8 +97,8 @@ export interface ResponsiveBreakpoints {
 }
 
 export class UIPolishSystem {
-  private currentTheme: UITheme;
-  private currentAgeGroup: AgeGroupSettings;
+  private currentTheme!: UITheme;
+  private currentAgeGroup!: AgeGroupSettings;
   private breakpoints: ResponsiveBreakpoints;
   private isInitialized = false;
   private resizeObserver: ResizeObserver | null = null;
@@ -1076,7 +1076,7 @@ export class UIPolishSystem {
     }
   }
 
-  private showAccessibilityPanel(): void {
+  private _showAccessibilityPanel(): void {
     const panel = document.getElementById('accessibility-controls');
     if (panel) {
       panel.style.display = 'block';

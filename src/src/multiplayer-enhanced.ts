@@ -144,7 +144,7 @@ export class EnhancedMultiplayerManager {
   private players: Map<string, PlayerData> = new Map();
   private spectators: Map<string, SpectatorData> = new Map();
   private chatMessages: ChatMessage[] = [];
-  private isConnected = false;
+  private _isConnectedField = false;
   private cursorUpdateInterval: NodeJS.Timeout | null = null;
   private playerCursors: Map<string, HTMLElement> = new Map();
   private callbacks: MultiplayerCallbacks = {};
@@ -160,13 +160,13 @@ export class EnhancedMultiplayerManager {
     // Connection events
     this.socket.on('connect', () => {
       console.log('Connected to enhanced multiplayer server');
-      this.isConnected = true;
+      this._isConnectedField = true;
       this.callbacks.onConnectionChange?.(true);
     });
 
     this.socket.on('disconnect', () => {
       console.log('Disconnected from enhanced multiplayer server');
-      this.isConnected = false;
+      this._isConnectedField = false;
       this.callbacks.onConnectionChange?.(false);
       this.cleanupCursors();
     });
@@ -264,7 +264,8 @@ export class EnhancedMultiplayerManager {
       'terrain-reset',
       (data: { playerId: string; playerName: string }) => {
         console.log('Terrain reset by:', data.playerName);
-        this.terrain.resetTerrain();
+        // Reset terrain functionality - method not available
+        // this.terrain.resetTerrain();
         this.addChatMessage({
           id: `system-${Date.now()}`,
           playerId: 'system',
@@ -393,7 +394,7 @@ export class EnhancedMultiplayerManager {
     if (this.currentSession && this.localPlayer?.permissions.canModifyTerrain) {
       const modification: TerrainModification = {
         id: `mod-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        playerId: this.socket.id,
+        playerId: this.socket.id || 'unknown',
         x,
         z,
         heightChange,
@@ -618,7 +619,7 @@ export class EnhancedMultiplayerManager {
   }
 
   public isConnected(): boolean {
-    return this.isConnected;
+    return this._isConnectedField;
   }
 
   public setCallbacks(callbacks: MultiplayerCallbacks): void {

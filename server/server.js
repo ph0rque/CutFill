@@ -14,13 +14,21 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"]
+    origin: process.env.NODE_ENV === 'production' 
+      ? [process.env.FRONTEND_URL, "https://cutfill-frontend-6z7oxm04u.vercel.app"]
+      : "http://localhost:5173",
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
 // Enable CORS and JSON parsing
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production'
+    ? [process.env.FRONTEND_URL, "https://cutfill-frontend-6z7oxm04u.vercel.app"]
+    : "http://localhost:5173",
+  credentials: true
+}));
 app.use(express.json());
 
 // Store game sessions and player data

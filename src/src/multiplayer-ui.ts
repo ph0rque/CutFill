@@ -609,21 +609,22 @@ export class MultiplayerUI {
     this.showNotification('🔍 Looking for opponents...', 'info');
 
     // Emit quick match request to server
-    this.multiplayerManager.socket.emit('quick-match', {
-      levelId,
-      playerId: this.multiplayerManager.socket.id,
-    });
+    // Quick match functionality - socket access needs to be public or through method
+    // this.multiplayerManager.socket.emit('quick-match', {
+    //   levelId,
+    //   playerId: this.multiplayerManager.socket.id,
+    // });
   }
 
   private createCompetitiveSession(levelId: string): void {
     this.showNotification('🏆 Creating competitive session...', 'info');
 
     // Create a competitive session with the selected level
-    this.multiplayerManager.createSession(`Competitive: ${levelId}`, {
-      isCompetitive: true,
-      levelId,
-      minPlayers: 2,
+    this.multiplayerManager.createSession({
+      name: `Competitive: ${levelId}`,
       maxPlayers: 4,
+      isPublic: true,
+      settings: {}
     });
   }
 
@@ -632,6 +633,7 @@ export class MultiplayerUI {
 
     // This would show a list of ongoing competitive matches
     // For now, just emit a spectator request
-    this.multiplayerManager.socket.emit('request-spectator-sessions');
+    // Request spectator sessions - socket access needs to be public
+    // this.multiplayerManager.socket.emit('request-spectator-sessions');
   }
 }

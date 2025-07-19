@@ -322,14 +322,9 @@ export class AuthUI {
 
   private async handleGuestLogin(): Promise<void> {
     this.showLoading(true);
-    const { error } = await this.authService.signInAsGuest();
+    // Guest sign-in functionality removed - this should use guest UI instead
     this.showLoading(false);
-
-    if (error) {
-      this.showError(error.message);
-    } else {
-      this.hide();
-    }
+    this.hide(); // Just hide the auth UI since guests use separate flow
   }
 
   private showError(

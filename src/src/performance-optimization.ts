@@ -811,8 +811,9 @@ export class PerformanceMonitorUI {
   }
 
   private setupEventListeners(): void {
-    window.addEventListener('performanceUpdate', (e: CustomEvent) => {
-      this.updateDisplay(e.detail);
+    window.addEventListener('performanceUpdate', (e: Event) => {
+      const customEvent = e as CustomEvent;
+              this.updateDisplay(customEvent.detail);
     });
 
     // Toggle visibility with Ctrl+Shift+P

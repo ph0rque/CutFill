@@ -3171,7 +3171,7 @@ export class Terrain {
     x: number,
     z: number,
     heightChange: number,
-    tool: string
+    _tool: string
   ): void {
     // Database save functionality would go here if database is connected
     // For now, this is a no-op to prevent runtime errors
@@ -3428,7 +3428,7 @@ export class Terrain {
           const px = centerX + Math.cos(angle) * dist;
           const pz = centerZ + Math.sin(angle) * dist;
           const orig = this.getOriginalHeightAtPosition(px, pz);
-          const cur =
+          const _cur =
             plannedHeight > 0
               ? orig + plannedHeight
               : this.getHeightAtPosition(px, pz);
@@ -3491,7 +3491,7 @@ export class Terrain {
 
       const idx = (ix: number, iz: number, layer: number) =>
         layer * (steps + 1) * (steps + 1) + iz * (steps + 1) + ix;
-      const vertsPerLayer = (steps + 1) * (steps + 1);
+      const _vertsPerLayer = (steps + 1) * (steps + 1);
 
       for (let iz = 0; iz <= steps; iz++) {
         for (let ix = 0; ix <= steps; ix++) {
@@ -3506,14 +3506,14 @@ export class Terrain {
         for (let ix = 0; ix <= steps; ix++) {
           const px = bounds.minX + ix * stepX;
           const pz = bounds.minZ + iz * stepZ;
-          const cur = this.getHeightAtPosition(px, pz);
-          positions.push(px, cur, pz); // top layer
+          const _cur = this.getHeightAtPosition(px, pz);
+          positions.push(px, _cur, pz); // top layer
         }
       }
       // build faces only when cur>orig for at least one vertex in cell
       for (let iz = 0; iz < steps; iz++) {
         for (let ix = 0; ix < steps; ix++) {
-          const corners: number[][] = [];
+          const _corners: number[][] = [];
           const vertsIndex = [
             [ix, iz],
             [ix + 1, iz],
@@ -3568,7 +3568,7 @@ export class Terrain {
             pushSide(d, c, D, C);
         }
       }
-      function hasFillCell(ix: number, iz: number): boolean {
+      function hasFillCell(_ix: number, _iz: number): boolean {
         return false;
       } // placeholder; edges simplification
     }
@@ -3643,10 +3643,10 @@ export class Terrain {
   public saveCurrentState(callback?: (success: boolean) => void): void {
     if (callback) callback(true);
   }
-  public getUserTerrainStates(userId: string): any[] {
+  public getUserTerrainStates(_userId: string): any[] {
     return [];
   }
-  public loadTerrainFromDatabase(userId: string): void {
+  public loadTerrainFromDatabase(_userId: string): void {
     /* no-op */
   }
 
@@ -3766,7 +3766,7 @@ export class Terrain {
    */
   private createSmoothBoundary(
     boundary: { x: number; z: number }[],
-    resolution: number
+    _resolution: number
   ): { x: number; z: number }[] {
     if (boundary.length < 3) return boundary;
 

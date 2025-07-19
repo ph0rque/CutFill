@@ -23,7 +23,7 @@ type Control = ControlButton | ControlSeparator;
 export class ViewControls {
   private container: HTMLElement;
   private camera: THREE.PerspectiveCamera;
-  private scene: THREE.Scene;
+  private _scene: THREE.Scene;
   private defaultTarget: THREE.Vector3 = new THREE.Vector3(50, 0, 50); // Center of terrain
   private animationDuration: number = 500; // ms
 
@@ -70,7 +70,7 @@ export class ViewControls {
 
   constructor(camera: THREE.PerspectiveCamera, scene: THREE.Scene) {
     this.camera = camera;
-    this.scene = scene;
+    this._scene = scene;
     this.container = document.createElement('div'); // Initialize here
     this.createUI();
   }

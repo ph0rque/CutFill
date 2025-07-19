@@ -104,10 +104,10 @@ export interface ThemeSet {
 }
 
 export class VisualEnhancementSystem {
-  private icons: IconSet;
-  private animations: AnimationSet;
-  private feedback: FeedbackSystem;
-  private themes: ThemeSet;
+  private icons!: IconSet;
+  private animations!: AnimationSet;
+  private feedback!: FeedbackSystem;
+  private themes!: ThemeSet;
   private currentTheme: string = 'default';
   private isInitialized = false;
 
@@ -752,7 +752,7 @@ export class VisualEnhancementSystem {
           };
           button.setAttribute(
             'aria-label',
-            labels[icon as keyof typeof labels] || 'Button'
+            (labels as Record<string, string>)[icon] || 'Button'
           );
         }
       }
@@ -795,7 +795,11 @@ export class VisualEnhancementSystem {
   }
 
   public getIcon(category: keyof IconSet, name: string): string {
-    return this.icons[category]?.[name as keyof any] || '❓';
+    const categoryIcons = this.icons[category];
+    if (categoryIcons && typeof categoryIcons === 'object') {
+      return (categoryIcons as Record<string, string>)[name] || '❓';
+    }
+    return '❓';
   }
 
   public showNotification(
@@ -888,7 +892,7 @@ class NotificationManager implements NotificationSystem {
   }
 
   clear(): void {
-    this.notifications.forEach((notification, id) => {
+    this.notifications.forEach((_notification, id) => {
       this.hide(id);
     });
   }
@@ -900,7 +904,7 @@ class NotificationManager implements NotificationSystem {
       error: '❌',
       info: 'ℹ️',
     };
-    return icons[type as keyof typeof icons] || 'ℹ️';
+    return (icons as Record<string, string>)[type] || 'ℹ️';
   }
 }
 
@@ -970,7 +974,7 @@ class TooltipManager implements TooltipSystem {
   }
 
   hideAll(): void {
-    this.tooltips.forEach((tooltip, element) => {
+    this.tooltips.forEach((_tooltip, element) => {
       this.hide(element);
     });
   }

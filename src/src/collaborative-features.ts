@@ -1,5 +1,7 @@
 import {
   EnhancedMultiplayerManager,
+} from './multiplayer-enhanced';
+import type {
   GameSession,
   PlayerData,
   SharedObjective,
@@ -114,7 +116,7 @@ export class CollaborativeFeatures {
               parameters: { tolerance: 0.02 },
               tolerance: 0.02,
             },
-            progress: new Map(),
+            progress: {},
             completed: false,
             completedBy: null,
             completedAt: null,
@@ -128,7 +130,7 @@ export class CollaborativeFeatures {
               parameters: { efficiency: 0.85 },
               tolerance: 0.1,
             },
-            progress: new Map(),
+            progress: {},
             completed: false,
             completedBy: null,
             completedAt: null,
@@ -171,7 +173,7 @@ export class CollaborativeFeatures {
               parameters: { accuracy: 0.95 },
               tolerance: 0.05,
             },
-            progress: new Map(),
+            progress: {},
             completed: false,
             completedBy: null,
             completedAt: null,
@@ -214,7 +216,7 @@ export class CollaborativeFeatures {
               parameters: { connectivity: 1.0 },
               tolerance: 0.1,
             },
-            progress: new Map(),
+            progress: {},
             completed: false,
             completedBy: null,
             completedAt: null,
@@ -228,7 +230,7 @@ export class CollaborativeFeatures {
               parameters: { flowEfficiency: 0.9 },
               tolerance: 0.05,
             },
-            progress: new Map(),
+            progress: {},
             completed: false,
             completedBy: null,
             completedAt: null,
@@ -294,7 +296,7 @@ export class CollaborativeFeatures {
             parameters: { minContribution: 0.25 },
             tolerance: 0.05,
           },
-          progress: new Map([[playerId, 0]]),
+          progress: { [playerId]: 0 },
           completed: false,
           completedBy: null,
           completedAt: null,
@@ -309,7 +311,7 @@ export class CollaborativeFeatures {
             parameters: { accuracy: 0.9 },
             tolerance: 0.05,
           },
-          progress: new Map([[playerId, 0]]),
+          progress: { [playerId]: 0 },
           completed: false,
           completedBy: null,
           completedAt: null,
@@ -324,7 +326,7 @@ export class CollaborativeFeatures {
             parameters: { quality: 0.85 },
             tolerance: 0.1,
           },
-          progress: new Map([[playerId, 0]]),
+          progress: { [playerId]: 0 },
           completed: false,
           completedBy: null,
           completedAt: null,
@@ -474,8 +476,8 @@ export class CollaborativeFeatures {
         totalCompletion += 100;
       } else {
         // Calculate progress percentage
-        const progressSum = Array.from(objective.progress.values()).reduce(
-          (a, b) => a + b,
+        const progressSum = Object.values(objective.progress).reduce(
+          (a: number, b: number) => a + b,
           0
         );
         totalCompletion += Math.min(100, progressSum);
@@ -490,8 +492,8 @@ export class CollaborativeFeatures {
         if (objective.completed) {
           totalCompletion += 100;
         } else {
-          const progressSum = Array.from(objective.progress.values()).reduce(
-            (a, b) => a + b,
+          const progressSum = Object.values(objective.progress).reduce(
+            (a: number, b: number) => a + b,
             0
           );
           totalCompletion += Math.min(100, progressSum);
