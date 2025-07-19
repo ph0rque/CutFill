@@ -25,7 +25,8 @@ export class MultiplayerManager {
 
   constructor(terrain: Terrain) {
     this.terrain = terrain;
-    this.socket = io('http://localhost:3001');
+    const serverUrl = import.meta.env.VITE_MULTIPLAYER_SERVER_URL || 'http://localhost:3001';
+    this.socket = io(serverUrl);
     this.setupEventHandlers();
   }
 
